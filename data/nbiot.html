@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>SmartFranklin – NB‑IoT Monitor</title>
+
+    <script src="/theme.js"></script>
+    <style>
+        body { font-family: Arial; background: var(--bg); color: var(--fg); padding:20px; }
+        h1 { color: var(--accent); text-shadow:0 0 8px var(--accent-glow); }
+        .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:20px; }
+        .card { background:var(--card); padding:15px; border-radius:12px; border:1px solid var(--border); }
+        .value { font-size:1.6em; font-weight:bold; color:var(--fg-strong); }
+        .label { font-size:0.9em; color:var(--fg-soft); }
+        canvas { width:100%; height:180px; background:#000; border-radius:8px; }
+    </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<h1>NB‑IoT Monitor</h1>
+
+<div class="grid">
+
+    <div class="card">
+        <div class="label">Modem Ready</div>
+        <div id="modem_ready" class="value">--</div>
+    </div>
+
+    <div class="card">
+        <div class="label">Network Attached</div>
+        <div id="network_attached" class="value">--</div>
+    </div>
+
+    <div class="card">
+        <div class="label">PDP Active</div>
+        <div id="pdp_active" class="value">--</div>
+    </div>
+
+    <div class="card">
+        <div class="label">MQTT Connected</div>
+        <div id="mqtt_connected" class="value">--</div>
+    </div>
+
+    <div class="card">
+        <div class="label">Operator</div>
+        <div id="operator" class="value">--</div>
+    </div>
+
+    <div class="card">
+        <div class="label">IP Address</div>
+        <div id="ip" class="value">--</div>
+    </div>
+
+    <div class="card">
+        <div class="label">RSSI</div>
+        <div id="rssi" class="value">--</div>
+    </div>
+
+</div>
+
+<h2 style="color:var(--accent);margin-top:30px;">RSSI Chart</h2>
+
+<div class="card">
+    <canvas id="chart_rssi"></canvas>
+</div>
+
+<script>
+let rssiChart;
+
+function initCharts() {
+    const ctx = document.getElementById('chart_rssi').getContext('2d');
+    rssiChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label:"RSSI", data:[], borderColor:"#6ecbff", borderWidth:2 }] },
+        options: { animation:false }
+    });
+}
+
+function update() {
+    fetch("/api/nbiot")
+        .then(r => r.json())
+        .then(d => {
+            document.getElementById("modem_ready").textContent = d.modem_ready;
+            document.getElementById("network_attached").textContent = d.network_attached;
+            document.getElementById("pdp_active").textContent = d.pdp_active;
+            document.getElementById("mqtt_connected").textContent = d.mqtt_connected;
+            document.getElementById("operator").textContent = d.operator;
+            document.getElementById("ip").textContent = d.ip;
+            document.getElementById("rssi").textContent = d.rssi;
+
+            let t = new Date().toLocaleTimeString();
+            rssiChart.data.labels.push(t);
+            rssiChart.data.datasets[0].data.push(d.rssi);
+            if (rssiChart.data.labels.length > 20) {
+                rssiChart.data.labels.shift();
+                rssiChart.data.datasets[0].data.shift();
+            }
+            rssiChart.update();
+        });
+}
+
+initCharts();
+setInterval(update, 2000);
+update();
+</script>
+
+</body>
+</html>

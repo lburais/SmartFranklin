@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>SmartFranklin – Sensors Monitor</title>
+
+    <script src="/theme.js"></script>
+    <style>
+        body { font-family: Arial; background: var(--bg); color: var(--fg); padding:20px; }
+        h1 { color: var(--accent); text-shadow:0 0 8px var(--accent-glow); }
+        .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:20px; }
+        .card { background:var(--card); padding:15px; border-radius:12px; border:1px solid var(--border); }
+        .value { font-size:1.6em; font-weight:bold; color:var(--fg-strong); }
+        .label { font-size:0.9em; color:var(--fg-soft); }
+        canvas { width:100%; height:180px; background:#000; border-radius:8px; }
+    </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<h1>Sensors Monitor</h1>
+
+<div class="grid">
+
+    <div class="card">
+        <div class="label">Weight (U180)</div>
+        <div id="weight" class="value">-- g</div>
+    </div>
+
+    <div class="card">
+        <div class="label">Distance (Sonic)</div>
+        <div id="distance" class="value">-- cm</div>
+    </div>
+
+    <div class="card">
+        <div class="label">Temperature (if available)</div>
+        <div id="temp" class="value">-- °C</div>
+    </div>
+
+</div>
+
+<h2 style="color:var(--accent);margin-top:30px;">Live Charts</h2>
+
+<div class="grid">
+    <div class="card">
+        <div class="label">Weight (g)</div>
+        <canvas id="chart_weight"></canvas>
+    </div>
+
+    <div class="card">
+        <div class="label">Distance (cm)</div>
+        <canvas id="chart_distance"></canvas>
+    </div>
+</div>
+
+<script>
+let weightChart, distanceChart;
+
+function initCharts() {
+    weightChart = new Chart(document.getElementById('chart_weight'), {
+        type: 'line',
+        data: { labels: [], datasets: [{ label:"Weight", data:[], borderColor:"#6ecbff", borderWidth:2 }] },
+        options: { animation:false }
+    });
+
+    distanceChart = new Chart(document.getElementById('chart_distance'), {
+        type: 'line',
+        data: { labels: [], datasets: [{ label:"Distance", data:[], borderColor:"#ffeb3b", borderWidth:2 }] },
+        options: { animation:false }
+    });
+}
+
+function update() {
+    fetch("/api/sensors")
+        .then(r => r.json())
+        .then(d => {
+            document.getElementById("weight").textContent = d.weight + " g";
+            document.getElementById("distance").textContent = d.distance + " cm";
+            document.getElementById("temp").textContent = d.temperature + " °C";
+
+            let t = new Date().toLocaleTimeString();
+
+            weightChart.data.labels.push(t);
+            weightChart.data.datasets[0].data.push(d.weight);
+            if (weightChart.data.labels.length > 20) {
+                weightChart.data.labels.shift();
+                weightChart.data.datasets[0].data.shift();
+            }
+            weightChart.update();
+
+            distanceChart.data.labels.push(t);
+            distanceChart.data.datasets[0].data.push(d.distance);
+            if (distanceChart.data.labels.length > 20) {
+                distanceChart.data.labels.shift();
+                distanceChart.data.datasets[0].data.shift();
+            }
+            distanceChart.update();
+        });
+}
+
+initCharts();
+setInterval(update, 2000);
+update();
+</script>
+
+</body>
+</html>

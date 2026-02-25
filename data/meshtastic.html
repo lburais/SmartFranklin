@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>SmartFranklin – Meshtastic Monitor</title>
+
+    <script src="/theme.js"></script>
+    <style>
+        body { font-family: Arial; background: var(--bg); color: var(--fg); padding:20px; }
+        h1 { color: var(--accent); text-shadow:0 0 8px var(--accent-glow); }
+        .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:20px; }
+        .card { background:var(--card); padding:15px; border-radius:12px; border:1px solid var(--border); }
+        .value { font-size:1.6em; font-weight:bold; color:var(--fg-strong); }
+        .label { font-size:0.9em; color:var(--fg-soft); }
+        canvas { width:100%; height:180px; background:#000; border-radius:8px; }
+        pre { background:#000; padding:10px; border-radius:8px; color:#0f0; overflow-x:auto; }
+    </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<h1>Meshtastic Monitor</h1>
+
+<div class="grid">
+
+    <div class="card">
+        <div class="label">Module Connected</div>
+        <div id="connected" class="value">--</div>
+    </div>
+
+    <div class="card">
+        <div class="label">Last RSSI</div>
+        <div id="rssi" class="value">--</div>
+    </div>
+
+    <div class="card">
+        <div class="label">Last SNR</div>
+        <div id="snr" class="value">--</div>
+    </div>
+
+    <div class="card">
+        <div class="label">Last Sender</div>
+        <div id="sender" class="value">--</div>
+    </div>
+
+</div>
+
+<h2 style="color:var(--accent);margin-top:30px;">Last Message</h2>
+
+<div class="card">
+    <pre id="last_message">--</pre>
+</div>
+
+<h2 style="color:var(--accent);margin-top:30px;">RSSI Chart</h2>
+
+<div class="card">
+    <canvas id="chart_rssi"></canvas>
+</div>
+
+<script>
+let rssiChart;
+
+function initCharts() {
+    const ctx = document.getElementById('chart_rssi').getContext('2d');
+    rssiChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label:"RSSI", data:[], borderColor:"#6ecbff", borderWidth:2 }] },
+        options: { animation:false }
+    });
+}
+
+function update() {
+    fetch("/api/meshtastic")
+        .then(r => r.json())
+        .then(d => {
+            document.getElementById("connected").textContent = d.connected;
+            document.getElementById("rssi").textContent = d.rssi;
+            document.getElementById("snr").textContent = d.snr;
+            document.getElementById("sender").textContent = d.sender;
+            document.getElementById("last_message").textContent = d.last_message;
+
+            let t = new Date().toLocaleTimeString();
+            rssiChart.data.labels.push(t);
+            rssiChart.data.datasets[0].data.push(d.rssi);
+            if (rssiChart.data.labels.length > 20) {
+                rssiChart.data.labels.shift();
+                rssiChart.data.datasets[0].data.shift();
+            }
+            rssiChart.update();
+        });
+}
+
+initCharts();
+setInterval(update, 2000);
+update();
+</script>
+
+</body>
+</html>

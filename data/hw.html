@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>SmartFranklin – Hardware Monitor</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #0a0a0f;
+            color: #e0e0ff;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            color: #6ecbff;
+            margin-bottom: 10px;
+            text-shadow: 0 0 8px #0099ff;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 20px;
+        }
+        .card {
+            background: #11111a;
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid #222;
+            box-shadow: 0 0 12px rgba(0, 150, 255, 0.1);
+        }
+        .value {
+            font-size: 1.6em;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 0 0 6px #00aaff;
+        }
+        .label {
+            font-size: 0.9em;
+            color: #8aa;
+        }
+        .btn {
+            display: inline-block;
+            padding: 10px 14px;
+            background: #1a1a2a;
+            border-radius: 6px;
+            margin-top: 10px;
+            color: #ccc;
+            cursor: pointer;
+            user-select: none;
+            border: 1px solid #333;
+            transition: 0.2s;
+        }
+        .btn:hover {
+            background: #22223a;
+        }
+        .btn.active {
+            background: #00c853;
+            color: #fff;
+            box-shadow: 0 0 10px #00ff88;
+        }
+        .slider {
+            width: 100%;
+        }
+        canvas {
+            width: 100%;
+            height: 180px;
+            background: #000;
+            border-radius: 8px;
+            box-shadow: 0 0 12px rgba(0, 150, 255, 0.2);
+        }
+
+        /* Mobile */
+        @media (max-width: 600px) {
+            body { padding: 10px; }
+            h1 { font-size: 1.4em; }
+        }
+    </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<h1>Hardware Monitor</h1>
+
+<div class="grid">
+
+    <div class="card">
+        <div class="label">Battery Voltage</div>
+        <div id="battery_voltage" class="value">--</div>
+    </div>
+
+    <div class="card">
+        <div class="label">Battery Level</div>
+        <div id="battery_percent" class="value">-- %</div>
+    </div>
+
+    <div class="card">
+        <div class="label">Charging</div>
+        <div id="charging" class="value">--</div>
+    </div>
+
+    <div class="card">
+        <div class="label">Temperature</div>
+        <div id="temperature" class="value">-- °C</div>
+    </div>
+
+    <div class="card">
+        <div class="label">Button A</div>
+        <div id="button_a" class="btn">Released</div>
+    </div>
+
+    <div class="card">
+        <div class="label">Button B</div>
+        <div id="button_b" class="btn">Released</div>
+    </div>
+
+    <div class="card">
+        <div class="label">Brightness</div>
+        <input id="brightness" type="range" min="10" max="255" value="128" class="slider">
+    </div>
+
+    <div class="card">
+        <div class="label">Actions</div>
+        <div id="reboot" class="btn">Reboot</div>
+        <div id="sleep" class="btn">Deep Sleep</div>
+    </div>
+
+</div>
+
+<h2 style="color:#6ecbff;margin-top:30px;text-shadow:0 0 8px #0099ff;">Live Charts</h2>
+
+<div class="grid">
+    <div class="card">
+        <div class="label">Battery Voltage (V)</div>
+        <canvas id="chart_batt"></canvas>
+    </div>
+
+    <div class="card">
+        <div class="label">IMU Acceleration (XYZ)</div>
+        <canvas id="chart_imu"></canvas>
+    </div>
+</div>
+
+<script>
+let battChart, imuChart;
+
+function initCharts() {
+    const ctx1 = document.getElementById('chart_batt').getContext('2d');
+    battChart = new Chart(ctx1, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: "Voltage",
+                data: [],
+                borderColor: "#6ecbff",
+                borderWidth: 2
+            }]
+        },
+        options: { animation: false }
+    });
+
+    const ctx2 = document.getElementById('chart_imu').getContext('2d');
+    imuChart = new Chart(ctx2, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                { label: "X", data: [], borderColor: "#ff5252", borderWidth: 2 },
+                { label: "Y", data: [], borderColor: "#4caf50", borderWidth: 2 },
+                { label: "Z", data: [], borderColor: "#ffeb3b", borderWidth: 2 }
+            ]
+        },
+        options: { animation: false }
+    });
+}
+
+function updateHw() {
+    fetch("/api/hw")
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById("battery_voltage").textContent = data.battery_voltage.toFixed(2) + " V";
+            document.getElementById("battery_percent").textContent = data.battery_percent + " %";
+            document.getElementById("charging").textContent = data.charging ? "Charging" : "Not Charging";
+            document.getElementById("temperature").textContent = data.temperature.toFixed(1) + " °C";
+
+            let btnA = document.getElementById("button_a");
+            let btnB = document.getElementById("button_b");
+
+            btnA.classList.toggle("active", data.button_a);
+            btnA.textContent = data.button_a ? "Pressed" : "Released";
+
+            btnB.classList.toggle("active", data.button_b);
+            btnB.textContent = data.button_b ? "Pressed" : "Released";
+
+            // Update charts
+            let t = new Date().toLocaleTimeString();
+
+            battChart.data.labels.push(t);
+            battChart.data.datasets[0].data.push(data.battery_voltage);
+            if (battChart.data.labels.length > 20) {
+                battChart.data.labels.shift();
+                battChart.data.datasets[0].data.shift();
+            }
+            battChart.update();
+
+            imuChart.data.labels.push(t);
+            imuChart.data.datasets[0].data.push(data.accel.x);
+            imuChart.data.datasets[1].data.push(data.accel.y);
+            imuChart.data.datasets[2].data.push(data.accel.z);
+            if (imuChart.data.labels.length > 20) {
+                imuChart.data.labels.shift();
+                imuChart.data.datasets.forEach(ds => ds.data.shift());
+            }
+            imuChart.update();
+        });
+}
+
+document.getElementById("brightness").addEventListener("input", e => {
+    fetch("/api/set_brightness?value=" + e.target.value);
+});
+
+document.getElementById("reboot").addEventListener("click", () => {
+    fetch("/api/reboot");
+});
+
+document.getElementById("sleep").addEventListener("click", () => {
+    fetch("/api/sleep");
+});
+
+initCharts();
+setInterval(updateHw, 2000);
+updateHw();
+</script>
+
+</body>
+</html>
+
