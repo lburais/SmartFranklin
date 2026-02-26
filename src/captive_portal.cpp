@@ -2,7 +2,7 @@
 #include <DNSServer.h>
 #include <WiFi.h>
 
-static AsyncDNSServer dnsServer;
+static DNSServer dnsServer;
 
 void captive_portal_start()
 {

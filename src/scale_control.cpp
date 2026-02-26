@@ -1,11 +1,11 @@
 #include "scale_control.h"
-#include <M5Unit-MiniScale.h>
+#include <M5Unit-WeightI2C.h>
 
-extern MiniScale scale;
+extern M5Unit::WeightI2C scale;
 
 float scale_get_raw()
 {
-    return scale.getWeight();
+    return scale.getValue();
 }
 
 void scale_tare()

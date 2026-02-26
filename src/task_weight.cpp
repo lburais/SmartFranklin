@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <Wire.h>
-#include <M5Unit-MiniScale.h>
+#include <M5UnitWeightI2C.h>
 #include <M5Unit-PaHub.h>
 #include "tasks.h"
 #include "data_model.h"
@@ -8,8 +8,9 @@
 #include "mqtt_layer.h"
 #include "config_store.h"
 
+
 PaHub hubW;
-MiniScale scale;
+M5Unit::WeightI2C scale;
 
 void taskWeight(void *pv)
 {
@@ -18,8 +19,8 @@ void taskWeight(void *pv)
     scale.begin(&hubW, PAHUB_CH_WEIGHT);
     scale.setCalFactor(CONFIG.scale_cal_factor);
 
-    for (;;) {
-        float w = scale.getWeight();
+for (;;) {
+        float w = scale.getValue();
         {
             std::lock_guard<std::mutex> lock(DATA_MUTEX);
             DATA.weight_kg = w;

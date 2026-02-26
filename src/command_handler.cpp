@@ -17,7 +17,7 @@ int command_get_display_screen()
 
 static void handleDisplayCmd(const String &payload)
 {
-    DynamicJsonDocument doc(128);
+    JsonDocument doc;
     if (deserializeJson(doc, payload)) return;
     if (doc.containsKey("screen")) {
         g_screen = doc["screen"].as<int>();
@@ -26,7 +26,7 @@ static void handleDisplayCmd(const String &payload)
 
 static void handleMeshCmd(const String &payload)
 {
-    DynamicJsonDocument doc(256);
+    JsonDocument doc;
     if (deserializeJson(doc, payload)) return;
     if (doc.containsKey("text")) {
         meshtastic_send_text(doc["text"].as<String>());
@@ -35,7 +35,7 @@ static void handleMeshCmd(const String &payload)
 
 static void handleScaleCmd(const String &payload)
 {
-    DynamicJsonDocument doc(256);
+    JsonDocument doc;
     if (deserializeJson(doc, payload)) return;
     String action = doc["action"] | "";
     if (action == "tare") {
