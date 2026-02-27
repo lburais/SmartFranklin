@@ -2,26 +2,60 @@
 #include "tasks.h"
 #include "m5_hw.h"
 #include "mqtt_layer.h"
+#include <M5Unified.h>
 
 void taskHwMonitor(void *pv)
 {
     Serial.println("[HW] Hardware monitor started");
 
     for (;;) {
-        HwStatus st = HW.read();
 
-        mqtt_publish("smartfranklin/hw/battery_voltage", String(st.battery_voltage));
-        mqtt_publish("smartfranklin/hw/battery_percent", String(st.battery_percent));
-        mqtt_publish("smartfranklin/hw/charging", st.charging ? "1" : "0");
-        mqtt_publish("smartfranklin/hw/temperature", String(st.temperature));
+        // --- Lecture IMU ---
+        float ax = 0, ay = 0, az = 0;
+        if (M5.Imu.isEnabled()) {
+            M5.Imu.getAccel(&ax, &ay, &az);
+        }
 
-        mqtt_publish("smartfranklin/hw/button_a", st.button_a ? "1" : "0");
-        mqtt_publish("smartfranklin/hw/button_b", st.button_b ? "1" : "0");
+        // --- Lecture batterie ---
+        float batt_voltage = M5.Power.getBatteryVoltage();   // en mV
+        int   batt_percent = M5.Power.getBatteryLevel();     // en %
+        bool  charging = M5.Power.isCharging();
 
-        String accel = String("{\"x\":") + st.accel_x +
-                       ",\"y\":" + st.accel_y +
-                       ",\"z\":" + st.accel_z + "}";
-        mqtt_publish("smartfranklin/hw/accel", accel);
+        // --- Lecture température interne IMU (si dispo) ---
+        float temp = 0;
+        if (M5.Imu.isEnabled()) {
+            //temp = M5.Imu.getTemperature();
+        }
+
+        // --- Boutons ---
+        bool btnA = M5.BtnA.isPressed();
+        bool btnB = M5.BtnB.isPressed();
+
+        // --- Publication MQTT ---
+        sf_mqtt::publish("smartfranklin/hw/battery_voltage",
+                 std::string(String(batt_voltage).c_str()));
+
+        sf_mqtt::publish("smartfranklin/hw/battery_percent",
+                 std::string(String(batt_percent).c_str()));
+
+        sf_mqtt::publish("smartfranklin/hw/charging",
+                 std::string(charging ? "1" : "0"));
+
+        //sf_mqtt::publish("smartfranklin/hw/temperature",
+        //         std::string(String(st.temperature).c_str()));
+
+        sf_mqtt::publish("smartfranklin/hw/button_a",
+                 std::string(btnA ? "1" : "0"));
+
+        sf_mqtt::publish("smartfranklin/hw/button_b",
+                 std::string(btnB ? "1" : "0"));
+
+        String accel = String("{\"x\":") + ax +
+                       ",\"y\":" + ay +
+                       ",\"z\":" + az + "}";
+
+        sf_mqtt::publish("smartfranklin/hw/accel",
+                 std::string(accel.c_str()));
 
         vTaskDelay(pdMS_TO_TICKS(5000));
     }

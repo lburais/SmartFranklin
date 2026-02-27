@@ -15,15 +15,11 @@ HwStatus M5Hardware::read()
     status.battery_voltage = M5.Power.getBatteryVoltage() / 1000.0f;
     status.battery_percent = M5.Power.getBatteryLevel();
     status.charging        = M5.Power.isCharging();
-    status.temperature     = M5.Power.getBatteryTemperature();
 
     status.button_a = M5.BtnA.isPressed();
     status.button_b = M5.BtnB.isPressed();
 
-    auto imu = M5.Imu.getAccel();
-    status.accel_x = imu.x;
-    status.accel_y = imu.y;
-    status.accel_z = imu.z;
+    M5.Imu.getAccel(&status.accel_x, &status.accel_y, &status.accel_z);
 
     return status;
 }
