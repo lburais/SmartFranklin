@@ -1,58 +1,82 @@
 #include "command_handler.h"
-#include "meshtastic_bridge.h"
-#include "config_store.h"
+#include "data_model.h"
+#include "mqtt_layer.h"
+#include "tasks.h"
+
 #include <ArduinoJson.h>
 
-static int g_screen = 0;
+static void handle_set(JsonDocument& doc) {
+    if (doc["led"].is<bool>()) {
+        bool state = doc["led"];
+        DATA.led_state = state;
+        sf_mqtt::publish("smartfranklin/led/state", state ? "1" : "0");
+    }
 
-void command_handler_init()
-{
-    g_screen = 0;
+    if (doc["buzzer"].is<bool>()) {
+        bool state = doc["buzzer"];
+        DATA.buzzer_state = state;
+        sf_mqtt::publish("smartfranklin/buzzer/state", state ? "1" : "0");
+    }
+
+    if (doc["target_soc"].is<int>()) {
+        int soc = doc["target_soc"];
+        DATA.target_soc = soc;
+        sf_mqtt::publish("smartfranklin/bms/target_soc", String(soc).c_str());
+    }
 }
 
-int command_get_display_screen()
-{
-    return g_screen;
+static void handle_get(JsonDocument& doc) {
+    if (doc["what"].is<String>()) {
+        String what = doc["what"].as<String>();
+
+        if (what == "bms") {
+            JsonDocument out;
+            out["voltage"] = DATA.bms_voltage;
+            out["current"] = DATA.bms_current;
+            out["soc"]     = DATA.bms_soc;
+
+            String payload;
+            serializeJson(out, payload);
+            sf_mqtt::publish("smartfranklin/bms/status", payload.c_str());
+        }
+
+        if (what == "system") {
+            JsonDocument out;
+            out["uptime"] = millis();
+            out["free_heap"] = ESP.getFreeHeap();
+
+            String payload;
+            serializeJson(out, payload);
+            sf_mqtt::publish("smartfranklin/system/status", payload.c_str());
+        }
+    }
 }
 
-static void handleDisplayCmd(const String &payload)
-{
+void command_handler_process(const String& json) {
     JsonDocument doc;
-    if (deserializeJson(doc, payload)) return;
-    if (doc.containsKey("screen")) {
-        g_screen = doc["screen"].as<int>();
-    }
-}
+    DeserializationError err = deserializeJson(doc, json);
 
-static void handleMeshCmd(const String &payload)
-{
-    JsonDocument doc;
-    if (deserializeJson(doc, payload)) return;
-    if (doc.containsKey("text")) {
-        meshtastic_send_text(doc["text"].as<String>());
+    if (err) {
+        sf_mqtt::publish("smartfranklin/error", "invalid_json");
+        return;
     }
-}
 
-static void handleScaleCmd(const String &payload)
-{
-    JsonDocument doc;
-    if (deserializeJson(doc, payload)) return;
-    String action = doc["action"] | "";
-    if (action == "tare") {
-        // TODO: scale_tare();
-    } else if (action == "calibrate") {
-        float v = doc["value"] | 0.0f;
-        // TODO: scale_set_cal_factor(v);
-    }
-}
+    if (doc["cmd"].is<String>()) {
+        String cmd = doc["cmd"].as<String>();
 
-void command_handle(const String &topic, const String &payload)
-{
-    if (topic == "smartfranklin/cmd/display") {
-        handleDisplayCmd(payload);
-    } else if (topic == "smartfranklin/cmd/mesh") {
-        handleMeshCmd(payload);
-    } else if (topic == "smartfranklin/cmd/scale") {
-        handleScaleCmd(payload);
+        if (cmd == "set") {
+            handle_set(doc);
+            return;
+        }
+
+        if (cmd == "get") {
+            handle_get(doc);
+            return;
+        }
+
+        sf_mqtt::publish("smartfranklin/error", "unknown_cmd");
+        return;
     }
+
+    sf_mqtt::publish("smartfranklin/error", "missing_cmd");
 }

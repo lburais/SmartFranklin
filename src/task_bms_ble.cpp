@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <NimBLEDevice.h>
-#include <NimBLECharacteristic.h>
+#include <NimBLERemoteCharacteristic.h>
 
 #include "tasks.h"
 #include "jbd_bms.h"
@@ -12,11 +12,11 @@ static NimBLERemoteCharacteristic *notifyChar = nullptr;
 static const char *TARGET_NAME = "JBD-BMS";
 
 // ------------------------------------------------------------
-// Correct callback class for your version of NimBLE-Arduino
+// Correct callback class for your version of NimBLE
 // ------------------------------------------------------------
-class BmsNotifyCallback : public NimBLECharacteristicCallbacks {
-    void onNotify(NimBLERemoteCharacteristic *c,
-                  uint8_t *data,
+class BmsNotifyCallback : public NimBLERemoteCharacteristicCallbacks {
+    void onNotify(NimBLERemoteCharacteristic* c,
+                  uint8_t* data,
                   size_t len,
                   bool isNotify) override
     {
@@ -30,20 +30,14 @@ class BmsNotifyCallback : public NimBLECharacteristicCallbacks {
                 DATA.bms_soc     = f.soc;
             }
 
-            sf_mqtt::publish(
-                "smartfranklin/bms/voltage",
-                std::string(String(f.voltage, 2).c_str())
-            );
+            sf_mqtt::publish("smartfranklin/bms/voltage",
+                             std::string(String(f.voltage, 2).c_str()));
 
-            sf_mqtt::publish(
-                "smartfranklin/bms/current",
-                std::string(String(f.current, 2).c_str())
-            );
+            sf_mqtt::publish("smartfranklin/bms/current",
+                             std::string(String(f.current, 2).c_str()));
 
-            sf_mqtt::publish(
-                "smartfranklin/bms/soc",
-                std::string(String(f.soc, 1).c_str())
-            );
+            sf_mqtt::publish("smartfranklin/bms/soc",
+                             std::string(String(f.soc, 1).c_str()));
         }
     }
 };

@@ -51,7 +51,7 @@ bool config_load()
     File f = SPIFFS.open(CFG_PATH, "r");
     if (!f) return false;
 
-    StaticJsonDocument<4096> doc;
+    JsonDocument doc;
     DeserializationError err = deserializeJson(doc, f);
     f.close();
     if (err) return false;
@@ -100,7 +100,7 @@ bool config_load()
 
 bool config_save()
 {
-    StaticJsonDocument<4096> doc;
+    JsonDocument doc;
 
     // WIFI + ADMIN
     doc["sta_ssid"] = CONFIG.sta_ssid;
