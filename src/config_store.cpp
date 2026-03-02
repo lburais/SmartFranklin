@@ -1,4 +1,5 @@
 #include "config_store.h"
+#include "pahub_channels.h"
 #include <ArduinoJson.h>
 #include <FS.h>
 #include <SPIFFS.h>

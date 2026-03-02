@@ -11,7 +11,6 @@
 #include "data_model.h"
 #include "pahub_channels.h"
 #include "mqtt_layer.h"
-#include "config_store.h"
 
 // WEIGHT I2C UNIT
 
@@ -45,9 +44,9 @@ void setup()
     Wire.begin(pin_num_sda, pin_num_scl, 400000U);
 
     if (!pahub.add(scale, PAHUB_CH_WEIGHT) ||      // Connect scale to pahub channel PAHUB_CH_WEIGHT
-        !Units.add(pahub, Wire) ||                 // Connect pahub to core
+        !Units.add(pahub, Wire) ||                       // Connect pahub to core
         !Units.begin()) {
-        M5_LOGE("Failed to begin");
+        M5_LOGE("[WEIGHT] not found.");
         M5_LOGW("%s", Units.debugInfo().c_str());
 
         while (true) {
@@ -55,7 +54,7 @@ void setup()
         }
     }
 
-    M5_LOGI("M5UnitUnified has been begun");
+    M5_LOGI("[WEIGHT] found.");
     M5_LOGI("%s", Units.debugInfo().c_str());
 
     scale.resetOffset();
@@ -73,9 +72,9 @@ void loop()
     Units.update();
     if (scale.updated()) {
         if (!idx) {
-            M5.Log.printf(">Weight:%f\n", scale.weight());
+            M5.Log.printf("[WEIGHT] Weight:%f\n", scale.weight());
         } else {
-            M5.Log.printf(">iWeight:%d\n", scale.iweight());
+            M5.Log.printf("[WEIGHT] iWeight:%d\n", scale.iweight());
         }
 
         w = scale.iweight();
@@ -96,6 +95,6 @@ void taskWeight(void *pv)
 
     for (;;) {
             loop();
-            vTaskDelay(pdMS_TO_TICKS(200));
+            vTaskDelay(pdMS_TO_TICKS(PERIOD_WEIGHT));
     }
 }

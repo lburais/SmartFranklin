@@ -35,6 +35,7 @@ struct SmartConfig {
     int    nbiot_mqtt_port;
     String nbiot_mqtt_user;
     String nbiot_mqtt_pass;
+
 };
 
 // Global config instance

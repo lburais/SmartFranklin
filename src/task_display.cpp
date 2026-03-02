@@ -16,7 +16,7 @@ void draw()
     std::lock_guard<std::mutex> lock(DATA_MUTEX);
     if (screen == 0) {
         M5.Display.printf("Distance: %.1f cm\n", DATA.distance_cm);
-        M5.Display.printf("Weight: %.3f kg\n", DATA.weight_kg);
+        M5.Display.printf("Weight: %.3f g\n", DATA.weight_g);
     } else if (screen == 1) {
         M5.Display.printf("Pitch: %.1f\nRoll: %.1f\n", DATA.pitch, DATA.roll);
     } else if (screen == 2) {
@@ -30,7 +30,7 @@ void draw()
         } else {
             M5.Display.println("Calibrating...");
             M5.Display.printf("Known: %.2f kg\n", calib_known_weight);
-            M5.Display.printf("Raw:   %.3f kg\n", DATA.weight_kg);
+            M5.Display.printf("Raw:   %.3f kg\n", DATA.weight_g);
             M5.Display.println("BtnB: finish");
         }
     }
