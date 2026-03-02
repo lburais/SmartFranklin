@@ -4,11 +4,14 @@
 
 struct SmartData {
     float distance_cm = 0;
-    float weight_kg = 0;
     float pitch = 0;
     float roll = 0;
     String rtc_time = "";
     String last_mesh_msg = "";
+
+    // Weight
+    int32_t weight_g = 0;
+    int32_t gap = 0;
 
     // BMS
     float bms_voltage = 0.0f;

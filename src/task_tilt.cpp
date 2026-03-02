@@ -2,7 +2,7 @@
 #include <Wire.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
-#include <M5Unit-PaHub.h>
+#include <M5UnitUnifiedHUB.h>
 
 #include "tasks.h"
 #include "data_model.h"

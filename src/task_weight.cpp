@@ -1,31 +1,101 @@
+#include <M5Unified.h>
+#include <M5UnitUnified.h>
+#include <M5UnitUnifiedWEIGHT.h>
+#include <M5UnitUnifiedHUB.h>
+#include <M5Utility.h>
+
+
 #include <Arduino.h>
 #include <Wire.h>
-#include <M5UnitWeightI2C.h>
-#include <M5Unit-PaHub.h>
 #include "tasks.h"
 #include "data_model.h"
 #include "pahub_channels.h"
 #include "mqtt_layer.h"
 #include "config_store.h"
 
+// WEIGHT I2C UNIT
 
-PaHub hubW;
-M5Unit::WeightI2C scale;
+using m5::unit::weighti2c::Mode;
+
+namespace {
+m5::unit::UnitUnified Units;
+
+m5::unit::UnitWeightI2C scale;
+m5::unit::UnitPaHub2    pahub{PAHUB_ADDRESS};
+
+uint32_t idx{};
+constexpr Mode mode_table[] = {Mode::Float, Mode::Int};
+
+int32_t w = 0;
+}  
+
+// SETUP
+
+void setup()
+{
+    m5::utility::delay(2000);
+
+    M5.begin();
+
+    auto pin_num_sda = M5.getPin(m5::pin_name_t::port_a_sda);
+    auto pin_num_scl = M5.getPin(m5::pin_name_t::port_a_scl);
+    M5_LOGI("getPin: SDA:%u SCL:%u", pin_num_sda, pin_num_scl);
+
+    Wire.end();
+    Wire.begin(pin_num_sda, pin_num_scl, 400000U);
+
+    if (!pahub.add(scale, PAHUB_CH_WEIGHT) ||      // Connect scale to pahub channel PAHUB_CH_WEIGHT
+        !Units.add(pahub, Wire) ||                 // Connect pahub to core
+        !Units.begin()) {
+        M5_LOGE("Failed to begin");
+        M5_LOGW("%s", Units.debugInfo().c_str());
+
+        while (true) {
+            m5::utility::delay(10000);
+        }
+    }
+
+    M5_LOGI("M5UnitUnified has been begun");
+    M5_LOGI("%s", Units.debugInfo().c_str());
+
+    scale.resetOffset();
+
+    scale.writeGap(DATA.gap);
+
+}
+
+// LOOP
+
+void loop()
+{
+    M5.update();
+
+    Units.update();
+    if (scale.updated()) {
+        if (!idx) {
+            M5.Log.printf(">Weight:%f\n", scale.weight());
+        } else {
+            M5.Log.printf(">iWeight:%d\n", scale.iweight());
+        }
+
+        w = scale.iweight();
+
+        std::lock_guard<std::mutex> lock(DATA_MUTEX);
+        DATA.weight_g = w;
+
+        sf_mqtt::publish("smartfranklin/weight/g", String(w, 3).c_str());
+
+    }
+}
 
 void taskWeight(void *pv)
 {
-    Serial.println("[WEIGHT] Task started");
-    hubW.begin(Wire);
-    scale.begin(&hubW, PAHUB_CH_WEIGHT);
-    scale.setCalFactor(CONFIG.scale_cal_factor);
+    M5_LOGI("[WEIGHT] Task started");
 
-for (;;) {
-        float w = scale.getValue();
-        {
-            std::lock_guard<std::mutex> lock(DATA_MUTEX);
-            DATA.weight_kg = w;
-        }
-        mqtt_publish("smartfranklin/weight/kg", String(w, 3));
-        vTaskDelay(pdMS_TO_TICKS(200));
+    setup();
+
+    for (;;) {
+            loop();
+            vTaskDelay(pdMS_TO_TICKS(200));
     }
 }

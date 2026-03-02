@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <Wire.h>
-#include <M5Unit-Sonic.h>
-#include <M5Unit-PaHub.h>
+#include <M5UnitUnifiedDISTANCE.h>
+#include <M5UnitUnifiedHUB.h>
 #include "tasks.h"
 #include "data_model.h"
 #include "pahub_channels.h"

@@ -1,19 +1,19 @@
 #include "scale_control.h"
-#include <M5Unit-WeightI2C.h>
+#include <M5UnitUnifiedWEIGHT.h>
 
-extern M5Unit::WeightI2C scale;
+extern m5::unit::UnitWeightI2C scale;
 
 float scale_get_raw()
 {
-    return scale.getValue();
+    return 0; //return scale.getRaw();
 }
 
 void scale_tare()
 {
-    scale.tare();
+    //scale.tare();
 }
 
 void scale_set_cal_factor(float factor)
 {
-    scale.setCalFactor(factor);
+    //scale.setScale(factor);
 }
