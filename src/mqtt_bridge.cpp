@@ -1,8 +1,12 @@
 #include "mqtt_bridge.h"
 #include "config_store.h"
+
 #include <PubSubClient.h>
 #include <WiFi.h>
 
+// -----------------------------------------------------------------------------
+// MQTT clients
+// -----------------------------------------------------------------------------
 static WiFiClient extClient;
 static PubSubClient extMqtt(extClient);
 
@@ -18,6 +22,9 @@ static unsigned long lastExtToInt = 0;
 static uint32_t countIntToExt = 0;
 static uint32_t countExtToInt = 0;
 
+// -----------------------------------------------------------------------------
+// Loop detection
+// -----------------------------------------------------------------------------
 static bool isLoopMessage(const String &topic)
 {
     if (!CONFIG.mqtt_bridge_loop_detection) return false;
@@ -26,6 +33,9 @@ static bool isLoopMessage(const String &topic)
            topic.startsWith(CONFIG.mqtt_bridge_prefix_external);
 }
 
+// -----------------------------------------------------------------------------
+// Forward internal → external
+// -----------------------------------------------------------------------------
 static void forwardToExternal(char *topic, byte *payload, unsigned int len)
 {
     if (!CONFIG.mqtt_bridge_enabled || !extConnected) return;
@@ -35,14 +45,17 @@ static void forwardToExternal(char *topic, byte *payload, unsigned int len)
 
     String outTopic = CONFIG.mqtt_bridge_prefix_external + t;
 
-    extMqtt.publish(outTopic.c_str(), payload, len,
-                    CONFIG.mqtt_bridge_retain,
-                    CONFIG.mqtt_bridge_qos);
+    // PubSubClient publish signature:
+    // publish(const char* topic, const uint8_t* payload, unsigned int length, bool retained)
+    extMqtt.publish(outTopic.c_str(), payload, len, CONFIG.mqtt_bridge_retain);
 
     lastIntToExt = millis();
     countIntToExt++;
 }
 
+// -----------------------------------------------------------------------------
+// Forward external → internal
+// -----------------------------------------------------------------------------
 static void forwardToInternal(char *topic, byte *payload, unsigned int len)
 {
     if (!CONFIG.mqtt_bridge_enabled || !intConnected) return;
@@ -52,51 +65,72 @@ static void forwardToInternal(char *topic, byte *payload, unsigned int len)
 
     String outTopic = CONFIG.mqtt_bridge_prefix_internal + t;
 
-    intMqtt.publish(outTopic.c_str(), payload, len,
-                    CONFIG.mqtt_bridge_retain,
-                    CONFIG.mqtt_bridge_qos);
+    intMqtt.publish(outTopic.c_str(), payload, len, CONFIG.mqtt_bridge_retain);
 
     lastExtToInt = millis();
     countExtToInt++;
 }
 
+// -----------------------------------------------------------------------------
+// Init
+// -----------------------------------------------------------------------------
 void mqtt_bridge_init()
 {
+    // Internal broker (local Mosquitto)
     intMqtt.setServer("127.0.0.1", 1883);
     intMqtt.setCallback(forwardToExternal);
 
+    // External broker (optional)
     if (CONFIG.ext_mqtt_enabled) {
         extMqtt.setServer(CONFIG.ext_mqtt_host.c_str(), CONFIG.ext_mqtt_port);
         extMqtt.setCallback(forwardToInternal);
     }
 }
 
+// -----------------------------------------------------------------------------
+// Ensure internal broker connection
+// -----------------------------------------------------------------------------
 static void ensureInternal()
 {
     if (!intMqtt.connected()) {
-        intConnected = intMqtt.connect("SmartFranklinBridgeInternal",
-                                       CONFIG.admin_user.c_str(),
-                                       CONFIG.admin_pass.c_str());
+        intConnected = intMqtt.connect(
+            "SmartFranklinBridgeInternal",
+            CONFIG.admin_user.c_str(),
+            CONFIG.admin_pass.c_str()
+        );
+
         if (intConnected) {
-            intMqtt.subscribe("#", CONFIG.mqtt_bridge_qos);
+            // PubSubClient supports QoS 0 or 1 only
+            uint8_t qos = CONFIG.mqtt_bridge_qos > 1 ? 1 : CONFIG.mqtt_bridge_qos;
+            intMqtt.subscribe("#", qos);
         }
     }
 }
 
+// -----------------------------------------------------------------------------
+// Ensure external broker connection
+// -----------------------------------------------------------------------------
 static void ensureExternal()
 {
     if (!CONFIG.ext_mqtt_enabled) return;
 
     if (!extMqtt.connected()) {
-        extConnected = extMqtt.connect("SmartFranklinBridgeExternal",
-                                       CONFIG.ext_mqtt_user.c_str(),
-                                       CONFIG.ext_mqtt_pass.c_str());
+        extConnected = extMqtt.connect(
+            "SmartFranklinBridgeExternal",
+            CONFIG.ext_mqtt_user.c_str(),
+            CONFIG.ext_mqtt_pass.c_str()
+        );
+
         if (extConnected) {
-            extMqtt.subscribe("#", CONFIG.mqtt_bridge_qos);
+            uint8_t qos = CONFIG.mqtt_bridge_qos > 1 ? 1 : CONFIG.mqtt_bridge_qos;
+            extMqtt.subscribe("#", qos);
         }
     }
 }
 
+// -----------------------------------------------------------------------------
+// Loop
+// -----------------------------------------------------------------------------
 void mqtt_bridge_loop()
 {
     ensureInternal();
@@ -106,6 +140,9 @@ void mqtt_bridge_loop()
     if (extConnected) extMqtt.loop();
 }
 
+// -----------------------------------------------------------------------------
+// Status
+// -----------------------------------------------------------------------------
 void mqtt_bridge_status(JsonDocument &doc)
 {
     doc["internal_connected"] = intConnected;
