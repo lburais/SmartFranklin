@@ -4,28 +4,25 @@
 #include <M5UnitUnifiedHUB.h>
 #include <M5Utility.h>
 
-
-#include <Arduino.h>
-#include <Wire.h>
 #include "tasks.h"
 #include "data_model.h"
 #include "pahub_channels.h"
 #include "mqtt_layer.h"
 
-// WEIGHT I2C UNIT
+// WEIGHT I2C UNIT OVER PAHUB
 
 using m5::unit::weighti2c::Mode;
 
 namespace {
 m5::unit::UnitUnified Units;
 
-m5::unit::UnitWeightI2C scale;
+m5::unit::UnitWeightI2C unit;
 m5::unit::UnitPaHub2    pahub{PAHUB_ADDRESS};
 
 uint32_t idx{};
 constexpr Mode mode_table[] = {Mode::Float, Mode::Int};
 
-int32_t w = 0;
+int32_t weight = 0;
 }  
 
 // SETUP
@@ -43,7 +40,7 @@ void setup()
     Wire.end();
     Wire.begin(pin_num_sda, pin_num_scl, 400000U);
 
-    if (!pahub.add(scale, PAHUB_CH_WEIGHT) ||      // Connect scale to pahub channel PAHUB_CH_WEIGHT
+    if (!pahub.add(unit, PAHUB_CH_WEIGHT) ||      // Connect scale to pahub channel PAHUB_CH_WEIGHT
         !Units.add(pahub, Wire) ||                       // Connect pahub to core
         !Units.begin()) {
         M5_LOGE("[WEIGHT] not found.");
@@ -57,9 +54,9 @@ void setup()
     M5_LOGI("[WEIGHT] found.");
     M5_LOGI("%s", Units.debugInfo().c_str());
 
-    scale.resetOffset();
+    unit.resetOffset();
 
-    scale.writeGap(DATA.gap);
+    unit.writeGap(DATA.gap);
 
 }
 
@@ -70,19 +67,21 @@ void loop()
     M5.update();
 
     Units.update();
-    if (scale.updated()) {
-        if (!idx) {
-            M5.Log.printf("[WEIGHT] Weight:%f\n", scale.weight());
-        } else {
-            M5.Log.printf("[WEIGHT] iWeight:%d\n", scale.iweight());
+    if (unit.updated()) {
+        weight = unit.iweight();
+
+        {
+            std::lock_guard<std::mutex> lock(DATA_MUTEX);
+            DATA.weight_g = weight;
         }
 
-        w = scale.iweight();
+        sf_mqtt::publish("smartfranklin/weight/g", String(weight, 3).c_str());
 
-        std::lock_guard<std::mutex> lock(DATA_MUTEX);
-        DATA.weight_g = w;
-
-        sf_mqtt::publish("smartfranklin/weight/g", String(w, 3).c_str());
+        if (!idx) {
+            M5.Log.printf("[WEIGHT] Weight:%f\n", unit.weight());
+        } else {
+            M5.Log.printf("[WEIGHT] iWeight:%d\n", unit.iweight());
+        }
 
     }
 }

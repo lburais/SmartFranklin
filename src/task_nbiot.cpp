@@ -1,4 +1,7 @@
 #include <Arduino.h>
+#include <M5Unified.h>
+#include <M5Utility.h>
+
 #include "tasks.h"
 #include "nb_iot2.h"
 #include "config_store.h"
@@ -6,10 +9,10 @@
 
 void taskNbiot(void *pv)
 {
-    Serial.println("[NB_IOT] Task started");
+    M5_LOGI("[NB_IOT] Task started");
 
     if (!CONFIG.nbiot_enabled) {
-        Serial.println("[NB_IOT] Disabled in config");
+        M5_LOGW("[NB_IOT] Disabled in config");
         vTaskDelete(nullptr);
         return;
     }
@@ -17,9 +20,9 @@ void taskNbiot(void *pv)
     NB_IOT2.init(&Serial2, 115200, 13, 14);
 
     if (!NB_IOT2.connectNetwork(CONFIG.nbiot_apn)) {
-        Serial.println("[NB_IOT] Network attach failed");
+        M5_LOGE("[NB_IOT] Network attach failed");
     } else {
-        Serial.println("[NB_IOT] Network attached");
+        M5_LOGI("[NB_IOT] Network attached");
     }
 
     if (!CONFIG.nbiot_mqtt_host.isEmpty()) {
@@ -33,16 +36,17 @@ void taskNbiot(void *pv)
         NB_IOT2.loop();
 
         NbIotStatus st = NB_IOT2.getStatus();
-        mqtt_publish("smartfranklin/nbiot/rssi", String(st.rssi));
-        mqtt_publish("smartfranklin/nbiot/ip", st.ip);
-        mqtt_publish("smartfranklin/nbiot/operator", st.operator_name);
+
+        sf_mqtt::publish("smartfranklin/nbiot/rssi", String(st.rssi).c_str());
+        sf_mqtt::publish("smartfranklin/nbiot/ip", st.ip.c_str());
+        sf_mqtt::publish("smartfranklin/nbiot/operator", st.operator_name.c_str());
 
         GnssInfo g;
         if (NB_IOT2.getGnss(g) && g.valid) {
             String js = String("{\"lat\":") + String(g.lat, 6) +
                         ",\"lon\":" + String(g.lon, 6) +
                         ",\"alt\":" + String(g.alt, 1) + "}";
-            mqtt_publish("smartfranklin/nbiot/gnss", js);
+            sf_mqtt::publish("smartfranklin/nbiot/gnss", js.c_str());
         }
 
         vTaskDelay(pdMS_TO_TICKS(15000));

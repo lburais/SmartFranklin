@@ -2,9 +2,6 @@
 #include <M5UnitUnified.h>
 #include <M5Utility.h>
 
-#include <Arduino.h>
-#include <Wire.h>
-
 #include "tasks.h"
 #include "data_model.h"
 #include "pahub_channels.h"
