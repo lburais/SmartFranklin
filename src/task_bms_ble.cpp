@@ -124,6 +124,7 @@
  */
 
 #include <Arduino.h>
+#include <M5Unified.h>
 #include <NimBLEDevice.h>
 //#include <NimBLERemoteCharacteristic.h>  // Commented out as not used
 
@@ -183,7 +184,7 @@ static const char *UUID_SERVICE  = "0000ff00-0000-1000-8000-00805f9b34fb";
 static const char *UUID_NOTIFY   = "0000ff01-0000-1000-8000-00805f9b34fb";
 
 // ============================================================================
-// BLE Notification Callback Class
+// BLE Notification Callback
 // ============================================================================
 
 /**
@@ -225,56 +226,34 @@ static const char *UUID_NOTIFY   = "0000ff01-0000-1000-8000-00805f9b34fb";
  * @see DATA - Global data structure for battery parameters
  * @see sf_mqtt::publish() - MQTT message publishing
  */
-class BmsNotifyCallback : public NimBLERemoteCharacteristicCallbacks {
-    /**
-     * @brief Processes incoming BLE notifications from BMS.
-     * 
-     * Called by NimBLE stack when notification data is received.
-     * Parses JBD frame and updates system state accordingly.
-     * 
-     * @param c - Pointer to the characteristic that sent the notification
-     * @param data - Raw notification data buffer
-     * @param len - Length of data buffer in bytes
-     * @param isNotify - True if this is a notification (always true for this characteristic)
-     */
-    void onNotify(NimBLERemoteCharacteristic *c,
-                  uint8_t *data,
-                  size_t len,
-                  bool isNotify) override
-    {
-        // Parse the incoming JBD BMS frame
-        JbdFrame f;
-        if (!jbd_parse_frame(data, len, f)) {
-            Serial.println("[BMS_BLE] Invalid frame");
-            return;
-        }
-
-        // Update global data model with thread-safe access
-        {
-            std::lock_guard<std::mutex> lock(DATA_MUTEX);
-            DATA.bms_voltage = f.voltage;
-            DATA.bms_current = f.current;
-            DATA.bms_soc     = f.soc;
-        }
-
-        // Publish battery data to MQTT topics
-        // Convert float values to strings with appropriate precision
-        sf_mqtt::publish("smartfranklin/bms/voltage",
-                         String(f.voltage, 2).c_str());
-        sf_mqtt::publish("smartfranklin/bms/current",
-                         String(f.current, 2).c_str());
-        sf_mqtt::publish("smartfranklin/bms/soc",
-                         String(f.soc, 1).c_str());
+static void bmsNotifyCallback(NimBLERemoteCharacteristic *c,
+                              uint8_t *data,
+                              size_t len,
+                              bool isNotify)
+{
+    // Parse the incoming JBD BMS frame
+    JbdFrame f;
+    if (!jbd_parse_frame(data, len, f)) {
+        M5_LOGW("[BMS_BLE] Invalid frame");
+        return;
     }
-};
 
-/**
- * @brief Global instance of the BMS notification callback.
- * 
- * Registered with the notification characteristic during subscription.
- * Processes all incoming battery data notifications.
- */
-static BmsNotifyCallback notifyCb;
+    // Update global data model with thread-safe access
+    {
+        std::lock_guard<std::mutex> lock(DATA_MUTEX);
+        DATA.bms_voltage = f.voltage;
+        DATA.bms_current = f.current;
+        DATA.bms_soc     = f.soc;
+    }
+
+    // Publish battery data to MQTT topics
+    sf_mqtt::publish("smartfranklin/bms/voltage",
+                     String(f.voltage, 2).c_str());
+    sf_mqtt::publish("smartfranklin/bms/current",
+                     String(f.current, 2).c_str());
+    sf_mqtt::publish("smartfranklin/bms/soc",
+                     String(f.soc, 1).c_str());
+}
 
 // ============================================================================
 // BLE Connection Establishment Function
@@ -339,56 +318,57 @@ static BmsNotifyCallback notifyCb;
  */
 static bool connectToBms()
 {
-    Serial.println("[BMS_BLE] Scanning...");
+    M5_LOGI("[BMS_BLE] Scanning...");
 
     // Start BLE scan to find JBD-BMS device
     NimBLEScan *scan = NimBLEDevice::getScan();
     scan->setActiveScan(true);  // Active scan for faster discovery
-    NimBLEScanResults results = scan->start(5, false);  // 5-second scan
+    scan->start(5, false);  // 5-second scan
+    NimBLEScanResults results = scan->getResults();
 
     // Search scan results for target device by name
-    NimBLEAdvertisedDevice *target = nullptr;
+    const NimBLEAdvertisedDevice *target = nullptr;
     for (int i = 0; i < results.getCount(); ++i) {
-        auto &dev = results.getDevice(i);
-        if (dev.getName() == TARGET_NAME) {
-            target = &dev;
+        const NimBLEAdvertisedDevice *dev = results.getDevice(i);
+        if (dev && dev->getName() == TARGET_NAME) {
+            target = dev;
             break;
         }
     }
 
     if (!target) {
-        Serial.println("[BMS_BLE] Device not found");
+        M5_LOGW("[BMS_BLE] Device not found");
         return false;
     }
 
     // Create BLE client and attempt connection
     client = NimBLEDevice::createClient();
     if (!client->connect(target)) {
-        Serial.println("[BMS_BLE] Connect failed");
+        M5_LOGE("[BMS_BLE] Connect failed");
         return false;
     }
 
     // Discover JBD BMS service
     NimBLERemoteService *svc = client->getService(UUID_SERVICE);
     if (!svc) {
-        Serial.println("[BMS_BLE] Service missing");
+        M5_LOGE("[BMS_BLE] Service missing");
         return false;
     }
 
     // Find notification characteristic
     notifyChar = svc->getCharacteristic(UUID_NOTIFY);
     if (!notifyChar || !notifyChar->canNotify()) {
-        Serial.println("[BMS_BLE] Notify characteristic missing");
+        M5_LOGE("[BMS_BLE] Notify characteristic missing");
         return false;
     }
 
     // Subscribe to notifications with callback
-    if (!notifyChar->subscribe(true, &notifyCb)) {
-        Serial.println("[BMS_BLE] Subscribe failed");
+    if (!notifyChar->subscribe(true, bmsNotifyCallback, true)) {
+        M5_LOGE("[BMS_BLE] Subscribe failed");
         return false;
     }
 
-    Serial.println("[BMS_BLE] Subscribed to notifications");
+    M5_LOGI("[BMS_BLE] Subscribed to notifications");
     return true;
 }
 
@@ -448,7 +428,7 @@ static bool connectToBms()
  */
 void taskBmsBle(void *pv)
 {
-    Serial.println("[BMS_BLE] Task started");
+    M5_LOGI("[BMS_BLE] Task started");
 
     // Initialize NimBLE BLE stack
     NimBLEDevice::init("SmartFranklin");
@@ -460,16 +440,16 @@ void taskBmsBle(void *pv)
     for (;;) {
         // Check if BLE connection is active
         if (!client || !client->isConnected()) {
-            Serial.println("[BMS_BLE] Connecting...");
+            M5_LOGI("[BMS_BLE] Connecting...");
             
             // Attempt to establish BLE connection
             if (!connectToBms()) {
-                Serial.println("[BMS_BLE] Retry in 5s");
+                M5_LOGW("[BMS_BLE] Retry in 5s");
                 // Delay before retrying connection
                 vTaskDelay(pdMS_TO_TICKS(5000));
                 continue;
             }
-            Serial.println("[BMS_BLE] Connected");
+            M5_LOGI("[BMS_BLE] Connected");
         }
 
         // Connection active, check again in 1 second

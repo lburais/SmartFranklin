@@ -178,6 +178,16 @@ void taskBmsBle(void *pvParameters);
 void taskDisplay(void *pvParameters);
 
 /**
+ * @brief Hardware monitor task.
+ *
+ * Publishes M5 device hardware telemetry (battery, buttons, IMU) to MQTT.
+ *
+ * @param pvParameters FreeRTOS task parameter (unused)
+ * @return void (infinite loop, never returns)
+ */
+void taskHwMonitor(void *pvParameters);
+
+/**
  * @brief Meshtastic mesh networking bridge task.
  * 
  * Manages LoRa mesh network connectivity via Meshtastic protocol,

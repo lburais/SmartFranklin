@@ -115,6 +115,7 @@
  */
 
 #include <Arduino.h>
+#include <M5Unified.h>
 #include "tasks.h"
 #include "watchdog.h"
 #include <esp_task_wdt.h>
@@ -184,7 +185,7 @@
  */
 void taskWatchdog(void *pv)
 {
-    Serial.println("[WATCHDOG] Task started");
+    M5_LOGI("[WATCHDOG] Task started");
 
     // Initialize the watchdog system
     watchdog_init();

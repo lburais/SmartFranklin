@@ -14,11 +14,11 @@
  * Version:     1.0
  * 
  * Overview:
- *   SmartFranklin maintains accurate timekeeping using the built-in RTC
- *   module in the M5Stack. This task continuously reads the current date
- *   and time, formats it as an ISO-like string, updates the global data
- *   model for system-wide access, and publishes the timestamp to MQTT
- *   for remote monitoring and synchronization.
+ *   SmartFranklin maintains accurate timekeeping using the internal M5 RTC
+ *   when available, with automatic fallback to an external RTC on Port A.
+ *   The task can discover an external RTC behind a PAHub channel, then
+ *   continuously reads date/time, formats it as an ISO string, updates the
+ *   global data model, and publishes timestamps to MQTT.
  * 
  * RTC Hardware:
  *   - BM8563 RTC chip integrated in M5Stack Core devices
@@ -29,7 +29,7 @@
  *   - Alarm functionality available (not used in this task)
  * 
  * Time Format:
- *   - String Format: "YYYY-MM-DD HH:MM:SS" (ISO 8601 inspired)
+ *   - String Format: "YYYY-MM-DDTHH:MM:SSZ" (ISO 8601 UTC)
  *   - Components: 4-digit year, 2-digit month/day, 2-digit hour/minute/second
  *   - Zero-padding: All numeric components padded with leading zeros
  *   - Buffer Size: 32 characters (sufficient for format + null terminator)
@@ -44,7 +44,7 @@
  * 
  * MQTT Publishing:
  *   - Topic: "smartfranklin/rtc/time"
- *   - Payload: Timestamp string (e.g., "2026-03-05 14:30:25")
+ *   - Payload: Timestamp string (e.g., "2026-03-05T14:30:25Z")
  *   - QoS: Default (0, at most once delivery)
  *   - Retention: Not retained (current time only)
  *   - Frequency: Every PERIOD_RTC milliseconds (continuous updates)
@@ -75,7 +75,7 @@
  *   - M5Utility.h (M5Stack utility functions)
  *   - tasks.h (Task definitions and PERIOD_RTC constant)
  *   - data_model.h (Global DATA structure and mutex)
- *   - pahub_channels.h (PA Hub channels - not used in this task)
+ *   - pahub_channels.h (PAHub address/channel helpers for external RTC fallback)
  *   - mqtt_layer.h (MQTT publishing interface)
  * 
  * Limitations:
@@ -84,7 +84,7 @@
  *   - No Timezone Support: UTC time only (no timezone conversion)
  *   - Battery Dependency: Time lost if CR1220 battery depleted
  *   - No Alarm Usage: RTC alarm features not implemented
- *   - Single RTC: No support for external RTC modules
+ *   - Auto-discovery Scope: Fallback scans PAHub channels for supported RTC addresses
  * 
  * Best Practices:
  *   - Set RTC time during device commissioning
@@ -127,6 +127,73 @@
 #include "data_model.h"
 #include "pahub_channels.h"
 #include "mqtt_layer.h"
+
+namespace {
+constexpr uint8_t RTC_ADDR_PCF8563 = 0x51;
+constexpr uint8_t RTC_ADDR_RX8130 = 0x32;
+constexpr uint8_t RTC_ADDR_POWERHUB = 0x50;
+
+bool g_use_external_rtc = false;
+int g_external_rtc_pahub_channel = -1;
+
+bool ex_i2c_device_exists(const uint8_t address)
+{
+    return M5.Ex_I2C.scanID(address, 400000);
+}
+
+bool pahub_select_channel(const uint8_t channel)
+{
+    if (!M5.Ex_I2C.start(PAHUB_ADDRESS, false, 400000)) {
+        return false;
+    }
+    const bool write_ok = M5.Ex_I2C.write(static_cast<uint8_t>(1U << channel));
+    const bool stop_ok = M5.Ex_I2C.stop();
+    return write_ok && stop_ok;
+}
+
+void pahub_disable_all_channels()
+{
+    if (!M5.Ex_I2C.start(PAHUB_ADDRESS, false, 400000)) {
+        return;
+    }
+    M5.Ex_I2C.write(static_cast<uint8_t>(0x00));
+    M5.Ex_I2C.stop();
+}
+
+bool rtc_address_visible_on_bus()
+{
+    return ex_i2c_device_exists(RTC_ADDR_PCF8563)
+        || ex_i2c_device_exists(RTC_ADDR_RX8130)
+        || ex_i2c_device_exists(RTC_ADDR_POWERHUB);
+}
+
+bool enable_external_rtc_via_pahub()
+{
+    if (!ex_i2c_device_exists(PAHUB_ADDRESS)) {
+        return false;
+    }
+
+    for (uint8_t channel = 0; channel < 8; ++channel) {
+        if (!pahub_select_channel(channel)) {
+            continue;
+        }
+
+        if (!rtc_address_visible_on_bus()) {
+            continue;
+        }
+
+        if (M5.Rtc.begin(&M5.Ex_I2C)) {
+            g_use_external_rtc = true;
+            g_external_rtc_pahub_channel = static_cast<int>(channel);
+            M5_LOGI("[RTC] external RTC found via PAHub channel %d", g_external_rtc_pahub_channel);
+            return true;
+        }
+    }
+
+    pahub_disable_all_channels();
+    return false;
+}
+}  // namespace
 
 // ============================================================================
 // RTC Initialization Function
@@ -171,16 +238,36 @@
  * @see M5.Rtc.isEnabled() - RTC hardware availability check
  * @see M5.Rtc.getDateTime() - RTC time reading function
  */
-void setup()
+static void rtc_setup()
 {
-    if (!M5.Rtc.isEnabled()) {
+    if (M5.Rtc.isEnabled()) {
+        M5_LOGI("[RTC] found (internal).");
+        return;
+    }
+
+    M5_LOGW("[RTC] internal RTC not found, searching external RTC...");
+    M5.Ex_I2C.begin();
+
+    bool found = enable_external_rtc_via_pahub();
+
+    if (!found && M5.Rtc.begin(&M5.Ex_I2C)) {
+        g_use_external_rtc = true;
+        g_external_rtc_pahub_channel = -1;
+        found = true;
+        M5_LOGI("[RTC] external RTC found on direct Port A I2C");
+    }
+
+    if (!found) {
         M5_LOGE("[RTC] not found.");
         for (;;) {
             vTaskDelay(500);
         }
     }
 
-    M5_LOGI("[RTC] found.");
+    M5.Rtc.setSystemTimeFromRtc();
+    M5.Rtc.disableIRQ();
+
+    M5_LOGI("[RTC] found (external).");
 }
 
 // ============================================================================
@@ -196,7 +283,7 @@ void setup()
  * 
  * Processing Steps:
  *   1. Read current date/time from RTC hardware
- *   2. Format as "YYYY-MM-DD HH:MM:SS" string using snprintf
+ *   2. Format as "YYYY-MM-DDTHH:MM:SSZ" string using snprintf
  *   3. Update global DATA.rtc_time with thread-safe mutex lock
  *   4. Publish timestamp to MQTT topic "smartfranklin/rtc/time"
  *   5. Log formatted timestamp to serial console
@@ -221,7 +308,7 @@ void setup()
  * Logging:
  *   - Serial Output: Formatted log message with M5.Log.printf()
  *   - Debug Level: Informational logging for monitoring
- *   - Format: "[RTC] time:YYYY-MM-DD HH:MM:SS"
+ *   - Format: "[RTC] time:YYYY-MM-DDTHH:MM:SSZ"
  * 
  * Performance:
  *   - Execution Time: < 10ms (I2C read + formatting + MQTT)
@@ -238,26 +325,43 @@ void setup()
  * @see M5.Rtc.getDateTime() - RTC time reading
  * @see sf_mqtt::publish() - MQTT message publishing
  */
-void loop()
+static void rtc_loop()
 {
-    auto dt = M5.Rtc.getDateTime();
+    if (g_use_external_rtc && g_external_rtc_pahub_channel >= 0) {
+        if (!pahub_select_channel(static_cast<uint8_t>(g_external_rtc_pahub_channel))) {
+            M5_LOGW("[RTC] failed to select PAHub channel %d", g_external_rtc_pahub_channel);
+            return;
+        }
+    }
+
+    m5::rtc_datetime_t dt{};
+    const bool rtc_ok = M5.Rtc.getDateTime(&dt);
+
+    if (g_use_external_rtc && g_external_rtc_pahub_channel >= 0) {
+        pahub_disable_all_channels();
+    }
+
+    if (!rtc_ok) {
+        M5_LOGW("[RTC] read failed");
+        return;
+    }
 
     char buf[32];
 
-    snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d",
+    snprintf(buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02dZ",
                 dt.date.year, dt.date.month, dt.date.date,
                 dt.time.hours, dt.time.minutes, dt.time.seconds);
 
-    // Mise à jour du modèle partagé
+    // Update shared data model
     {
         std::lock_guard<std::mutex> lock(DATA_MUTEX);
         DATA.rtc_time = buf;
     }
 
-    // Publication MQTT
+    // Publish to MQTT
     sf_mqtt::publish("smartfranklin/rtc/time", std::string(String(buf).c_str()));
 
-    // Affichage des valeurs
+    // Log current value
     M5.Log.printf("[RTC] time:%s\r\n", buf);
 
 }
@@ -309,22 +413,22 @@ void loop()
  * 
  * @return void (task runs indefinitely)
  * 
- * @note Task function name is taskRtc but implements RTC functionality.
- *       The naming is consistent with other sensor tasks.
+ * @note Task function name is taskRtc and supports internal/external RTC sources.
  *       RTC time should be set during initial device setup.
+ *       External fallback currently supports direct Port A or PAHub-routed RTC.
  * 
- * @see setup() - RTC hardware initialization
- * @see loop() - Time reading and publishing
+ * @see rtc_setup() - RTC hardware initialization
+ * @see rtc_loop() - Time reading and publishing
  * @see PERIOD_RTC - Update interval configuration
  */
 void taskRtc(void *pv)
 {
     M5_LOGI("[RTC] Task started");
 
-    setup();
+    rtc_setup();
 
     for (;;) {
-            loop();
+        rtc_loop();
             vTaskDelay(pdMS_TO_TICKS(PERIOD_RTC));
     }
 

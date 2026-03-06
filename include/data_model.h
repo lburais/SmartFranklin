@@ -183,8 +183,8 @@ struct SmartData {
      * Updated continuously by RTC task for system time synchronization.
      * Used for timestamping sensor data and logging.
      * 
-     * Format: "YYYY-MM-DD HH:MM:SS" (ISO 8601 inspired)
-     * Example: "2026-03-05 14:30:25"
+    * Format: "YYYY-MM-DDTHH:MM:SSZ" (ISO 8601 UTC)
+    * Example: "2026-03-05T14:30:25Z"
      * Update Rate: Continuous (every few seconds)
      * Default: Empty string (no time set)
      */

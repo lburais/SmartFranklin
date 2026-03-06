@@ -165,6 +165,12 @@ static bool extConnected = false;
  */
 static bool intConnected = false;
 
+// Reconnect throttling (prevents rapid connect() retries and log spam)
+static unsigned long lastIntReconnectAttemptMs = 0;
+static unsigned long lastExtReconnectAttemptMs = 0;
+static constexpr unsigned long kIntReconnectIntervalMs = 5000;
+static constexpr unsigned long kExtReconnectIntervalMs = 10000;
+
 // ============================================================================
 // Message Forwarding Statistics
 // ============================================================================
@@ -490,7 +496,7 @@ void mqtt_bridge_init()
  * 
  * Error Handling:
  *   - Connection failures: Silently retried on next call
- *   - No exponential backoff (simple retry logic)
+ *   - Retry attempts are rate-limited to avoid rapid reconnect loops
  *   - Authentication failures: Logged by broker, not by this function
  * 
  * Performance:
@@ -509,7 +515,23 @@ void mqtt_bridge_init()
  */
 static void ensureInternal()
 {
+    if (!CONFIG.mqtt_bridge_enabled) {
+        intConnected = false;
+        return;
+    }
+
     // Check if internal broker connection is already established
+    if (intMqtt.connected()) {
+        intConnected = true;
+        return;
+    }
+
+    const unsigned long now = millis();
+    if (lastIntReconnectAttemptMs != 0 && now - lastIntReconnectAttemptMs < kIntReconnectIntervalMs) {
+        return;
+    }
+    lastIntReconnectAttemptMs = now;
+
     if (!intMqtt.connected()) {
         // Attempt connection to internal broker
         // Client ID identifies this bridge instance
@@ -566,7 +588,7 @@ static void ensureInternal()
  * Error Handling:
  *   - External disabled: Function returns immediately
  *   - Connection failures: Silently retried on next call
- *   - No exponential backoff (simple retry logic)
+ *   - Retry attempts are rate-limited to avoid rapid reconnect loops
  *   - Network issues: Handled by underlying WiFiClient
  * 
  * Performance:
@@ -586,9 +608,23 @@ static void ensureInternal()
 static void ensureExternal()
 {
     // Only attempt external connection if enabled in configuration
-    if (!CONFIG.ext_mqtt_enabled) return;
+    if (!CONFIG.mqtt_bridge_enabled || !CONFIG.ext_mqtt_enabled || CONFIG.ext_mqtt_host.isEmpty()) {
+        extConnected = false;
+        return;
+    }
 
     // Check if external broker connection is already established
+    if (extMqtt.connected()) {
+        extConnected = true;
+        return;
+    }
+
+    const unsigned long now = millis();
+    if (lastExtReconnectAttemptMs != 0 && now - lastExtReconnectAttemptMs < kExtReconnectIntervalMs) {
+        return;
+    }
+    lastExtReconnectAttemptMs = now;
+
     if (!extMqtt.connected()) {
         // Attempt connection to external broker
         // Client ID identifies this bridge instance

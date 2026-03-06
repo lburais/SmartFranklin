@@ -117,6 +117,7 @@
 #include "mqtt_layer.h"
 
 #include <cstring>
+#include <esp_idf_version.h>
 #include <esp_log.h>
 #include <mqtt_client.h>
 
@@ -187,7 +188,7 @@ static bool                     s_connected = false;
  * @see esp_mqtt_event_handle_t - ESP-IDF MQTT event structure
  * @see MessageCallback - User-registered message handler function
  */
-static esp_err_t event_handler_cb(esp_mqtt_event_handle_t event)
+static void handle_mqtt_event(esp_mqtt_event_handle_t event)
 {
     switch (event->event_id) {
 
@@ -221,9 +222,23 @@ static esp_err_t event_handler_cb(esp_mqtt_event_handle_t event)
         ESP_LOGD(TAG, "Unhandled MQTT event id: %d", event->event_id);
         break;
     }
+}
 
+#if defined(ESP_IDF_VERSION_MAJOR) && (ESP_IDF_VERSION_MAJOR >= 5)
+static void event_handler_cb(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
+{
+    (void)handler_args;
+    (void)base;
+    (void)event_id;
+    handle_mqtt_event(static_cast<esp_mqtt_event_handle_t>(event_data));
+}
+#else
+static esp_err_t event_handler_cb(esp_mqtt_event_handle_t event)
+{
+    handle_mqtt_event(event);
     return ESP_OK;
 }
+#endif
 
 /**
  * @brief Initializes the MQTT client with configuration and callback.
@@ -296,9 +311,36 @@ bool init(const Config &cfg, MessageCallback cb)
         return true;
     }
 
+    if (cfg.uri.empty()) {
+        ESP_LOGW(TAG, "MQTT init skipped: empty URI");
+        return false;
+    }
+
+    if (cfg.uri.find("://") == std::string::npos) {
+        ESP_LOGW(TAG, "MQTT init skipped: URI missing scheme (expected mqtt://...)");
+        return false;
+    }
+
     s_msg_cb = cb;
 
     esp_mqtt_client_config_t mqtt_cfg = {};
+
+#if defined(ESP_IDF_VERSION_MAJOR) && (ESP_IDF_VERSION_MAJOR >= 5)
+    mqtt_cfg.broker.address.uri = cfg.uri.c_str();
+
+    if (!cfg.username.empty()) {
+        mqtt_cfg.credentials.username = cfg.username.c_str();
+    }
+    if (!cfg.password.empty()) {
+        mqtt_cfg.credentials.authentication.password = cfg.password.c_str();
+    }
+    if (!cfg.client_id.empty()) {
+        mqtt_cfg.credentials.client_id = cfg.client_id.c_str();
+    }
+
+    mqtt_cfg.session.keepalive = cfg.keepalive_sec;
+    mqtt_cfg.session.disable_clean_session = !cfg.clean_session;
+#else
     mqtt_cfg.uri = cfg.uri.c_str();
 
     if (!cfg.username.empty()) {
@@ -315,12 +357,23 @@ bool init(const Config &cfg, MessageCallback cb)
     mqtt_cfg.disable_clean_session = !cfg.clean_session;
 
     mqtt_cfg.event_handle = event_handler_cb;
+#endif
 
     s_client = esp_mqtt_client_init(&mqtt_cfg);
     if (!s_client) {
         ESP_LOGE(TAG, "Failed to init MQTT client");
         return false;
     }
+
+#if defined(ESP_IDF_VERSION_MAJOR) && (ESP_IDF_VERSION_MAJOR >= 5)
+    esp_err_t register_err = esp_mqtt_client_register_event(s_client, MQTT_EVENT_ANY, event_handler_cb, nullptr);
+    if (register_err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register MQTT event handler: %d", register_err);
+        esp_mqtt_client_destroy(s_client);
+        s_client = nullptr;
+        return false;
+    }
+#endif
 
     esp_err_t err = esp_mqtt_client_start(s_client);
     if (err != ESP_OK) {

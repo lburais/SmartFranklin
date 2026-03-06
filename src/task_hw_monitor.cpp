@@ -209,7 +209,7 @@
  */
 void taskHwMonitor(void *pv)
 {
-    Serial.println("[HW] Hardware monitor started");
+    M5_LOGI("[HW] Hardware monitor started");
 
     for (;;) {
 

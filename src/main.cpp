@@ -50,8 +50,6 @@
  * ============================================================================
  */
 
-#include "task_meshtastic_bridge.cpp"
-#include "task_hw_monitor.cpp"
 #include "m5_hw.h"
 
 #include <Arduino.h>
@@ -67,6 +65,7 @@
 #include "config_store.h"
 #include "captive_portal.h"
 #include "mqtt_bridge.h"
+#include "meshtastic_bridge.h"
 
 // ============================================================================
 // Task Handle Declarations
@@ -132,18 +131,32 @@ void setup() {
     command_handler_init();
 
     // --- MQTT Layer Setup ---
-    // Configure and initialize ESP-MQTT client for broker communication
-    sf_mqtt::Config mcfg;
-    mcfg.uri       = std::string(CONFIG.ext_mqtt_host.c_str());  // MQTT broker address
-    mcfg.username  = std::string(CONFIG.ext_mqtt_user.c_str());  // MQTT authentication user
-    mcfg.password  = std::string(CONFIG.ext_mqtt_pass.c_str());  // MQTT authentication password
-    mcfg.client_id = std::string("SmartFranklin");               // MQTT client identifier
+    // Configure and initialize ESP-MQTT client for external broker communication
+    if (CONFIG.ext_mqtt_enabled && !CONFIG.ext_mqtt_host.isEmpty()) {
+        std::string uri = std::string(CONFIG.ext_mqtt_host.c_str());
+        if (uri.find("://") == std::string::npos) {
+            uri = std::string("mqtt://") + uri;
+        }
 
-    // Initialize MQTT with callback for incoming messages
-    sf_mqtt::init(mcfg, [](const std::string &topic, const std::string &payload){
-        // Route incoming MQTT messages to command handler for processing
-        command_handle(String(topic.c_str()), String(payload.c_str()));
-    });
+        sf_mqtt::Config mcfg;
+        mcfg.uri       = uri;                                    // MQTT broker URI
+        mcfg.username  = std::string(CONFIG.ext_mqtt_user.c_str());
+        mcfg.password  = std::string(CONFIG.ext_mqtt_pass.c_str());
+        mcfg.client_id = std::string("SmartFranklin");
+
+        const bool mqtt_ok = sf_mqtt::init(mcfg, [](const std::string &topic, const std::string &payload){
+            meshtastic_bridge_handle_mqtt(String(topic.c_str()), String(payload.c_str()));
+            command_handle(String(topic.c_str()), String(payload.c_str()));
+        });
+
+        if (!mqtt_ok) {
+            M5_LOGW("[MQTT] External MQTT init failed for URI: %s", uri.c_str());
+        }
+    } else if (CONFIG.ext_mqtt_enabled && CONFIG.ext_mqtt_host.isEmpty()) {
+        M5_LOGW("[MQTT] External MQTT enabled but host is empty; skipping init");
+    } else {
+        M5_LOGI("[MQTT] External MQTT disabled in config; skipping init");
+    }
 
     // --- Web Dashboard and Bridge Initialization ---
     // Start web-based management interface and MQTT device bridge
@@ -169,7 +182,7 @@ void setup() {
     xTaskCreatePinnedToCore(taskNbiot,            "NB_IOT",   8192, nullptr, 2,  &taskNbiotHandle,           0);
     xTaskCreatePinnedToCore(taskWatchdog,         "WATCHDOG", 2048, nullptr, 3,  nullptr,                    0);
 
-    Serial.println("SmartFranklin setup complete.");
+    M5_LOGI("SmartFranklin setup complete.");
 }
 
 // ============================================================================

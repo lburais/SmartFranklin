@@ -346,7 +346,7 @@ void draw()
  */
 void taskDisplay(void *pv)
 {
-    Serial.println("[DISPLAY] Task started");
+    M5_LOGI("[DISPLAY] Task started");
     
     // Track last screen to detect changes and avoid unnecessary redraws
     int lastScreen = -1;

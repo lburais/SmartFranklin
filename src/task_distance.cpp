@@ -31,7 +31,7 @@
  *   - Technology: Time-of-flight ultrasonic ranging
  *   - Range: 2-400 cm (manufacturer specifications)
  *   - Accuracy: ±1 cm typical (temperature and angle dependent)
- *   - Update Rate: Configurable via PERIOD_DISTANCE (default 100ms)
+ *   - Update Rate: Configurable via PERIOD_DISTANCE (default 1000ms)
  *   - Units: Centimeters (stored as float for precision)
  * 
  * PA Hub Integration:
@@ -182,6 +182,28 @@ namespace {
      * Updated on each sensor measurement cycle and used for data publishing.
      */
     int32_t                     distance = 0;
+
+    constexpr uint8_t           DISTANCE_I2C_ADDRESS = 0x57;
+
+    bool i2c_device_exists(const uint8_t address)
+    {
+        Wire.beginTransmission(address);
+        return Wire.endTransmission() == 0;
+    }
+
+    bool pahub_select_channel(const uint8_t channel)
+    {
+        Wire.beginTransmission(PAHUB_ADDRESS);
+        Wire.write(static_cast<uint8_t>(1U << channel));
+        return Wire.endTransmission() == 0;
+    }
+
+    void pahub_disable_all_channels()
+    {
+        Wire.beginTransmission(PAHUB_ADDRESS);
+        Wire.write(static_cast<uint8_t>(0x00));
+        Wire.endTransmission();
+    }
 }  // namespace
 
 // ============================================================================
@@ -238,7 +260,7 @@ namespace {
  * @see UnitPaHub2 - PA Hub multiplexer documentation
  * @see pahub_channels.h - Channel assignment definitions
  */
-void setup()
+static void distance_setup()
 {
     // Allow system to stabilize after power-on
     m5::utility::delay(2000);
@@ -255,10 +277,39 @@ void setup()
     Wire.end();
     Wire.begin(pin_num_sda, pin_num_scl, 400000U);
 
-    // Connect ultrasonic sensor to PA Hub and initialize units
-    if (!pahub.add(unit, PAHUB_CH_DISTANCE) ||      // Connect sensor to PA Hub channel
-        !Units.add(pahub, Wire) ||                       // Add PA Hub to unit interface
-        !Units.begin()) {
+    bool initialized = false;
+
+    // Prefer PAHub auto-discovery if the hub is present
+    if (i2c_device_exists(PAHUB_ADDRESS)) {
+        int foundChannel = -1;
+
+        for (uint8_t channel = 0; channel < 8; ++channel) {
+            if (!pahub_select_channel(channel)) {
+                continue;
+            }
+            if (i2c_device_exists(DISTANCE_I2C_ADDRESS)) {
+                foundChannel = channel;
+                break;
+            }
+        }
+
+        pahub_disable_all_channels();
+
+        if (foundChannel >= 0) {
+            M5_LOGI("[DISTANCE] found via PAHub channel %d", foundChannel);
+            initialized = pahub.add(unit, static_cast<uint8_t>(foundChannel)) &&
+                          Units.add(pahub, Wire) &&
+                          Units.begin();
+        }
+    }
+
+    // Fallback: direct I2C unit (without PAHub)
+    if (!initialized && i2c_device_exists(DISTANCE_I2C_ADDRESS)) {
+        M5_LOGI("[DISTANCE] found on direct I2C");
+        initialized = Units.add(unit, Wire) && Units.begin();
+    }
+
+    if (!initialized) {
         M5_LOGE("[DISTANCE] not found.");
         M5_LOGW("%s", Units.debugInfo().c_str());
 
@@ -327,7 +378,7 @@ void setup()
  * @see unit.updated() - Checks for new distance data
  * @see sf_mqtt::publish() - MQTT message publishing
  */
-void loop()
+static void distance_loop()
 {
     // Update M5Stack system state
     M5.update();
@@ -399,22 +450,21 @@ void loop()
  * 
  * @return void (task runs indefinitely)
  * 
- * @note Task function name is taskWeight but implements distance measurement.
- *       This appears to be a copy-paste artifact from weight sensor code.
- *       Consider renaming for clarity.
+ * @note Task function name is taskDistance and matches the implemented behavior.
+ *       Keep PAHub wiring consistent with runtime auto-discovery.
  * 
- * @see setup() - Sensor initialization function
- * @see loop() - Measurement processing function
+ * @see distance_setup() - Sensor initialization function
+ * @see distance_loop() - Measurement processing function
  * @see PERIOD_DISTANCE - Update interval configuration
  */
-void taskWeight(void *pv)
+void taskDistance(void *pv)
 {
     M5_LOGI("[DISTANCE] Task started");
 
-    setup();
+    distance_setup();
 
     for (;;) {
-        loop();
+        distance_loop();
         vTaskDelay(pdMS_TO_TICKS(PERIOD_DISTANCE));
     }
 }

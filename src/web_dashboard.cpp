@@ -113,7 +113,7 @@
  * 
  * Dependencies:
  *   - ESPAsyncWebServer.h (asynchronous web server library)
- *   - AsyncElegantOTA.h (OTA firmware update library)
+ *   - ElegantOTA.h (OTA firmware update library)
  *   - ArduinoJson.h (JSON serialization for API responses)
  *   - FS.h, SPIFFS.h (SPIFFS filesystem access)
  *   - WiFi.h (network connectivity)
@@ -168,7 +168,7 @@
 #include "web_dashboard.h"
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
-#include <AsyncElegantOTA.h>
+#include <ElegantOTA.h>
 #include <FS.h>
 #include <SPIFFS.h>
 #include <WiFi.h>
@@ -351,7 +351,7 @@ static bool checkAuth(AsyncWebServerRequest *request) {
  *   - /api/sleep : Deep sleep mode entry
  * 
  *   Special Routes:
- *   - OTA Update: /update (handled by AsyncElegantOTA)
+ *   - OTA Update: /update (handled by ElegantOTA)
  *   - Authentication: Required for sensitive endpoints
  * 
  * Server Configuration:
@@ -361,7 +361,7 @@ static bool checkAuth(AsyncWebServerRequest *request) {
  *   - Up to 4 concurrent connections
  * 
  * OTA Integration:
- *   - AsyncElegantOTA provides firmware upload interface
+ *   - ElegantOTA provides firmware upload interface
  *   - Protected by same admin credentials
  *   - Automatic partition switching on successful update
  *   - Rollback capability if update fails
@@ -384,7 +384,7 @@ static bool checkAuth(AsyncWebServerRequest *request) {
  *       Example: web_dashboard_init(); // in setup()
  * 
  * @see AsyncWebServer::begin() - Starts the web server
- * @see AsyncElegantOTA::begin() - Initializes OTA update capability
+ * @see ElegantOTA::begin() - Initializes OTA update capability
  */
 void web_dashboard_init()
 {
@@ -394,7 +394,7 @@ void web_dashboard_init()
     // Serve embedded HTML page from PROGMEM memory
     // No authentication required for main dashboard
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-        request->send_P(200, "text/html", MAIN_PAGE);
+        request->send(200, "text/html", MAIN_PAGE);
     });
 
     // =========================================================================
@@ -403,11 +403,11 @@ void web_dashboard_init()
     // Returns real-time sensor data as JSON
     // Thread-safe access to global DATA with mutex
     server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *request){
-        DynamicJsonDocument doc(512);
+        JsonDocument doc;
         {
             std::lock_guard<std::mutex> lock(DATA_MUTEX);
             doc["distance_cm"] = DATA.distance_cm;
-            doc["weight_kg"] = DATA.weight_kg;
+            doc["weight_kg"] = static_cast<float>(DATA.weight_g) / 1000.0f;
             doc["pitch"] = DATA.pitch;
             doc["roll"] = DATA.roll;
             doc["rtc_time"] = DATA.rtc_time;
@@ -427,7 +427,7 @@ void web_dashboard_init()
     // Returns M5Stack hardware status (battery, IMU, buttons)
     // No authentication required for status monitoring
     server.on("/api/hw", HTTP_GET, [](AsyncWebServerRequest *request){ 
-        DynamicJsonDocument doc(256); 
+        JsonDocument doc; 
         HwStatus st = HW.read(); 
         doc["battery_voltage"] = st.battery_voltage; 
         doc["battery_percent"] = st.battery_percent; 
@@ -435,7 +435,7 @@ void web_dashboard_init()
         doc["temperature"]     = st.temperature;  // Note: temperature not in HwStatus
         doc["button_a"]        = st.button_a; 
         doc["button_b"]        = st.button_b; 
-        JsonObject accel = doc.createNestedObject("accel"); 
+        JsonObject accel = doc["accel"].to<JsonObject>(); 
         accel["x"] = st.accel_x; 
         accel["y"] = st.accel_y; 
         accel["z"] = st.accel_z; 
@@ -450,7 +450,7 @@ void web_dashboard_init()
     // Returns cellular modem and network status
     // No authentication required for status monitoring
     server.on("/api/nbiot", HTTP_GET, [](AsyncWebServerRequest *request){ 
-        DynamicJsonDocument doc(256); 
+        JsonDocument doc; 
         NbIotStatus st = NB_IOT2.getStatus(); 
         doc["modem_ready"]      = st.modem_ready; 
         doc["network_attached"] = st.network_attached; 
@@ -467,9 +467,9 @@ void web_dashboard_init()
     // =========================================================================
     // OTA Firmware Update Integration
     // =========================================================================
-    // Initialize AsyncElegantOTA for firmware updates
+    // Initialize ElegantOTA for firmware updates
     // Protected by admin authentication
-    AsyncElegantOTA.begin(&server, CONFIG.admin_user.c_str(), CONFIG.admin_pass.c_str());
+    ElegantOTA.begin(&server, CONFIG.admin_user.c_str(), CONFIG.admin_pass.c_str());
 
     // =========================================================================
     // Static File Serving from SPIFFS

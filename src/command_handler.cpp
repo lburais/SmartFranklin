@@ -382,3 +382,20 @@ void command_handler_process(const String& json) {
     // Publish error if JSON lacks "cmd" field
     sf_mqtt::publish("smartfranklin/error", "missing_cmd");
 }
+
+static int g_display_screen = 0;
+
+void command_handler_init()
+{
+}
+
+void command_handle(const String &topic, const String &payload)
+{
+    (void)topic;
+    command_handler_process(payload);
+}
+
+int command_get_display_screen()
+{
+    return g_display_screen;
+}

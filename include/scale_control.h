@@ -169,7 +169,7 @@
  * Usage Examples:
  *   float weight = scale_get_raw();
  *   if (weight > 0) {
- *       Serial.printf("Weight: %.2f grams\n", weight);
+ *       M5_LOGI("Weight: %.2f grams", weight);
  *   }
  * 
  * Integration:

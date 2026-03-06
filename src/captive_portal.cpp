@@ -72,6 +72,7 @@
 
 #include "captive_portal.h"
 #include <DNSServer.h>
+#include <M5Unified.h>
 #include <WiFi.h>
 
 // ============================================================================
@@ -136,6 +137,6 @@ void captive_portal_start()
     // - WiFi.softAPIP(): Respond with AP IP address (typically 192.168.4.1)
     dnsServer.start(53, "*", WiFi.softAPIP());
     
-    Serial.printf("[Captive Portal] DNS server started on %s:53\n",
-                  WiFi.softAPIP().toString().c_str());
+        M5_LOGI("[Captive Portal] DNS server started on %s:53",
+            WiFi.softAPIP().toString().c_str());
 }

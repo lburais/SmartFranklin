@@ -116,6 +116,7 @@
  */
 
 #include "watchdog.h"
+#include <esp_idf_version.h>
 #include <esp_task_wdt.h>
 
 // ============================================================================
@@ -237,7 +238,19 @@ void watchdog_init()
     // Initialize ESP32 Task Watchdog Timer
     // Timeout: 10 seconds, Panic reset: enabled (true)
     // Panic reset causes immediate system restart on timeout
+#if defined(ESP_IDF_VERSION_MAJOR) && (ESP_IDF_VERSION_MAJOR >= 5)
+    esp_task_wdt_config_t twdt_config = {};
+    twdt_config.timeout_ms = 10000;
+#if defined(CONFIG_FREERTOS_NUMBER_OF_CORES)
+    twdt_config.idle_core_mask = (1U << CONFIG_FREERTOS_NUMBER_OF_CORES) - 1U;
+#else
+    twdt_config.idle_core_mask = 1U;
+#endif
+    twdt_config.trigger_panic = true;
+    esp_task_wdt_init(&twdt_config);
+#else
     esp_task_wdt_init(10, true);
+#endif
 
     // Initialize all task heartbeat timestamps to current time
     // Provides grace period before first watchdog checks

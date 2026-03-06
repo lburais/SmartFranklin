@@ -120,6 +120,7 @@
 
 #pragma once
 #include <Arduino.h>
+#include <Meshtastic.h>
 
 /**
  * @brief Initializes the Meshtastic bridge and mesh networking.
@@ -174,6 +175,18 @@
  * @see meshtastic_poll_received() - Receive messages after initialization
  */
 void meshtastic_bridge_init();
+
+/**
+ * @brief Processes Meshtastic protocol state machine.
+ *
+ * Call regularly from a task loop to process serial traffic and callbacks.
+ */
+void meshtastic_bridge_tick();
+
+/**
+ * @brief Returns whether the Meshtastic link is currently ready.
+ */
+bool meshtastic_bridge_is_ready();
 
 /**
  * @brief Sends a text message through the Meshtastic mesh network.
@@ -235,6 +248,22 @@ void meshtastic_bridge_init();
  * @see meshtastic_bridge_init() - Required initialization
  */
 void meshtastic_send_text(const String &msg);
+
+/**
+ * @brief Forwards MQTT payloads to Meshtastic when topic matches configured prefix.
+ *
+ * @param topic MQTT topic
+ * @param payload MQTT payload
+ */
+void meshtastic_bridge_handle_mqtt(const String &topic, const String &payload);
+
+/**
+ * @brief Requests a node report from the connected Meshtastic radio.
+ *
+ * @param callback Callback invoked for each node report entry and completion status.
+ * @return true if request was sent, false otherwise.
+ */
+bool meshtastic_bridge_request_node_report(void (*callback)(mt_node_t *, mt_nr_progress_t));
 
 /**
  * @brief Polls for received Meshtastic messages from the mesh network.

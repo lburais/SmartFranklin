@@ -71,6 +71,7 @@
 #include "mqtt_layer.h"
 #include "config_store.h"
 
+#include <M5Unified.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
 
@@ -103,6 +104,9 @@ static bool detectCaptivePortal()
     if (WiFi.status() != WL_CONNECTED) return false;
 
     HTTPClient http;
+    http.setConnectTimeout(1500);
+    http.setTimeout(1500);
+
     // Send probe request to Google's connectivity check server
     http.begin("http://connectivitycheck.gstatic.com/generate_204");
     
@@ -200,9 +204,11 @@ static void wifiInitialSetup()
                             CONFIG.ap_pass.c_str());    // AP password (WPA2)
     
     // Log Access Point startup result
-    Serial.printf("[WiFi] AP %s: %s\n",
-                  CONFIG.ap_ssid.c_str(),
-                  apOk ? "OK" : "FAIL");
+    if (apOk) {
+        M5_LOGI("[WiFi] AP %s: OK", CONFIG.ap_ssid.c_str());
+    } else {
+        M5_LOGW("[WiFi] AP %s: FAIL", CONFIG.ap_ssid.c_str());
+    }
 
     // If Station SSID is configured, attempt to connect to external network
     if (!CONFIG.sta_ssid.isEmpty()) {
@@ -210,8 +216,7 @@ static void wifiInitialSetup()
                    CONFIG.sta_pass.c_str());    // External network password
         
         // Log Station connection attempt
-        Serial.printf("[WiFi] STA connecting to %s\n",
-                      CONFIG.sta_ssid.c_str());
+        M5_LOGI("[WiFi] STA connecting to %s", CONFIG.sta_ssid.c_str());
     }
 }
 
@@ -248,7 +253,7 @@ static void wifiInitialSetup()
  */
 void taskWiFi(void *pv)
 {
-    Serial.println("[WiFi] Task started");
+    M5_LOGI("[WiFi] Task started");
 
     // Initialize WiFi hardware in AP+STA mode with configured credentials
     wifiInitialSetup();
@@ -258,6 +263,10 @@ void taskWiFi(void *pv)
     // =========================================================================
     unsigned long lastStatus = 0;           // Timestamp of last MQTT status publish
     unsigned long lastReconnectAttempt = 0; // Timestamp of last STA reconnection attempt
+    unsigned long lastCaptiveCheck = 0;     // Timestamp of last captive-portal probe
+    unsigned long staConnectedSince = 0;    // Timestamp when STA became connected
+    bool lastCaptive = false;               // Last known captive-portal state
+    bool captiveKnown = false;              // Whether lastCaptive has been measured
     
     // Reconnection attempt interval (15 seconds between attempts)
     // Prevents excessive reconnection attempts that drain power
@@ -267,19 +276,36 @@ void taskWiFi(void *pv)
     // Provides periodic WiFi health metrics to MQTT
     const unsigned long statusInterval = 30000;
 
+    // Captive-portal probing policy
+    // Keep probes infrequent to avoid socket noise when internet is unavailable
+    const unsigned long captiveCheckInterval = 60000;
+    const unsigned long captiveCheckStartupDelay = 15000;
+
     // =========================================================================
     // Infinite Task Loop
     // =========================================================================
     for (;;) {
+        wl_status_t staStatus = WiFi.status();
+
+        // Track STA connect/disconnect transitions
+        if (staStatus == WL_CONNECTED) {
+            if (staConnectedSince == 0) {
+                staConnectedSince = millis();
+                captiveKnown = false;
+            }
+        } else {
+            staConnectedSince = 0;
+            captiveKnown = false;
+        }
 
         // --- Station Reconnection Logic ---
         // If Station SSID is configured, manage STA connection state
         if (!CONFIG.sta_ssid.isEmpty()) {
             // Check if currently disconnected from external network
-            if (WiFi.status() != WL_CONNECTED) {
+            if (staStatus != WL_CONNECTED) {
                 // Check if enough time has elapsed since last reconnection attempt
                 if (millis() - lastReconnectAttempt > reconnectInterval) {
-                    Serial.println("[WiFi] STA reconnecting...");
+                    M5_LOGW("[WiFi] STA reconnecting...");
                     
                     // Clear any previous connection state before reattempt
                     WiFi.disconnect();
@@ -295,14 +321,21 @@ void taskWiFi(void *pv)
         }
 
         // --- Captive Portal Detection ---
-        // If STA is connected, check for captive portal interception
-        if (WiFi.status() == WL_CONNECTED) {
-            // Detect if connection is trapped behind captive portal for login
-            bool captive = detectCaptivePortal();
-            
+        // If STA is connected, run captive-portal probe at low rate
+        if (staStatus == WL_CONNECTED &&
+            staConnectedSince != 0 &&
+            (millis() - staConnectedSince) >= captiveCheckStartupDelay &&
+            (millis() - lastCaptiveCheck) >= captiveCheckInterval) {
+
+            lastCaptive = detectCaptivePortal();
+            captiveKnown = true;
+            lastCaptiveCheck = millis();
+
             // Publish captive portal status: 1 = portal detected, 0 = free internet
-            sf_mqtt::publish("smartfranklin/wifi/captive",
-                             captive ? "1" : "0");
+            sf_mqtt::publish("smartfranklin/wifi/captive", lastCaptive ? "1" : "0");
+        } else if (captiveKnown && staStatus == WL_CONNECTED) {
+            // Re-publish last known state between probe intervals
+            sf_mqtt::publish("smartfranklin/wifi/captive", lastCaptive ? "1" : "0");
         }
 
         // --- Periodic MQTT Status Publication ---

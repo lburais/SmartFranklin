@@ -190,8 +190,10 @@ bool config_load()
     if (!SPIFFS.exists(CFG_PATH)) {
 
         // --- WiFi & Hardware Calibration ---
-        CONFIG.sta_ssid = "";              // No external network configured
-        CONFIG.sta_pass = "";              // No password set
+        CONFIG.ap_ssid  = "SmartFranklin-AP"; // Default Access Point SSID
+        CONFIG.ap_pass  = "smartfranklin";    // Default Access Point password
+        CONFIG.sta_ssid = "";                 // No external network configured
+        CONFIG.sta_pass = "";                 // No password set
         CONFIG.scale_cal_factor = 1.0f;    // Uncalibrated weight sensor
 
         // --- Web Dashboard Authentication ---
@@ -221,6 +223,13 @@ bool config_load()
         CONFIG.nbiot_mqtt_user = "";                    // No authentication
         CONFIG.nbiot_mqtt_pass = "";                    // No authentication
 
+        // --- Meshtastic Bridge Configuration ---
+        CONFIG.meshtastic_bridge_enabled = false;                // Disabled by default
+        CONFIG.meshtastic_mqtt_prefix    = "smartfranklin/mesh/in/";
+        CONFIG.meshtastic_baud           = 115200;               // Default UART baud
+        CONFIG.meshtastic_pin_rx         = 33;                   // Default RX pin
+        CONFIG.meshtastic_pin_tx         = 32;                   // Default TX pin
+
         return true;
     }
 
@@ -246,8 +255,10 @@ bool config_load()
     // =========================================================================
     // Load WiFi connection parameters and web dashboard authentication
     
-    CONFIG.sta_ssid = doc["sta_ssid"] | "";             // Station SSID (external network)
-    CONFIG.sta_pass = doc["sta_pass"] | "";             // Station password
+    CONFIG.ap_ssid = doc["ap_ssid"] | "SmartFranklin-AP";   // AP SSID (local network)
+    CONFIG.ap_pass = doc["ap_pass"] | "smartfranklin";      // AP password
+    CONFIG.sta_ssid = doc["sta_ssid"] | "";                 // Station SSID (external network)
+    CONFIG.sta_pass = doc["sta_pass"] | "";                 // Station password
     CONFIG.scale_cal_factor = doc["scale_cal_factor"] | 1.0f;  // Weight sensor calibration
 
     CONFIG.admin_user = doc["admin_user"] | "admin";    // Web dashboard username
@@ -287,6 +298,16 @@ bool config_load()
     CONFIG.nbiot_mqtt_port = doc["nbiot_mqtt_port"] | 1883;             // Cellular MQTT port
     CONFIG.nbiot_mqtt_user = doc["nbiot_mqtt_user"] | "";               // Cellular MQTT username
     CONFIG.nbiot_mqtt_pass = doc["nbiot_mqtt_pass"] | "";               // Cellular MQTT password
+
+    // =========================================================================
+    // Meshtastic Bridge Configuration
+    // =========================================================================
+
+    CONFIG.meshtastic_bridge_enabled = doc["meshtastic_bridge_enabled"] | false;
+    CONFIG.meshtastic_mqtt_prefix    = doc["meshtastic_mqtt_prefix"] | "smartfranklin/mesh/in/";
+    CONFIG.meshtastic_baud           = doc["meshtastic_baud"] | 115200;
+    CONFIG.meshtastic_pin_rx         = doc["meshtastic_pin_rx"] | 33;
+    CONFIG.meshtastic_pin_tx         = doc["meshtastic_pin_tx"] | 32;
 
     return true;
 }
@@ -345,6 +366,8 @@ bool config_save()
     // =========================================================================
     // Serialize WiFi connection parameters and authentication
     
+    doc["ap_ssid"] = CONFIG.ap_ssid;                        // Local AP SSID
+    doc["ap_pass"] = CONFIG.ap_pass;                        // Local AP password
     doc["sta_ssid"] = CONFIG.sta_ssid;                      // External network SSID
     doc["sta_pass"] = CONFIG.sta_pass;                      // External network password
     doc["scale_cal_factor"] = CONFIG.scale_cal_factor;      // Weight sensor calibration
@@ -386,6 +409,16 @@ bool config_save()
     doc["nbiot_mqtt_port"] = CONFIG.nbiot_mqtt_port;        // Cellular MQTT port
     doc["nbiot_mqtt_user"] = CONFIG.nbiot_mqtt_user;        // Cellular MQTT username
     doc["nbiot_mqtt_pass"] = CONFIG.nbiot_mqtt_pass;        // Cellular MQTT password
+
+    // =========================================================================
+    // Meshtastic Bridge Configuration
+    // =========================================================================
+
+    doc["meshtastic_bridge_enabled"] = CONFIG.meshtastic_bridge_enabled;
+    doc["meshtastic_mqtt_prefix"]    = CONFIG.meshtastic_mqtt_prefix;
+    doc["meshtastic_baud"]           = CONFIG.meshtastic_baud;
+    doc["meshtastic_pin_rx"]         = CONFIG.meshtastic_pin_rx;
+    doc["meshtastic_pin_tx"]         = CONFIG.meshtastic_pin_tx;
 
     // Open configuration file for writing (creates or overwrites existing)
     File f = SPIFFS.open(CFG_PATH, "w");

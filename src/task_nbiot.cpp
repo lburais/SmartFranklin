@@ -233,7 +233,7 @@ void taskNbiot(void *pv)
 
     // Check configuration enable flag
     if (!CONFIG.nbiot_enabled) {
-        M5_LOGW("[NB_IOT] Disabled in config");
+        M5_LOGI("[NB_IOT] Disabled in config");
         vTaskDelete(nullptr);
         return;
     }
