@@ -6,8 +6,8 @@ struct SmartConfig {
     // WiFi
     String ap_ssid = "SmartFranklin-AP";
     String ap_pass = "smartfranklin";
-    String sta_ssid;
-    String sta_pass;
+    String sta_ssid = "jrdl";
+    String sta_pass = "05121996190119942106196801071964";
 
     // Scale calibration
     float scale_cal_factor = 1.0f;
@@ -24,7 +24,7 @@ struct SmartConfig {
     bool ext_mqtt_enabled = false;
 
     // MQTT bridge
-    bool mqtt_bridge_enabled = true;
+    bool mqtt_bridge_enabled = false;
     String mqtt_bridge_prefix_internal = "local/";
     String mqtt_bridge_prefix_external = "cloud/";
     int mqtt_bridge_qos = 1;
@@ -32,7 +32,7 @@ struct SmartConfig {
     bool mqtt_bridge_loop_detection = true;
 
     // NB-IoT
-    bool nbiot_enabled = true;
+    bool nbiot_enabled = false;
     String nbiot_apn = "iot.1nce.net";
     String nbiot_mqtt_host;
     int nbiot_mqtt_port = 1883;

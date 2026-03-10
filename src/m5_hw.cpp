@@ -94,6 +94,7 @@
  */
 
 #include "m5_hw.h"
+#include "i2c_enumerator.h"
 
 // ============================================================================
 // Global Hardware Instance (Singleton Pattern)
@@ -394,6 +395,20 @@ void M5Hardware::setBrightness(uint8_t level)
     // Range: 0 (off) to 255 (maximum)
     // Changes take effect immediately on display
     M5.Display.setBrightness(level);
+}
+
+// ============================================================================
+// I2C Unit Enumeration
+// ============================================================================
+
+uint16_t M5Hardware::enumerateI2CUnits()
+{
+    return enumerate_i2c_units(i2c_report);
+}
+
+const I2CEnumerationReport& M5Hardware::getLastI2CEnumerationReport() const
+{
+    return i2c_report;
 }
 
 // ============================================================================

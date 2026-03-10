@@ -22,8 +22,8 @@
  * 
  * Hardware Configuration:
  *   - Sensor: M5Stack Weight I2C Unit (load cell with HX711 amplifier)
- *   - Interface: I2C bus with PA Hub multiplexer
- *   - PA Hub Channel: PAHUB_CH_WEIGHT (configured in pahub_channels.h)
+ *   - Interface: Direct Wire I2C or PA Hub channel (runtime-discovered)
+ *   - Channel Source: HW.getLastI2CEnumerationReport()
  *   - I2C Pins: Port A SDA/SCL (configurable via M5Stack pin mapping)
  *   - I2C Speed: 400kHz (fast mode for reliable communication)
  * 
@@ -37,7 +37,7 @@
  * 
  * PA Hub Integration:
  *   - Multiplexer: Allows multiple I2C devices on single bus
- *   - Channel Assignment: Dedicated channel for weight sensor
+ *   - Channel Assignment: Selected from startup enumeration report
  *   - Address Resolution: PA Hub handles I2C address conflicts
  *   - Hot-plug Support: Devices can be added/removed dynamically
  * 
@@ -143,6 +143,7 @@
 
 #include "tasks.h"
 #include "data_model.h"
+#include "m5_hw.h"
 #include "pahub_channels.h"
 #include "mqtt_layer.h"
 
@@ -212,27 +213,6 @@ namespace {
      */
     int32_t                     weight = 0;
 
-    constexpr uint8_t           WEIGHT_I2C_ADDRESS = 0x26;
-
-    bool i2c_device_exists(const uint8_t address)
-    {
-        Wire.beginTransmission(address);
-        return Wire.endTransmission() == 0;
-    }
-
-    bool pahub_select_channel(const uint8_t channel)
-    {
-        Wire.beginTransmission(PAHUB_ADDRESS);
-        Wire.write(static_cast<uint8_t>(1U << channel));
-        return Wire.endTransmission() == 0;
-    }
-
-    void pahub_disable_all_channels()
-    {
-        Wire.beginTransmission(PAHUB_ADDRESS);
-        Wire.write(static_cast<uint8_t>(0x00));
-        Wire.endTransmission();
-    }
 }  // namespace
 
 // ============================================================================
@@ -252,7 +232,7 @@ namespace {
  *   2. Initialize M5Stack core functionality
  *   3. Configure I2C pins for Port A (SDA/SCL retrieval)
  *   4. Reinitialize I2C bus with 400kHz speed
- *   5. Connect weight unit to PA Hub channel PAHUB_CH_WEIGHT
+ *   5. Connect weight unit using enumerated path (PA Hub channel or direct)
  *   6. Add PA Hub to unified units interface
  *   7. Begin unit discovery and initialization
  *   8. Reset sensor offset (tare operation)
@@ -286,7 +266,7 @@ namespace {
  * 
  * @note This function blocks indefinitely on sensor initialization failure.
  *       Ensure hardware is properly connected and calibrated before running.
- *       PA Hub channel assignments must match physical connections.
+ *       Startup enumeration must run before this task starts.
  *       Calibration gap should be set appropriately for load cell range.
  * 
  * @see M5UnitUnified - Unified sensor interface library
@@ -310,35 +290,15 @@ static void weight_setup()
     Wire.end();
     Wire.begin(pin_num_sda, pin_num_scl, 400000U);
 
+    const I2CEnumerationReport& report = HW.getLastI2CEnumerationReport();
     bool initialized = false;
 
-    // Prefer PAHub auto-discovery if the hub is present
-    if (i2c_device_exists(PAHUB_ADDRESS)) {
-        int foundChannel = -1;
-
-        for (uint8_t channel = 0; channel < 8; ++channel) {
-            if (!pahub_select_channel(channel)) {
-                continue;
-            }
-            if (i2c_device_exists(WEIGHT_I2C_ADDRESS)) {
-                foundChannel = channel;
-                break;
-            }
-        }
-
-        pahub_disable_all_channels();
-
-        if (foundChannel >= 0) {
-            M5_LOGI("[WEIGHT] found via PAHub channel %d", foundChannel);
-            initialized = pahub.add(unit, static_cast<uint8_t>(foundChannel)) &&
-                          Units.add(pahub, Wire) &&
-                          Units.begin();
-        }
-    }
-
-    // Fallback: direct I2C unit (without PAHub)
-    if (!initialized && i2c_device_exists(WEIGHT_I2C_ADDRESS)) {
-        M5_LOGI("[WEIGHT] found on direct I2C");
+    if (report.weight_on_wire_pahub && report.weight_pahub_channel >= 0) {
+        const uint8_t channel = static_cast<uint8_t>(report.weight_pahub_channel);
+        M5_LOGI("[WEIGHT] using enumerated PAHub channel %u", channel);
+        initialized = pahub.add(unit, channel) && Units.add(pahub, Wire) && Units.begin();
+    } else if (report.weight_on_wire) {
+        M5_LOGI("[WEIGHT] using enumerated direct Wire path");
         initialized = Units.add(unit, Wire) && Units.begin();
     }
 

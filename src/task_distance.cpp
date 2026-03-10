@@ -22,8 +22,8 @@
  * 
  * Hardware Configuration:
  *   - Sensor: M5Stack Ultrasonic I2C Unit (HC-SR04 compatible)
- *   - Interface: I2C bus with PA Hub multiplexer
- *   - PA Hub Channel: PAHUB_CH_DISTANCE (configured in pahub_channels.h)
+ *   - Interface: Direct Wire I2C or PA Hub channel (runtime-discovered)
+ *   - Channel Source: HW.getLastI2CEnumerationReport()
  *   - I2C Pins: Port A SDA/SCL (configurable via M5Stack pin mapping)
  *   - I2C Speed: 400kHz (fast mode for reliable communication)
  * 
@@ -36,7 +36,7 @@
  * 
  * PA Hub Integration:
  *   - Multiplexer: Allows multiple I2C devices on single bus
- *   - Channel Assignment: Dedicated channel for distance sensor
+ *   - Channel Assignment: Selected from startup enumeration report
  *   - Address Resolution: PA Hub handles I2C address conflicts
  *   - Hot-plug Support: Devices can be added/removed dynamically
  * 
@@ -133,6 +133,7 @@
 
 #include "tasks.h"
 #include "data_model.h"
+#include "m5_hw.h"
 #include "pahub_channels.h"
 #include "mqtt_layer.h"
 
@@ -183,27 +184,6 @@ namespace {
      */
     int32_t                     distance = 0;
 
-    constexpr uint8_t           DISTANCE_I2C_ADDRESS = 0x57;
-
-    bool i2c_device_exists(const uint8_t address)
-    {
-        Wire.beginTransmission(address);
-        return Wire.endTransmission() == 0;
-    }
-
-    bool pahub_select_channel(const uint8_t channel)
-    {
-        Wire.beginTransmission(PAHUB_ADDRESS);
-        Wire.write(static_cast<uint8_t>(1U << channel));
-        return Wire.endTransmission() == 0;
-    }
-
-    void pahub_disable_all_channels()
-    {
-        Wire.beginTransmission(PAHUB_ADDRESS);
-        Wire.write(static_cast<uint8_t>(0x00));
-        Wire.endTransmission();
-    }
 }  // namespace
 
 // ============================================================================
@@ -234,8 +214,8 @@ namespace {
  * 
  * PA Hub Setup:
  *   - Address: PAHUB_ADDRESS (configured in pahub_channels.h)
- *   - Channel: PAHUB_CH_DISTANCE (dedicated distance sensor channel)
- *   - Connection: Ultrasonic unit attached to specific channel
+ *   - Channel: Retrieved from HW enumeration report
+ *   - Connection: Ultrasonic unit attached to discovered channel
  *   - Validation: Unit addition and initialization verified
  * 
  * Error Handling:
@@ -254,7 +234,7 @@ namespace {
  * 
  * @note This function blocks indefinitely on sensor initialization failure.
  *       Ensure hardware is properly connected before running the task.
- *       PA Hub channel assignments must match physical connections.
+ *       Startup enumeration must run before this task starts.
  * 
  * @see M5UnitUnified - Unified sensor interface library
  * @see UnitPaHub2 - PA Hub multiplexer documentation
@@ -276,37 +256,25 @@ static void distance_setup()
     // Reinitialize I2C bus with custom pins and speed
     Wire.end();
     Wire.begin(pin_num_sda, pin_num_scl, 400000U);
+    M5.Ex_I2C.begin();
 
+    const I2CEnumerationReport& report = HW.getLastI2CEnumerationReport();
     bool initialized = false;
 
-    // Prefer PAHub auto-discovery if the hub is present
-    if (i2c_device_exists(PAHUB_ADDRESS)) {
-        int foundChannel = -1;
-
-        for (uint8_t channel = 0; channel < 8; ++channel) {
-            if (!pahub_select_channel(channel)) {
-                continue;
-            }
-            if (i2c_device_exists(DISTANCE_I2C_ADDRESS)) {
-                foundChannel = channel;
-                break;
-            }
-        }
-
-        pahub_disable_all_channels();
-
-        if (foundChannel >= 0) {
-            M5_LOGI("[DISTANCE] found via PAHub channel %d", foundChannel);
-            initialized = pahub.add(unit, static_cast<uint8_t>(foundChannel)) &&
-                          Units.add(pahub, Wire) &&
-                          Units.begin();
-        }
-    }
-
-    // Fallback: direct I2C unit (without PAHub)
-    if (!initialized && i2c_device_exists(DISTANCE_I2C_ADDRESS)) {
-        M5_LOGI("[DISTANCE] found on direct I2C");
+    if (report.distance_on_wire_pahub && report.distance_pahub_channel >= 0) {
+        const uint8_t channel = static_cast<uint8_t>(report.distance_pahub_channel);
+        M5_LOGI("[DISTANCE] using enumerated PAHub channel %u", channel);
+        initialized = pahub.add(unit, channel) && Units.add(pahub, Wire) && Units.begin();
+    } else if (report.distance_on_wire) {
+        M5_LOGI("[DISTANCE] using enumerated direct Wire path");
         initialized = Units.add(unit, Wire) && Units.begin();
+    } else if (report.distance_on_ex_pahub && report.distance_ex_pahub_channel >= 0) {
+        const uint8_t channel = static_cast<uint8_t>(report.distance_ex_pahub_channel);
+        M5_LOGI("[DISTANCE] using enumerated EX/PAHub channel %u", channel);
+        initialized = pahub.add(unit, channel) && Units.add(pahub, M5.Ex_I2C) && Units.begin();
+    } else if (report.distance_on_ex) {
+        M5_LOGI("[DISTANCE] using enumerated direct EX path");
+        initialized = Units.add(unit, M5.Ex_I2C) && Units.begin();
     }
 
     if (!initialized) {

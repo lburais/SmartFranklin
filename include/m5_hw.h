@@ -250,6 +250,39 @@ struct HwStatus {
 };
 
 /**
+ * @brief Result snapshot of the latest I2C enumeration pass.
+ */
+struct I2CEnumerationReport {
+    uint16_t discovered_entries = 0;
+    uint16_t gravity_bridge_hits = 0;
+
+    bool pahub_found = false;
+    bool distance_found = false;
+    bool weight_found = false;
+    bool rtc_addr_found = false;
+
+    bool distance_on_wire = false;
+    bool distance_on_wire_pahub = false;
+    int8_t distance_pahub_channel = -1;
+    bool distance_on_ex = false;
+    bool distance_on_ex_pahub = false;
+    int8_t distance_ex_pahub_channel = -1;
+
+    bool weight_on_wire = false;
+    bool weight_on_wire_pahub = false;
+    int8_t weight_pahub_channel = -1;
+
+    bool gravity_bridge_detected = false;
+    bool gravity_on_wire = false;
+    bool gravity_on_wire_pahub = false;
+    bool gravity_on_ex = false;
+    bool gravity_on_ex_pahub = false;
+    bool gravity_probe_ran = false;
+    bool nb_iot2_confirmed = false;
+    bool c6l_activity_detected = false;
+};
+
+/**
  * @brief M5Stack hardware abstraction class.
  * 
  * Provides unified interface to M5Stack Core device hardware components.
@@ -383,6 +416,22 @@ public:
     void setBrightness(uint8_t level);
 
     /**
+     * @brief Enumerates visible I2C units on all supported buses.
+     *
+     * Scans direct `Wire` I2C, external `M5.Ex_I2C`, and each PAHUB channel
+     * (when a PAHUB is detected on either bus). Also highlights addresses that
+     * match common Gravity Dual UART bridge address ranges.
+     *
+     * @return Number of discovered bus entries (path/address combinations).
+     */
+    uint16_t enumerateI2CUnits();
+
+    /**
+     * @brief Returns the latest I2C enumeration report.
+     */
+    const I2CEnumerationReport& getLastI2CEnumerationReport() const;
+
+    /**
      * @brief Puts the device into deep sleep mode.
      * 
      * Enters ultra-low power deep sleep state to conserve battery power.
@@ -437,6 +486,7 @@ private:
      * Not directly accessible from outside the class.
      */
     HwStatus status;
+    I2CEnumerationReport i2c_report;
 };
 
 // ============================================================================

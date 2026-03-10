@@ -31,19 +31,19 @@
  *   - Isolation: Each channel electrically isolated
  *   - Power: 2.7V to 5.5V operation
  * 
- * Channel Assignment Strategy:
- *   - Channel 0: Distance sensor (ultrasonic/laser proximity)
- *   - Channel 1: Weight sensor (load cell amplifier)
- *   - Channels 2-7: Available for future expansion
- *   - Internal Devices: IMU and RTC use dedicated I2C bus
- *   - Conflict Resolution: Different channels prevent address conflicts
+ * Channel Discovery Strategy:
+ *   - Channels are discovered dynamically during startup enumeration
+ *   - Distance/weight units are bound to detected channels at runtime
+ *   - Channels 0-7 are scanned when PA Hub is present
+ *   - Internal devices (IMU/RTC) use dedicated buses
+ *   - Dynamic binding avoids hardcoded channel assumptions
  * 
  * Device Integration:
- *   - Distance Sensor: Connected to channel 0 for proximity measurement
- *   - Weight Sensor: Connected to channel 1 for mass measurement
+ *   - Distance Sensor: Discovered on direct I2C or PA Hub channel
+ *   - Weight Sensor: Discovered on direct I2C or PA Hub channel
  *   - IMU Sensor: Internal MPU6886, no PA Hub required
  *   - RTC Module: Internal BM8563, no PA Hub required
- *   - Future Devices: Additional sensors can use remaining channels
+ *   - Future Devices: Compatible units can be detected on remaining channels
  * 
  * Sampling Periods:
  *   - Weight Sensor: 1000ms (1Hz) - stable readings for load cells
@@ -54,10 +54,10 @@
  *   - Adjustability: Periods can be modified based on application needs
  * 
  * Configuration Management:
- *   - Static Assignment: Fixed channel mappings for reliability
- *   - Documentation: Clear mapping prevents configuration errors
- *   - Expansion: Unused channels available for new devices
- *   - Compatibility: Channel assignments maintain hardware compatibility
+ *   - Runtime Discovery: Startup scan determines active channel mappings
+ *   - Documentation: Header documents PA Hub address and timing constants
+ *   - Expansion: Unused channels remain available for new devices
+ *   - Compatibility: Dynamic mapping adapts to wiring changes
  * 
  * Hardware Considerations:
  *   - Wiring: Each device connected to appropriate PA Hub channel pins
@@ -145,61 +145,16 @@
 #define PAHUB_ADDRESS       0x70
 
 // ============================================================================
-// PA Hub Channel Assignments
+// PA Hub Channel Discovery
 // ============================================================================
 
 /**
- * @brief PA Hub channel assignment for distance sensor.
- * 
- * Channel 0 is dedicated to the distance/proximity sensor
- * (ultrasonic or laser). This sensor measures object distance
- * for obstacle detection and proximity monitoring.
- * 
- * Channel: 0
- * Device: Distance sensor (e.g., ultrasonic module)
- * Purpose: Proximity measurement and obstacle detection
- * I2C Address: Device-specific (configured on sensor)
+ * @brief PA Hub channel mapping is discovered dynamically at runtime.
+ *
+ * SmartFranklin now uses HW I2C enumeration to detect the active PA Hub
+ * channels for connected units (distance, weight, etc.) instead of fixed
+ * compile-time channel constants.
  */
-#define PAHUB_CH_DISTANCE   0
-
-/**
- * @brief PA Hub channel assignment for weight sensor.
- * 
- * Channel 1 is dedicated to the weight/load cell sensor.
- * This sensor measures mass/weight for monitoring applications.
- * 
- * Channel: 1
- * Device: Weight sensor (e.g., HX711 load cell amplifier)
- * Purpose: Mass measurement and weight monitoring
- * I2C Address: Device-specific (configured on amplifier)
- */
-#define PAHUB_CH_WEIGHT     1
-
-/**
- * @brief PA Hub channel for IMU sensor (undefined - internal).
- * 
- * Channel 2 would be for inertial measurement unit, but SmartFranklin
- * uses the internal MPU6886 IMU on the M5Stack core, so this channel
- * is not used and explicitly undefined to prevent accidental assignment.
- * 
- * Status: Undefined (not used)
- * Reason: Internal MPU6886 handles IMU functions
- * Alternative: Internal I2C bus on M5Stack core
- */
-#undef  PAHUB_CH_IMU                // internal MPU6886 accel + gyro
-
-/**
- * @brief PA Hub channel for RTC module (undefined - internal).
- * 
- * Channel 3 would be for real-time clock, but SmartFranklin
- * uses the internal BM8563 RTC on the M5Stack core, so this channel
- * is not used and explicitly undefined to prevent accidental assignment.
- * 
- * Status: Undefined (not used)
- * Reason: Internal BM8563 handles RTC functions
- * Alternative: Internal I2C bus on M5Stack core
- */
-#undef  PAHUB_CH_RTC                // internal BM8563 RTC     
 
 // ============================================================================
 // Sensor Sampling Periods (milliseconds)
@@ -218,7 +173,7 @@
  * Power Impact: Lower frequency reduces ADC and processing load
  * Adjustability: Can be decreased for faster response if needed
  */
-#define PERIOD_WEIGHT       1000
+#define PERIOD_WEIGHT       60000
 
 /**
  * @brief Sampling period for tilt/orientation measurements.
@@ -233,7 +188,7 @@
  * Power Impact: Conservative sampling reduces IMU processing load
  * Adjustability: Can be increased for slower applications or decreased for dynamic use
  */
-#define PERIOD_TILT         1000
+#define PERIOD_TILT         60000
 
 /**
  * @brief Sampling period for RTC time synchronization.
@@ -248,7 +203,7 @@
  * Power Impact: Minimal impact as RTC reads are low power
  * Adjustability: Can be increased for less frequent time checks
  */
-#define PERIOD_RTC          1000
+#define PERIOD_RTC          60000
 
 /**
  * @brief Sampling period for distance sensor measurements.
@@ -263,4 +218,4 @@
  * Power Impact: Ultrasonic sensors can be power-hungry, so conservative sampling
  * Adjustability: Can be decreased for dynamic distance tracking applications
  */
-#define PERIOD_DISTANCE     1000
+#define PERIOD_DISTANCE     60000

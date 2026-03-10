@@ -444,15 +444,15 @@ void taskBmsBle(void *pv)
             
             // Attempt to establish BLE connection
             if (!connectToBms()) {
-                M5_LOGW("[BMS_BLE] Retry in 5s");
+                M5_LOGW("[BMS_BLE] Retry in 50s");
                 // Delay before retrying connection
-                vTaskDelay(pdMS_TO_TICKS(5000));
+                vTaskDelay(pdMS_TO_TICKS(50000));
                 continue;
             }
             M5_LOGI("[BMS_BLE] Connected");
         }
 
-        // Connection active, check again in 1 second
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        // Connection active, check again in 10 second
+        vTaskDelay(pdMS_TO_TICKS(10000));
     }
 }

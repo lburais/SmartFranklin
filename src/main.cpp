@@ -67,6 +67,11 @@
 #include "mqtt_bridge.h"
 #include "meshtastic_bridge.h"
 
+// Set to 1 to stop execution before DISTANCE task launch (debug only).
+#ifndef STOP_BEFORE_DISTANCE_TASK
+#define STOP_BEFORE_DISTANCE_TASK 0
+#endif
+
 // ============================================================================
 // Task Handle Declarations
 // ============================================================================
@@ -110,6 +115,15 @@ void setup() {
     // --- Configuration Loading ---
     // Load saved configuration from SPIFFS, or use defaults if missing
     config_load();
+
+    // Enumerate I2C units (direct, via PAHUB, and bridge candidates)
+    const uint16_t i2c_entries = HW.enumerateI2CUnits();
+    M5_LOGI("[I2C] startup enumeration discovered %u entries", i2c_entries);
+    const I2CEnumerationReport& i2c_report = HW.getLastI2CEnumerationReport();
+    const bool gravity_path_detected = i2c_report.gravity_on_wire
+        || i2c_report.gravity_on_wire_pahub
+        || i2c_report.gravity_on_ex
+        || i2c_report.gravity_on_ex_pahub;
 
     // --- WiFi Dual-Mode Setup ---
     // Initialize both AP (access point) and STA (station) modes
@@ -172,14 +186,45 @@ void setup() {
     
     xTaskCreatePinnedToCore(taskHwMonitor,        "HW_MON",   4096, nullptr, 1,  nullptr,                    0);
     xTaskCreatePinnedToCore(taskMqttBroker,       "MQTT_BRK", 4096, nullptr, 3,  &taskMqttBrokerHandle,      1);
-    xTaskCreatePinnedToCore(taskDistance,         "DISTANCE", 4096, nullptr, 2,  &taskDistanceHandle,        1);
-    xTaskCreatePinnedToCore(taskWeight,           "WEIGHT",   4096, nullptr, 2,  &taskWeightHandle,          1);
+
+    if (i2c_report.distance_on_wire
+        || i2c_report.distance_on_wire_pahub
+        || i2c_report.distance_on_ex
+        || i2c_report.distance_on_ex_pahub) {
+        xTaskCreatePinnedToCore(taskDistance, "DISTANCE", 4096, nullptr, 2, &taskDistanceHandle, 1);
+    } else {
+        M5_LOGW("[TASK] Skipping DISTANCE task: no compatible distance path found");
+    }
+
+    if (i2c_report.weight_on_wire || i2c_report.weight_on_wire_pahub) {
+        xTaskCreatePinnedToCore(taskWeight, "WEIGHT", 4096, nullptr, 2, &taskWeightHandle, 1);
+    } else {
+        M5_LOGW("[TASK] Skipping WEIGHT task: no Wire-compatible weight path found");
+    }
+
     xTaskCreatePinnedToCore(taskTilt,             "TILT",     4096, nullptr, 2,  &taskTiltHandle,            1);
     xTaskCreatePinnedToCore(taskRtc,              "RTC",      4096, nullptr, 2,  &taskRtcHandle,             1);
     xTaskCreatePinnedToCore(taskBmsBle,           "BMS_BLE",  8192, nullptr, 2,  &taskBmsBleHandle,          0);
     xTaskCreatePinnedToCore(taskDisplay,          "DISPLAY",  4096, nullptr, 1,  &taskDisplayHandle,         1);
-    xTaskCreatePinnedToCore(taskMeshtasticBridge, "MESH_BR",  8192, nullptr, 2,  &taskMeshtasticBridgeHandle,0);
-    xTaskCreatePinnedToCore(taskNbiot,            "NB_IOT",   8192, nullptr, 2,  &taskNbiotHandle,           0);
+
+    const bool has_negative_meshtastic_probe = gravity_path_detected
+        && i2c_report.gravity_probe_ran
+        && !i2c_report.c6l_activity_detected;
+    if (CONFIG.meshtastic_bridge_enabled && !has_negative_meshtastic_probe) {
+        xTaskCreatePinnedToCore(taskMeshtasticBridge, "MESH_BR", 8192, nullptr, 2, &taskMeshtasticBridgeHandle, 0);
+    } else {
+        M5_LOGW("[TASK] Skipping MESH_BR task: enumeration/probe does not confirm C6L path");
+    }
+
+    const bool has_negative_nbiot_probe = gravity_path_detected
+        && i2c_report.gravity_probe_ran
+        && !i2c_report.nb_iot2_confirmed;
+    if (CONFIG.nbiot_enabled && !has_negative_nbiot_probe) {
+        xTaskCreatePinnedToCore(taskNbiot, "NB_IOT", 8192, nullptr, 2, &taskNbiotHandle, 0);
+    } else {
+        M5_LOGW("[TASK] Skipping NB_IOT task: enumeration/probe does not confirm NB-IoT2 path");
+    }
+
     xTaskCreatePinnedToCore(taskWatchdog,         "WATCHDOG", 2048, nullptr, 3,  nullptr,                    0);
 
     M5_LOGI("SmartFranklin setup complete.");
@@ -191,7 +236,8 @@ void setup() {
 /**
  * Main loop executed repeatedly by the Arduino framework.
  * Handles M5Stack button input and bridges MQTT loop for message processing.
- * Long-press detection on Button A allows device reset.
+ * Long-press detection on Button A allows config reset.
+ * Pressing Button B performs an immediate reboot.
  */
 void loop() {
     // Update M5Stack internal state (buttons, sensors, power management)
@@ -215,6 +261,12 @@ void loop() {
     } else {
         // Button released: reset the press timer
         pressStart = 0;
+    }
+
+    // Reboot immediately on Button B press event
+    if (M5.BtnB.wasPressed()) {
+        M5_LOGI("----- SmartFranklin restarted -----");
+        ESP.restart();
     }
 
     // Process MQTT bridge events and message delivery

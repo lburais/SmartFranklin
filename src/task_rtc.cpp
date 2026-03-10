@@ -6,7 +6,8 @@
  * File:        task_rtc.cpp
  * Project:     SmartFranklin IoT Device Controller
  * Description: FreeRTOS task for Real-Time Clock (RTC) management and time
- *              synchronization. Reads current date/time from M5Stack RTC,
+ *              synchronization. Prefers internal M5 RTC, then dynamically
+ *              discovers an external RTC (direct Port A I2C or via PAHub),
  *              updates global data model, and publishes timestamp to MQTT.
  * 
  * Author:      Laurent Burais
@@ -16,7 +17,8 @@
  * Overview:
  *   SmartFranklin maintains accurate timekeeping using the internal M5 RTC
  *   when available, with automatic fallback to an external RTC on Port A.
- *   The task can discover an external RTC behind a PAHub channel, then
+ *   External discovery is runtime-based and scans direct Port A I2C as well
+ *   as all PAHub channels (no fixed compile-time RTC channel). The task then
  *   continuously reads date/time, formats it as an ISO string, updates the
  *   global data model, and publishes timestamps to MQTT.
  * 
@@ -75,7 +77,7 @@
  *   - M5Utility.h (M5Stack utility functions)
  *   - tasks.h (Task definitions and PERIOD_RTC constant)
  *   - data_model.h (Global DATA structure and mutex)
- *   - pahub_channels.h (PAHub address/channel helpers for external RTC fallback)
+ *   - pahub_channels.h (PAHub address constants for external RTC fallback)
  *   - mqtt_layer.h (MQTT publishing interface)
  * 
  * Limitations:
@@ -84,7 +86,7 @@
  *   - No Timezone Support: UTC time only (no timezone conversion)
  *   - Battery Dependency: Time lost if CR1220 battery depleted
  *   - No Alarm Usage: RTC alarm features not implemented
- *   - Auto-discovery Scope: Fallback scans PAHub channels for supported RTC addresses
+ *   - Auto-discovery Scope: Fallback scans direct Port A I2C and PAHub channels for supported RTC addresses
  * 
  * Best Practices:
  *   - Set RTC time during device commissioning
@@ -207,14 +209,16 @@ bool enable_external_rtc_via_pahub()
  * loop to prevent task continuation with invalid time data.
  * 
  * Initialization Process:
- *   1. Query M5Stack RTC interface for availability
- *   2. Check M5.Rtc.isEnabled() for hardware status
- *   3. Log success or failure with appropriate message level
- *   4. Enter error loop on failure to halt task execution
+ *   1. Check internal RTC availability with M5.Rtc.isEnabled()
+ *   2. If unavailable, start external Port A I2C bus
+ *   3. Scan PAHub channels for supported external RTC addresses
+ *   4. Fallback to direct Port A external RTC init
+ *   5. Enter error loop only if all RTC paths fail
  * 
  * Hardware Validation:
  *   - I2C Communication: Verified by M5Unified library
- *   - RTC Chip Presence: BM8563 detection and initialization
+ *   - RTC Chip Presence: Internal RTC first, then supported external RTC addresses
+ *   - PAHub Path: Dynamically detected channel when external RTC is behind PAHub
  *   - Battery Backup: Assumed functional (not explicitly checked)
  *   - Time Validity: Not checked (assumes previously set time)
  * 
@@ -232,7 +236,8 @@ bool enable_external_rtc_via_pahub()
  * @return void
  * 
  * @note This function blocks indefinitely on RTC initialization failure.
- *       Ensure M5Stack RTC is properly connected and battery is installed.
+ *       Ensure at least one RTC path is available (internal, direct external,
+ *       or external via PAHub) and battery backup is installed.
  *       RTC time should be set during device commissioning.
  * 
  * @see M5.Rtc.isEnabled() - RTC hardware availability check
