@@ -129,7 +129,6 @@
  *       Command processing is not available until this function completes.
  * 
  * @see command_handle() - Command processing function
- * @see command_get_display_screen() - Screen management function
  */
 void command_handler_init();
 
@@ -151,7 +150,6 @@ void command_handler_init();
  *   5. Send acknowledgment if required
  * 
  * Supported Command Types:
- *   - "screen X": Switch to display screen X (0-9)
  *   - "restart": System restart command
  *   - "config": Configuration update commands
  *   - "sensor": Sensor control commands
@@ -174,38 +172,3 @@ void command_handler_init();
  * @see command_handler_init() - Initialization function
  */
 void command_handle(const String &topic, const String &payload);
-
-/**
- * @brief Returns the current display screen identifier.
- * 
- * Provides access to the currently selected display screen number.
- * Used by display rendering code to determine which screen content
- * to show on the M5Stack LCD.
- * 
- * @return int - Current display screen ID (0-9 range)
- * 
- * Screen ID Usage:
- *   - 0: Default/main screen (system overview)
- *   - 1: Sensor data screen
- *   - 2: Network status screen
- *   - 3: Configuration screen
- *   - 4-9: Reserved for future screens
- * 
- * State Management:
- *   - Screen ID persists across function calls
- *   - Changed by command_handle() for remote control
- *   - Used by display rendering tasks
- *   - Thread-safe access to shared state
- * 
- * Display Integration:
- *   - Called by UI rendering code
- *   - Determines screen layout and content
- *   - Supports dynamic screen switching
- *   - Enables remote display control
- * 
- * @note Screen IDs are limited to 0-9 range.
- *       Invalid screen selections default to screen 0.
- * 
- * @see command_handle() - Screen switching function
- */
-int command_get_display_screen();

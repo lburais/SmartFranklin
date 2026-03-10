@@ -72,6 +72,11 @@
 #define STOP_BEFORE_DISTANCE_TASK 0
 #endif
 
+// Set to 1 to run only the display + watchdog tasks for LCD diagnostics.
+#ifndef DISPLAY_DIAG_ONLY
+#define DISPLAY_DIAG_ONLY 0
+#endif
+
 // ============================================================================
 // Task Handle Declarations
 // ============================================================================
@@ -88,6 +93,11 @@ TaskHandle_t taskBmsBleHandle           = nullptr;  // BLE battery management sy
 TaskHandle_t taskDisplayHandle          = nullptr;  // M5Stack display updates
 TaskHandle_t taskMeshtasticBridgeHandle = nullptr;  // Meshtastic mesh bridge
 TaskHandle_t taskNbiotHandle            = nullptr;  // NB-IoT cellular communication
+
+static constexpr uint8_t DISPLAY_UI_ROTATION = 3;
+static constexpr uint8_t DISPLAY_UI_BRIGHTNESS = 255;
+static constexpr uint16_t COLOR_SPLASH_BG = 0xFD20;   // orange
+static constexpr uint16_t COLOR_SPLASH_TEXT = 0xFFFF; // white
 
 // ============================================================================
 // setup() - System Initialization
@@ -106,6 +116,26 @@ void setup() {
     cfg.internal_imu = true;   // Enable internal 6-axis IMU (accelerometer + gyroscope)
     cfg.internal_rtc = true;   // Enable internal real-time clock for timekeeping
     M5.begin(cfg);
+
+    // Startup splash shown before starting background tasks.
+    M5.Display.wakeup();
+    M5.Display.setBrightness(DISPLAY_UI_BRIGHTNESS);
+    M5.Display.setRotation(DISPLAY_UI_ROTATION);
+    M5.Display.setTextSize(2);
+    M5.Display.fillScreen(COLOR_SPLASH_BG);
+    M5.Display.setTextColor(COLOR_SPLASH_TEXT, COLOR_SPLASH_BG);
+    const char* splash = "SmartFranklin";
+    int16_t splashX = (M5.Display.width() - M5.Display.textWidth(splash)) / 2;
+    if (splashX < 0) {
+        splashX = 0;
+    }
+    int16_t splashY = (M5.Display.height() - M5.Display.fontHeight()) / 2;
+    if (splashY < 0) {
+        splashY = 0;
+    }
+    M5.Display.setCursor(splashX, splashY);
+    M5.Display.print(splash);
+    delay(250);
 
     // Initialize serial communication at 115200 baud for debugging
     Serial.begin(115200);
@@ -185,6 +215,15 @@ void setup() {
     // Stack sizes: 2048-8192 bytes (larger for BLE/mesh operations)
     // Priority levels: 1 (low) to 3 (high); higher = more CPU scheduling time
     
+    xTaskCreatePinnedToCore(taskDisplay,          "DISPLAY",  8192, nullptr, 3,  &taskDisplayHandle,         1);
+    xTaskCreatePinnedToCore(taskWatchdog,         "WATCHDOG", 2048, nullptr, 3,  nullptr,                    0);
+
+#if DISPLAY_DIAG_ONLY
+    M5_LOGW("[DISPLAY] DISPLAY_DIAG_ONLY=1: skipping non-display tasks");
+    M5_LOGI("SmartFranklin setup complete.");
+    return;
+#endif
+
     xTaskCreatePinnedToCore(taskHwMonitor,        "HW_MON",   4096, nullptr, 1,  nullptr,                    0);
     xTaskCreatePinnedToCore(taskMqttBroker,       "MQTT_BRK", 4096, nullptr, 3,  &taskMqttBrokerHandle,      1);
 
@@ -211,8 +250,6 @@ void setup() {
 
     xTaskCreatePinnedToCore(taskBmsBle,           "BMS_BLE",  8192, nullptr, 2,  &taskBmsBleHandle,          0);
     
-    xTaskCreatePinnedToCore(taskDisplay,          "DISPLAY",  4096, nullptr, 1,  &taskDisplayHandle,         1);
-
     const bool has_negative_meshtastic_probe = gravity_path_detected
         && i2c_report.gravity_probe_ran
         && !i2c_report.c6l_activity_detected;
@@ -231,8 +268,6 @@ void setup() {
         M5_LOGW("[TASK] Skipping NB_IOT task: enumeration/probe does not confirm NB-IoT2 path");
     }
 
-    xTaskCreatePinnedToCore(taskWatchdog,         "WATCHDOG", 2048, nullptr, 3,  nullptr,                    0);
-
     M5_LOGI("SmartFranklin setup complete.");
 }
 
@@ -241,38 +276,23 @@ void setup() {
 // ============================================================================
 /**
  * Main loop executed repeatedly by the Arduino framework.
- * Handles M5Stack button input and bridges MQTT loop for message processing.
- * Long-press detection on Button A allows config reset.
- * Pressing Button B performs an immediate reboot.
+ * Bridges MQTT loop for message processing.
+ * Long-pressing Button B performs a system reboot.
  */
 void loop() {
-    // Update M5Stack internal state (buttons, sensors, power management)
-    M5.update();
-
-    // =========================================================================
-    // Button A Long-Press Handler (Configuration Reset)
-    // =========================================================================
-    // Detects 5+ second press on Button A to trigger factory reset
-    static unsigned long pressStart = 0;
-    
-    if (M5.BtnA.isPressed()) {
-        // Button press detected: record the start time if not already recorded
-        if (pressStart == 0) pressStart = millis();
-        
-        // Check if button has been held for more than 5 seconds
-        if (millis() - pressStart > 5000) {
-            SPIFFS.remove("/config.json");  // Delete configuration file
-            ESP.restart();                   // Restart device to load defaults
+    // Long press on Button B triggers restart without stealing short presses
+    // used by the display task (for example calibration actions).
+    static unsigned long rebootPressStart = 0;
+    if (M5.BtnB.isPressed()) {
+        if (rebootPressStart == 0) {
+            rebootPressStart = millis();
+        }
+        if (millis() - rebootPressStart > 3000) {
+            M5_LOGI("----- SmartFranklin restarted -----");
+            ESP.restart();
         }
     } else {
-        // Button released: reset the press timer
-        pressStart = 0;
-    }
-
-    // Reboot immediately on Button B press event
-    if (M5.BtnB.wasPressed()) {
-        M5_LOGI("----- SmartFranklin restarted -----");
-        ESP.restart();
+        rebootPressStart = 0;
     }
 
     // Process MQTT bridge events and message delivery
