@@ -62,6 +62,35 @@
 #include <Arduino.h>
 
 // ============================================================================
+// Task Period Configuration (milliseconds)
+// ============================================================================
+
+/**
+ * @brief Sampling period for weight task updates.
+ */
+#define PERIOD_WEIGHT       60000
+
+/**
+ * @brief Sampling period for tilt task updates.
+ */
+#define PERIOD_TILT         60000
+
+/**
+ * @brief Sampling period for RTC task updates.
+ */
+#define PERIOD_RTC          60000
+
+/**
+ * @brief Sampling period for distance task updates.
+ */
+#define PERIOD_DISTANCE     60000
+
+/**
+ * @brief Sampling period for GPS task updates.
+ */
+#define PERIOD_GPS          60000
+
+// ============================================================================
 // External Task Handle Declarations
 // ============================================================================
 // FreeRTOS task handles for runtime task management and control
@@ -72,6 +101,7 @@ extern TaskHandle_t taskDistanceHandle;         // Distance sensor acquisition
 extern TaskHandle_t taskWeightHandle;           // Weight sensor acquisition
 extern TaskHandle_t taskTiltHandle;             // Tilt sensor acquisition
 extern TaskHandle_t taskRtcHandle;              // Real-time clock synchronization
+extern TaskHandle_t taskGpsHandle;              // Gravity DFR1103 GPS/RTC acquisition
 extern TaskHandle_t taskBmsBleHandle;           // BLE battery management system
 extern TaskHandle_t taskDisplayHandle;          // M5Stack display updates
 extern TaskHandle_t taskMeshtasticBridgeHandle; // Meshtastic mesh networking bridge
@@ -152,6 +182,26 @@ void taskTilt(void *pvParameters);
  * @return void (infinite loop, never returns)
  */
 void taskRtc(void *pvParameters);
+
+/**
+ * @brief Gravity DFR1103 GPS/RTC acquisition task.
+ *
+ * Initializes the GNSS/RTC unit on I2C, periodically reads GPS and RTC
+ * values, updates shared DATA fields, and publishes them to MQTT.
+ *
+ * @param pvParameters FreeRTOS task parameter (unused)
+ * @return void (infinite loop, never returns)
+ */
+void taskGps(void *pvParameters);
+
+/**
+ * @brief Returns whether the GPS task is currently alive and healthy.
+ *
+ * Checks task handle state, recent loop activity, and module health.
+ *
+ * @return true if GPS task is running and healthy, otherwise false
+ */
+bool isGpsTaskRunning();
 
 /**
  * @brief BLE battery management system (BMS) monitoring task.

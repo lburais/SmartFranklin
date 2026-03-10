@@ -83,6 +83,7 @@ TaskHandle_t taskDistanceHandle         = nullptr;  // Distance sensor reading
 TaskHandle_t taskWeightHandle           = nullptr;  // Weight sensor reading
 TaskHandle_t taskTiltHandle             = nullptr;  // Tilt sensor reading
 TaskHandle_t taskRtcHandle              = nullptr;  // Real-time clock synchronization
+TaskHandle_t taskGpsHandle              = nullptr;  // Gravity DFR1103 GPS/RTC task
 TaskHandle_t taskBmsBleHandle           = nullptr;  // BLE battery management system
 TaskHandle_t taskDisplayHandle          = nullptr;  // M5Stack display updates
 TaskHandle_t taskMeshtasticBridgeHandle = nullptr;  // Meshtastic mesh bridge
@@ -203,8 +204,13 @@ void setup() {
     }
 
     xTaskCreatePinnedToCore(taskTilt,             "TILT",     4096, nullptr, 2,  &taskTiltHandle,            1);
+    
     xTaskCreatePinnedToCore(taskRtc,              "RTC",      4096, nullptr, 2,  &taskRtcHandle,             1);
+
+    xTaskCreatePinnedToCore(taskGps,              "GPS",      6144, nullptr, 2,  &taskGpsHandle,            1);
+
     xTaskCreatePinnedToCore(taskBmsBle,           "BMS_BLE",  8192, nullptr, 2,  &taskBmsBleHandle,          0);
+    
     xTaskCreatePinnedToCore(taskDisplay,          "DISPLAY",  4096, nullptr, 1,  &taskDisplayHandle,         1);
 
     const bool has_negative_meshtastic_probe = gravity_path_detected

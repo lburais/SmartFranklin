@@ -191,6 +191,46 @@ struct SmartData {
     String rtc_time = "";
 
     /**
+     * @brief GNSS fix state from DFR1103 module.
+     */
+    bool gps_fix = false;
+
+    /**
+     * @brief GNSS latitude in decimal degrees.
+     */
+    double gps_lat = 0.0;
+
+    /**
+     * @brief GNSS longitude in decimal degrees.
+     */
+    double gps_lon = 0.0;
+
+    /**
+     * @brief GNSS altitude above sea level in meters.
+     */
+    double gps_alt_m = 0.0;
+
+    /**
+     * @brief Number of satellites currently used for navigation.
+     */
+    uint8_t gps_satellites = 0;
+
+    /**
+     * @brief GNSS UTC date string (YYYY-MM-DD).
+     */
+    String gps_utc_date = "";
+
+    /**
+     * @brief GNSS UTC time string (HH:MM:SS).
+     */
+    String gps_utc_time = "";
+
+    /**
+     * @brief RTC timestamp read from the DFR1103 module.
+     */
+    String gps_rtc_time = "";
+
+    /**
      * @brief Last received mesh network message.
      * 
      * Most recent message received through mesh networking layer.
