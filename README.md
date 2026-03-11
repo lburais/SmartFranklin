@@ -25,40 +25,76 @@ SmartFranklin is an ESP32 IoT controller for **M5Stick C Plus2**, organized as c
 ## Task-Oriented Architecture
 
 ```mermaid
-flowchart TB
-    SETUP[setup\nBoot + init + task creation]
-    LOOP[loop\nHMI tick + MQTT bridge loop]
+flowchart TD
+    subgraph L1[Execution Layer]
+        SETUP[setup\nBoot + init + task creation]
+        LOOP[loop\nHMI tick + MQTT bridge loop]
+    end
+
+    subgraph L2[Task Layer]
+        T_HMI[HMI execution]
+        T_BRIDGE[MQTT bridge loop]
+        T_WD[taskWatchdog]
+        T_HW[taskHwMonitor]
+        T_MQTT[taskMqttBroker]
+        T_WIFI[taskWiFi]
+        T_DIST[taskDistance]
+        T_WEIGHT[taskWeight]
+        T_TILT[taskTilt]
+        T_RTC[taskRtc]
+        T_GPS[taskGps]
+        T_BMS[taskBmsBle]
+        T_MESH[taskMeshtasticBridge]
+        T_NBIOT[taskNbiot]
+    end
+
+    subgraph L3[Unit Layer]
+        U_HMI[Display + Buttons + Scale calibration UI]
+        U_BRIDGE[Command routing + local publish/subscribe]
+        U_WD[System watchdog]
+        U_M5[M5 hardware unit\nBattery/buttons/IMU telemetry]
+        U_BROKER[External MQTT broker]
+        U_WIFI[Wi-Fi AP+STA]
+        U_DIST[Distance unit\nToF/ultrasonic over Wire/Ex_I2C/PAHUB]
+        U_WEIGHT[Weight unit\nScale/load cell]
+        U_TILT[Tilt unit\nIMU orientation]
+        U_RTC[RTC unit\nTime sync]
+        U_GPS[GPS+RTC unit\nGravity DFR1103]
+        U_BMS[BMS BLE unit\nBattery telemetry]
+        U_MESH[Meshtastic unit\nLoRa mesh bridge]
+        U_NBIOT[NB-IoT2 unit\nCellular connectivity]
+    end
 
     SETUP --> LOOP
+    LOOP --> T_HMI
+    LOOP --> T_BRIDGE
+    SETUP --> T_WD
+    SETUP --> T_HW
+    SETUP --> T_MQTT
+    SETUP --> T_WIFI
+    SETUP --> T_DIST
+    SETUP --> T_WEIGHT
+    SETUP --> T_TILT
+    SETUP --> T_RTC
+    SETUP --> T_GPS
+    SETUP --> T_BMS
+    SETUP --> T_MESH
+    SETUP --> T_NBIOT
 
-    LOOP --> HMI[HMI unit\nDisplay + Buttons + Scale calibration UI]
-    LOOP --> BRIDGE[MQTT Bridge unit\nCommand routing + local publish/subscribe]
-
-    SETUP --> T_WD[taskWatchdog]
-    SETUP --> T_HW[taskHwMonitor]
-    SETUP --> T_MQTT[taskMqttBroker]
-    SETUP --> T_WIFI[taskWiFi]
-
-    SETUP --> T_DIST[taskDistance]
-    SETUP --> T_WEIGHT[taskWeight]
-    SETUP --> T_TILT[taskTilt]
-    SETUP --> T_RTC[taskRtc]
-    SETUP --> T_GPS[taskGps]
-    SETUP --> T_BMS[taskBmsBle]
-    SETUP --> T_MESH[taskMeshtasticBridge]
-    SETUP --> T_NBIOT[taskNbiot]
-
-    T_DIST --> U_DIST[Distance unit\nToF/ultrasonic over Wire/Ex_I2C/PAHUB]
-    T_WEIGHT --> U_WEIGHT[Weight unit\nScale/load cell]
-    T_TILT --> U_TILT[Tilt unit\nIMU orientation]
-    T_RTC --> U_RTC[RTC unit\nTime sync]
-    T_GPS --> U_GPS[GPS+RTC unit\nGravity DFR1103]
-    T_BMS --> U_BMS[BMS BLE unit\nBattery telemetry]
-    T_MESH --> U_MESH[Meshtastic unit\nLoRa mesh bridge]
-    T_NBIOT --> U_NBIOT[NB-IoT2 unit\nCellular connectivity]
-    T_MQTT --> U_BROKER[External MQTT broker]
-    T_WIFI --> U_WIFI[Wi-Fi AP+STA]
-    T_HW --> U_M5[M5 hardware unit\nBattery/buttons/IMU telemetry]
+    T_HMI --> U_HMI
+    T_BRIDGE --> U_BRIDGE
+    T_WD --> U_WD
+    T_HW --> U_M5
+    T_MQTT --> U_BROKER
+    T_WIFI --> U_WIFI
+    T_DIST --> U_DIST
+    T_WEIGHT --> U_WEIGHT
+    T_TILT --> U_TILT
+    T_RTC --> U_RTC
+    T_GPS --> U_GPS
+    T_BMS --> U_BMS
+    T_MESH --> U_MESH
+    T_NBIOT --> U_NBIOT
 ```
 
 ### Execution-to-Unit Mapping
