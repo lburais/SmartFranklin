@@ -63,8 +63,8 @@ struct SmartConfig {
 
     // Task timing configuration (milliseconds)
     int task_gps_loop_ms = 60000;
-    int task_mqtt_loop_ms = 20;
-    int task_hmi_loop_ms = 20;
+    int task_mqtt_loop_ms = 250;
+    int task_hmi_loop_ms = 1000;
 };
 
 extern SmartConfig CONFIG;

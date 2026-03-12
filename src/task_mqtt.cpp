@@ -172,6 +172,10 @@ void ensureLocalBrokerStarted()
     if (s_localBroker.init(port)) {
         s_localBrokerStarted = true;
         M5_LOGI("[MQTT] Local broker started on port %u", port);
+
+        // Publier la configuration du broker sur le topic système
+        sf_mqtt::publish("smartfranklin/system/mqtt_broker/config/host", CONFIG.ext_mqtt_host.c_str());
+        sf_mqtt::publish("smartfranklin/system/mqtt_broker/config/port", std::to_string(port));
         return;
     }
 

@@ -63,6 +63,7 @@
 
 #include "hmi.h"
 
+#include <M5GFX.h>
 #include <M5Unified.h>
 
 #include "config_store.h"
@@ -121,22 +122,22 @@ static constexpr uint16_t COLOR_SPLASH_BG = 0xFD20;
 static constexpr uint16_t COLOR_SPLASH_TEXT = 0xFFFF;
 
 /** @brief Startup splash dwell time in milliseconds. */
-static constexpr uint32_t SPLASH_DELAY_MS = 250;
+static constexpr uint32_t SPLASH_DELAY_MS = 1000;
 
 /**
  * @brief Draws one centered text line using M5GFX horizontal centering.
  */
-void drawCenteredTextLine(const char* text,
+void drawCenteredTextLine(lgfx::LGFXBase& surface,
+                          const char* text,
                           int16_t center_x,
                           int16_t top_y,
                           uint8_t text_size,
                           uint16_t fg,
                           uint16_t bg)
 {
-    auto& lcd = M5.Display;
-    lcd.setTextSize(text_size);
-    lcd.setTextColor(fg, bg);
-    lcd.drawCenterString(text, center_x, top_y);
+    surface.setTextSize(text_size);
+    surface.setTextColor(fg, bg);
+    surface.drawCenterString(text, center_x, top_y);
 }
 
 }  // namespace
@@ -145,21 +146,19 @@ void drawCenteredTextLine(const char* text,
  * @brief Initializes display hardware state and internal HMI runtime state.
  *
  * Steps performed:
- * - configure backlight PWM and wake display
+ * - wake display and apply visual defaults
  * - apply brightness, rotation, and color defaults
  * - reset screen/calibration/button state machine variables
- * - draw initial frame and mark runtime initialized/healthy
+ * - draw initial frame
  *
  * @return true when initialization path completes.
  */
 bool HMI::init()
 {
     M5_LOGI("[HMI] init");
-    auto& lcd = M5.Display;
+    M5GFX& lcd = M5.Display;
 
-    ledcSetup(7, 12000, 8);
-    ledcAttachPin(27, 7);
-    ledcWrite(7, DISPLAY_BRIGHTNESS);
+    initialized_ = false;
 
     lcd.wakeup();
     lcd.setBrightness(DISPLAY_BRIGHTNESS);
@@ -173,13 +172,14 @@ bool HMI::init()
     lcd.setTextSize(CONTENT_TEXT_SIZE);
     const int16_t splashY = (lcd.height() - lcd.fontHeight()) / 2;
     drawCenteredTextLine(
+        lcd,
         splash,
         static_cast<int16_t>(lcd.width() / 2),
         splashY,
         CONTENT_TEXT_SIZE,
         COLOR_SPLASH_TEXT,
         COLOR_SPLASH_BG);
-    
+
     delay(SPLASH_DELAY_MS);
 
     lcd.fillScreen(COLOR_CONTENT_BG);
@@ -191,10 +191,7 @@ bool HMI::init()
     last_published_screen_ = -1;
 
     draw();
-    last_redraw_ms_ = millis();
-    last_process_ms_ = last_redraw_ms_;
     initialized_ = true;
-    last_process_ok_ = true;
 
     return true;
 }
@@ -206,9 +203,8 @@ bool HMI::init()
  * - refresh button states (`M5.update`)
  * - detect navigation button edges
  * - redraw on page changes
- * - redraw periodically to refresh telemetry
+ * - redraw current page to refresh telemetry
  * - process calibration button transitions
- * - update runtime heartbeat/health markers
  */
 void HMI::process()
 {
@@ -234,43 +230,19 @@ void HMI::process()
 
     if (next_screen != screen_) {
         screen_ = next_screen;
-        draw();
-        last_redraw_ms_ = millis();
     }
 
-    if ((millis() - last_redraw_ms_) > 250UL) {
-        draw();
-        last_redraw_ms_ = millis();
-    }
+    draw();
 
     handleCalibrationButton(btnB_rising);
-    last_process_ms_ = millis();
-    last_process_ok_ = true;
 }
 
 /**
- * @brief Returns true once `init()` has completed.
+ * @brief Returns HMI availability status.
  */
 bool HMI::isInitialized() const
 {
     return initialized_;
-}
-
-/**
- * @brief Returns runtime health based on process heartbeat freshness.
- *
- * Health is considered true only when:
- * - initialized flag is true
- * - previous process cycle did not fail
- * - heartbeat timestamp is recent
- */
-bool HMI::isHealthy() const
-{
-    if (!initialized_ || !last_process_ok_) {
-        return false;
-    }
-
-    return (millis() - last_process_ms_) <= 5000UL;
 }
 
 const char* HMI::currentScreenName() const
@@ -304,7 +276,6 @@ void HMI::handleCalibrationButton(bool btnB_rising)
         calib_in_progress_ = true;
         scale_tare();
         draw();
-        last_redraw_ms_ = millis();
         return;
     }
 
@@ -317,7 +288,6 @@ void HMI::handleCalibrationButton(bool btnB_rising)
     }
     calib_in_progress_ = false;
     draw();
-    last_redraw_ms_ = millis();
 }
 
 /**
@@ -326,7 +296,7 @@ void HMI::handleCalibrationButton(bool btnB_rising)
  */
 void HMI::drawTitleBox(const char* title) const
 {
-    auto& lcd = M5.Display;
+    M5GFX& lcd = M5.Display;
     const int16_t boxW = static_cast<int16_t>(lcd.width()) - (2 * TITLE_BOX_X);
 
     lcd.fillRect(TITLE_BOX_X, TITLE_BOX_Y, boxW, TITLE_BOX_H, COLOR_TITLE_BG);
@@ -335,6 +305,7 @@ void HMI::drawTitleBox(const char* title) const
     lcd.setTextSize(TITLE_TEXT_SIZE);
     const int16_t textY = TITLE_BOX_Y + ((TITLE_BOX_H - lcd.fontHeight()) / 2);
     drawCenteredTextLine(
+        lcd,
         title,
         static_cast<int16_t>(TITLE_BOX_X + (boxW / 2)),
         textY,
@@ -351,7 +322,7 @@ void HMI::draw()
     DisplaySnapshot snapshot = last_snapshot_;
     updateSnapshot(snapshot);
 
-    auto& lcd = M5.Display;
+    M5GFX& lcd = M5.Display;
     lcd.fillScreen(COLOR_CONTENT_BG);
 
     switch (screen_) {
@@ -410,7 +381,7 @@ void HMI::updateSnapshot(DisplaySnapshot& snapshot)
  */
 void HMI::beginContentArea() const
 {
-    auto& lcd = M5.Display;
+    M5GFX& lcd = M5.Display;
     lcd.setTextSize((screen_ == 4 || screen_ == 5) ? 1 : CONTENT_TEXT_SIZE);
     lcd.setTextColor(COLOR_CONTENT_TEXT, COLOR_CONTENT_BG);
     lcd.setCursor(CONTENT_X, CONTENT_Y);
@@ -419,7 +390,8 @@ void HMI::beginContentArea() const
 /** @brief Draw helper for Tank distance page. */
 void HMI::drawTankScreen(const DisplaySnapshot& snapshot) const
 {
-    auto& lcd = M5.Display;
+    M5_LOGI("[HMI] drawTankScreen");
+    M5GFX& lcd = M5.Display;
     drawTitleBox("Tank");
     beginContentArea();
     lcd.printf("Distance: %.1f cm\n", snapshot.distance_cm);
@@ -428,7 +400,8 @@ void HMI::drawTankScreen(const DisplaySnapshot& snapshot) const
 /** @brief Draw helper for Gaz weight page. */
 void HMI::drawGazScreen(const DisplaySnapshot& snapshot) const
 {
-    auto& lcd = M5.Display;
+    M5_LOGI("[HMI] drawGazScreen");
+    M5GFX& lcd = M5.Display;
     drawTitleBox("Gaz");
     beginContentArea();
     lcd.printf("Weight: %.3f g\n", snapshot.weight_g);
@@ -437,7 +410,8 @@ void HMI::drawGazScreen(const DisplaySnapshot& snapshot) const
 /** @brief Draw helper for Level tilt telemetry page. */
 void HMI::drawLevelScreen(const DisplaySnapshot& snapshot) const
 {
-    auto& lcd = M5.Display;
+    M5_LOGI("[HMI] drawLevelScreen");
+    M5GFX& lcd = M5.Display;
     drawTitleBox("Level");
     beginContentArea();
     lcd.printf("Pitch: %.2f\n", snapshot.pitch);
@@ -447,7 +421,8 @@ void HMI::drawLevelScreen(const DisplaySnapshot& snapshot) const
 /** @brief Draw helper for battery/BMS telemetry page. */
 void HMI::drawBatteryScreen(const DisplaySnapshot& snapshot) const
 {
-    auto& lcd = M5.Display;
+    M5_LOGI("[HMI] drawBatteryScreen");
+    M5GFX& lcd = M5.Display;
     drawTitleBox("Battery");
     beginContentArea();
     lcd.printf("BMS V: %.2f\nI: %.2f\nSOC: %.1f\n",
@@ -459,7 +434,8 @@ void HMI::drawBatteryScreen(const DisplaySnapshot& snapshot) const
 /** @brief Draw helper for GPS telemetry page. */
 void HMI::drawGpsScreen(const DisplaySnapshot& snapshot) const
 {
-    auto& lcd = M5.Display;
+    M5_LOGI("[HMI] drawGpsScreen");
+    M5GFX& lcd = M5.Display;
     drawTitleBox("GPS");
     beginContentArea();
     lcd.printf("Fix: %s  Sat: %u\n",
@@ -473,7 +449,8 @@ void HMI::drawGpsScreen(const DisplaySnapshot& snapshot) const
 /** @brief Draw helper for RTC telemetry page. */
 void HMI::drawRtcScreen(const DisplaySnapshot& snapshot) const
 {
-    auto& lcd = M5.Display;
+    M5_LOGI("[HMI] drawRtcScreen");
+    M5GFX& lcd = M5.Display;
     drawTitleBox("RTC");
     beginContentArea();
     lcd.println("GPS UTC:");
@@ -485,7 +462,8 @@ void HMI::drawRtcScreen(const DisplaySnapshot& snapshot) const
 /** @brief Draw helper for interactive scale calibration page. */
 void HMI::drawCalibrationScreen(const DisplaySnapshot& snapshot) const
 {
-    auto& lcd = M5.Display;
+    M5_LOGI("[HMI] drawCalibrationScreen");
+    M5GFX& lcd = M5.Display;
     drawTitleBox("Scale Calibration");
     beginContentArea();
     if (!calib_in_progress_) {

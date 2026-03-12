@@ -211,8 +211,8 @@ bool config_load()
 
         // --- Task Timing Configuration ---
         CONFIG.task_gps_loop_ms          = 60000;
-        CONFIG.task_mqtt_loop_ms         = 20;
-        CONFIG.task_hmi_loop_ms          = 20;
+        CONFIG.task_mqtt_loop_ms         = 200;
+        CONFIG.task_hmi_loop_ms          = 1000;
 
         return true;
     }

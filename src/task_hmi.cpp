@@ -69,12 +69,6 @@ static constexpr unsigned long HMI_REBOOT_HOLD_MS = 3000;
 /** @brief Task-owned HMI runtime instance. */
 HMI g_hmi;
 
-uint32_t hmiLoopMs()
-{
-    const int loopMs = CONFIG.task_hmi_loop_ms;
-    return (loopMs > 0) ? static_cast<uint32_t>(loopMs) : 20UL;
-}
-
 }  // namespace
 
 /**
@@ -121,6 +115,6 @@ void taskHmi(void *pvParameters)
             rebootPressStart = 0;
         }
 
-        vTaskDelay(pdMS_TO_TICKS(hmiLoopMs()));
+        vTaskDelay(pdMS_TO_TICKS(CONFIG.task_hmi_loop_ms));
     }
 }

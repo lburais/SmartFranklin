@@ -15,8 +15,7 @@
  *
  * Overview:
  *   The HMI class provides a compact application-facing API that mirrors
- *   other SmartFranklin runtime modules (`init`, `process`, `isInitialized`,
- *   `isHealthy`).
+ *   other SmartFranklin runtime modules (`init`, `process`, `isInitialized`).
  *
  *   It owns:
  *   - LCD page rendering for all local operator views,
@@ -68,7 +67,7 @@
  * Lifecycle model:
  * 1. `init()` configures display/backlight and draws first frame.
  * 2. Task periodically calls `process()` to update input/rendering.
- * 3. Supervisors use `isInitialized()` and `isHealthy()` for task status.
+ * 3. Supervisors can query `isInitialized()`.
  */
 class HMI {
 public:
@@ -91,16 +90,10 @@ public:
     void process();
 
     /**
-     * @brief Reports whether `init()` completed successfully.
+     * @brief Reports HMI initialization status.
      * @return true after successful initialization.
      */
     bool isInitialized() const;
-
-    /**
-     * @brief Reports whether runtime heartbeat is considered healthy.
-     * @return true when initialized and recent process activity exists.
-     */
-    bool isHealthy() const;
 
     /**
      * @brief Returns the active HMI screen name.
@@ -196,17 +189,8 @@ private:
     /** @brief Previous sampled Button B pressed state for edge detection. */
     bool btnB_prev_ = false;
 
-    /** @brief Timestamp of latest full redraw. */
-    uint32_t last_redraw_ms_ = 0;
-
-    /** @brief Timestamp of latest successful process cycle. */
-    uint32_t last_process_ms_ = 0;
-
     /** @brief True after successful init(). */
     bool initialized_ = false;
-
-    /** @brief Result flag of most recent process cycle. */
-    bool last_process_ok_ = false;
 
     /** @brief Last screen index published to MQTT, or -1 if none yet. */
     int last_published_screen_ = -1;
