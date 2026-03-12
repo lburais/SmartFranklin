@@ -5,13 +5,13 @@
  *
  * File:        hmi.h
  * Project:     SmartFranklin IoT Device Controller
- * Description: Declares the Human-Machine Interface (HMI) runtime used to
- *              render display pages, process local button inputs, and execute
- *              interactive scale calibration workflow.
+ * Description: Public API for the Human-Machine Interface (HMI) runtime.
+ *              Defines lifecycle hooks, rendering helpers, and local-control
+ *              state used by the dedicated HMI task.
  *
  * Author:      Laurent Burais
- * Date:        11 March 2026
- * Version:     1.0
+ * Date:        12 March 2026
+ * Version:     1.1
  *
  * Overview:
  *   The HMI class provides a compact application-facing API that mirrors
@@ -19,10 +19,10 @@
  *   `isHealthy`).
  *
  *   It owns:
- *   - LCD page rendering for all local operator views
- *   - Button-driven page navigation and calibration control
- *   - Snapshot-based reads from shared DATA under mutex protection
- *   - Lightweight runtime health reporting for task supervision
+ *   - LCD page rendering for all local operator views,
+ *   - Button-driven page navigation and calibration control,
+ *   - Snapshot-based reads from shared DATA under mutex protection,
+ *   - screen-name publication for MQTT UI observability.
  *
  * Screen Map:
  *   - 0: Tank (distance)
@@ -33,6 +33,28 @@
  *   - 5: RTC
  *   - 6: Scale Calibration
  *
+ * ============================================================================
+ * MIT License
+ * ============================================================================
+ * Copyright (c) 2026 Laurent Burais
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  * ============================================================================
  */
 
@@ -79,6 +101,12 @@ public:
      * @return true when initialized and recent process activity exists.
      */
     bool isHealthy() const;
+
+    /**
+     * @brief Returns the active HMI screen name.
+     * @return Stable lowercase screen name string.
+     */
+    const char* currentScreenName() const;
 
 private:
     /** @brief Number of available UI screens. */
@@ -179,6 +207,9 @@ private:
 
     /** @brief Result flag of most recent process cycle. */
     bool last_process_ok_ = false;
+
+    /** @brief Last screen index published to MQTT, or -1 if none yet. */
+    int last_published_screen_ = -1;
 
     /** @brief Cached last known snapshot used by rendering helpers. */
     DisplaySnapshot last_snapshot_;

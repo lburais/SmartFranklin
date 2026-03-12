@@ -9,8 +9,8 @@
  *              SmartFranklin screen interface.
  *
  * Author:      Laurent Burais
- * Date:        11 March 2026
- * Version:     1.0
+ * Date:        12 March 2026
+ * Version:     1.1
  *
  * Overview:
  *   This module provides concrete behavior for the HMI runtime contract
@@ -22,12 +22,42 @@
  *   - Health/init status signals (`isInitialized`, `isHealthy`)
  *   - Snapshot-based drawing helpers for each page
  *   - Calibration interaction flow on dedicated screen
+ *   - MQTT publication of active screen name on UI transitions
  *
- * Rendering model:
+ * Rendering Model:
  *   - A stable copy of shared DATA is captured under mutex each frame.
  *   - Draw helpers consume that snapshot without holding locks.
  *   - Periodic redraw keeps UI current even when no buttons are pressed.
  *
+ * Dependencies:
+ *   - M5Unified (display, buttons, logging)
+ *   - data_model.h (shared runtime state + mutex)
+ *   - scale_control.h (tare + calibration factor helpers)
+ *   - config_store.h (persisted calibration factor)
+ *   - mqtt.h (screen-name topic publishing)
+ *
+ * ============================================================================
+ * MIT License
+ * ============================================================================
+ * Copyright (c) 2026 Laurent Burais
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  * ============================================================================
  */
 
@@ -37,6 +67,7 @@
 
 #include "config_store.h"
 #include "data_model.h"
+#include "mqtt.h"
 #include "scale_control.h"
 
 namespace {
@@ -83,7 +114,32 @@ static constexpr uint8_t TITLE_TEXT_SIZE = 2;
 /** @brief Content text scale factor for most pages. */
 static constexpr uint8_t CONTENT_TEXT_SIZE = 2;
 
-} // namespace
+/** @brief Startup splash background color. */
+static constexpr uint16_t COLOR_SPLASH_BG = 0xFD20;
+
+/** @brief Startup splash text color. */
+static constexpr uint16_t COLOR_SPLASH_TEXT = 0xFFFF;
+
+/** @brief Startup splash dwell time in milliseconds. */
+static constexpr uint32_t SPLASH_DELAY_MS = 250;
+
+/**
+ * @brief Draws one centered text line using M5GFX horizontal centering.
+ */
+void drawCenteredTextLine(const char* text,
+                          int16_t center_x,
+                          int16_t top_y,
+                          uint8_t text_size,
+                          uint16_t fg,
+                          uint16_t bg)
+{
+    auto& lcd = M5.Display;
+    lcd.setTextSize(text_size);
+    lcd.setTextColor(fg, bg);
+    lcd.drawCenterString(text, center_x, top_y);
+}
+
+}  // namespace
 
 /**
  * @brief Initializes display hardware state and internal HMI runtime state.
@@ -99,22 +155,40 @@ static constexpr uint8_t CONTENT_TEXT_SIZE = 2;
 bool HMI::init()
 {
     M5_LOGI("[HMI] init");
+    auto& lcd = M5.Display;
 
     ledcSetup(7, 12000, 8);
     ledcAttachPin(27, 7);
     ledcWrite(7, DISPLAY_BRIGHTNESS);
 
-    M5.Display.wakeup();
-    M5.Display.setBrightness(DISPLAY_BRIGHTNESS);
-    M5.Display.setTextSize(CONTENT_TEXT_SIZE);
-    M5.Display.setRotation(DISPLAY_ROTATION);
-    M5.Display.invertDisplay(false);
-    M5.Display.fillScreen(COLOR_CONTENT_BG);
+    lcd.wakeup();
+    lcd.setBrightness(DISPLAY_BRIGHTNESS);
+    lcd.setTextSize(CONTENT_TEXT_SIZE);
+    lcd.setRotation(DISPLAY_ROTATION);
+    lcd.invertDisplay(false);
+
+    // Show startup splash before entering normal page rendering.
+    lcd.fillScreen(COLOR_SPLASH_BG);
+    const char* splash = "SmartFranklin";
+    lcd.setTextSize(CONTENT_TEXT_SIZE);
+    const int16_t splashY = (lcd.height() - lcd.fontHeight()) / 2;
+    drawCenteredTextLine(
+        splash,
+        static_cast<int16_t>(lcd.width() / 2),
+        splashY,
+        CONTENT_TEXT_SIZE,
+        COLOR_SPLASH_TEXT,
+        COLOR_SPLASH_BG);
+    
+    delay(SPLASH_DELAY_MS);
+
+    lcd.fillScreen(COLOR_CONTENT_BG);
 
     screen_ = 2;
     calib_in_progress_ = false;
     btnA_prev_ = false;
     btnB_prev_ = false;
+    last_published_screen_ = -1;
 
     draw();
     last_redraw_ms_ = millis();
@@ -199,6 +273,20 @@ bool HMI::isHealthy() const
     return (millis() - last_process_ms_) <= 5000UL;
 }
 
+const char* HMI::currentScreenName() const
+{
+    switch (screen_) {
+    case 0: return "tank";
+    case 1: return "gaz";
+    case 2: return "level";
+    case 3: return "battery";
+    case 4: return "gps";
+    case 5: return "rtc";
+    case 6: return "calibration";
+    default: return "level";
+    }
+}
+
 /**
  * @brief Handles Button B behavior specific to calibration page.
  *
@@ -238,26 +326,21 @@ void HMI::handleCalibrationButton(bool btnB_rising)
  */
 void HMI::drawTitleBox(const char* title) const
 {
-    const int16_t boxW = static_cast<int16_t>(M5.Display.width()) - (2 * TITLE_BOX_X);
+    auto& lcd = M5.Display;
+    const int16_t boxW = static_cast<int16_t>(lcd.width()) - (2 * TITLE_BOX_X);
 
-    M5.Display.fillRect(TITLE_BOX_X, TITLE_BOX_Y, boxW, TITLE_BOX_H, COLOR_TITLE_BG);
-    M5.Display.drawRect(TITLE_BOX_X, TITLE_BOX_Y, boxW, TITLE_BOX_H, COLOR_TITLE_BORDER);
+    lcd.fillRect(TITLE_BOX_X, TITLE_BOX_Y, boxW, TITLE_BOX_H, COLOR_TITLE_BG);
+    lcd.drawRect(TITLE_BOX_X, TITLE_BOX_Y, boxW, TITLE_BOX_H, COLOR_TITLE_BORDER);
 
-    M5.Display.setTextSize(TITLE_TEXT_SIZE);
-    M5.Display.setTextColor(COLOR_TITLE_TEXT, COLOR_TITLE_BG);
-
-    int16_t textX = TITLE_BOX_X + ((boxW - M5.Display.textWidth(title)) / 2);
-    int16_t textY = TITLE_BOX_Y + ((TITLE_BOX_H - M5.Display.fontHeight()) / 2);
-
-    if (textX < (TITLE_BOX_X + 2)) {
-        textX = TITLE_BOX_X + 2;
-    }
-    if (textY < (TITLE_BOX_Y + 2)) {
-        textY = TITLE_BOX_Y + 2;
-    }
-
-    M5.Display.setCursor(textX, textY);
-    M5.Display.print(title);
+    lcd.setTextSize(TITLE_TEXT_SIZE);
+    const int16_t textY = TITLE_BOX_Y + ((TITLE_BOX_H - lcd.fontHeight()) / 2);
+    drawCenteredTextLine(
+        title,
+        static_cast<int16_t>(TITLE_BOX_X + (boxW / 2)),
+        textY,
+        TITLE_TEXT_SIZE,
+        COLOR_TITLE_TEXT,
+        COLOR_TITLE_BG);
 }
 
 /**
@@ -268,22 +351,26 @@ void HMI::draw()
     DisplaySnapshot snapshot = last_snapshot_;
     updateSnapshot(snapshot);
 
-    M5.Display.fillScreen(COLOR_CONTENT_BG);
+    auto& lcd = M5.Display;
+    lcd.fillScreen(COLOR_CONTENT_BG);
 
-    if (screen_ == 0) {
-        drawTankScreen(snapshot);
-    } else if (screen_ == 1) {
-        drawGazScreen(snapshot);
-    } else if (screen_ == 2) {
+    switch (screen_) {
+    case 0: drawTankScreen(snapshot); break;
+    case 1: drawGazScreen(snapshot); break;
+    case 2: drawLevelScreen(snapshot); break;
+    case 3: drawBatteryScreen(snapshot); break;
+    case 4: drawGpsScreen(snapshot); break;
+    case 5: drawRtcScreen(snapshot); break;
+    case 6: drawCalibrationScreen(snapshot); break;
+    default:
         drawLevelScreen(snapshot);
-    } else if (screen_ == 3) {
-        drawBatteryScreen(snapshot);
-    } else if (screen_ == 4) {
-        drawGpsScreen(snapshot);
-    } else if (screen_ == 5) {
-        drawRtcScreen(snapshot);
-    } else if (screen_ == 6) {
-        drawCalibrationScreen(snapshot);
+        break;
+    }
+
+    // Emit current screen when it changes so MQTT reflects UI navigation.
+    if (last_published_screen_ != screen_) {
+        sf_mqtt::publish("smartfranklin/hmi/screen", currentScreenName());
+        last_published_screen_ = screen_;
     }
 }
 
@@ -323,85 +410,93 @@ void HMI::updateSnapshot(DisplaySnapshot& snapshot)
  */
 void HMI::beginContentArea() const
 {
-    M5.Display.setTextSize((screen_ == 4 || screen_ == 5) ? 1 : CONTENT_TEXT_SIZE);
-    M5.Display.setTextColor(COLOR_CONTENT_TEXT, COLOR_CONTENT_BG);
-    M5.Display.setCursor(CONTENT_X, CONTENT_Y);
+    auto& lcd = M5.Display;
+    lcd.setTextSize((screen_ == 4 || screen_ == 5) ? 1 : CONTENT_TEXT_SIZE);
+    lcd.setTextColor(COLOR_CONTENT_TEXT, COLOR_CONTENT_BG);
+    lcd.setCursor(CONTENT_X, CONTENT_Y);
 }
 
 /** @brief Draw helper for Tank distance page. */
 void HMI::drawTankScreen(const DisplaySnapshot& snapshot) const
 {
+    auto& lcd = M5.Display;
     drawTitleBox("Tank");
     beginContentArea();
-    M5.Display.printf("Distance: %.1f cm\n", snapshot.distance_cm);
+    lcd.printf("Distance: %.1f cm\n", snapshot.distance_cm);
 }
 
 /** @brief Draw helper for Gaz weight page. */
 void HMI::drawGazScreen(const DisplaySnapshot& snapshot) const
 {
+    auto& lcd = M5.Display;
     drawTitleBox("Gaz");
     beginContentArea();
-    M5.Display.printf("Weight: %.3f g\n", snapshot.weight_g);
+    lcd.printf("Weight: %.3f g\n", snapshot.weight_g);
 }
 
 /** @brief Draw helper for Level tilt telemetry page. */
 void HMI::drawLevelScreen(const DisplaySnapshot& snapshot) const
 {
+    auto& lcd = M5.Display;
     drawTitleBox("Level");
     beginContentArea();
-    M5.Display.printf("Pitch: %.2f\n", snapshot.pitch);
-    M5.Display.printf("Roll:  %.2f\n", snapshot.roll);
+    lcd.printf("Pitch: %.2f\n", snapshot.pitch);
+    lcd.printf("Roll:  %.2f\n", snapshot.roll);
 }
 
 /** @brief Draw helper for battery/BMS telemetry page. */
 void HMI::drawBatteryScreen(const DisplaySnapshot& snapshot) const
 {
+    auto& lcd = M5.Display;
     drawTitleBox("Battery");
     beginContentArea();
-    M5.Display.printf("BMS V: %.2f\nI: %.2f\nSOC: %.1f\n",
-                      snapshot.bms_voltage,
-                      snapshot.bms_current,
-                      snapshot.bms_soc);
+    lcd.printf("BMS V: %.2f\nI: %.2f\nSOC: %.1f\n",
+               snapshot.bms_voltage,
+               snapshot.bms_current,
+               snapshot.bms_soc);
 }
 
 /** @brief Draw helper for GPS telemetry page. */
 void HMI::drawGpsScreen(const DisplaySnapshot& snapshot) const
 {
+    auto& lcd = M5.Display;
     drawTitleBox("GPS");
     beginContentArea();
-    M5.Display.printf("Fix: %s  Sat: %u\n",
-                      snapshot.gps_fix ? "YES" : "NO",
-                      snapshot.gps_satellites);
-    M5.Display.printf("Lat: %.6f\n", snapshot.gps_lat);
-    M5.Display.printf("Lon: %.6f\n", snapshot.gps_lon);
-    M5.Display.printf("Alt: %.1f m\n", snapshot.gps_alt_m);
+    lcd.printf("Fix: %s  Sat: %u\n",
+               snapshot.gps_fix ? "YES" : "NO",
+               snapshot.gps_satellites);
+    lcd.printf("Lat: %.6f\n", snapshot.gps_lat);
+    lcd.printf("Lon: %.6f\n", snapshot.gps_lon);
+    lcd.printf("Alt: %.1f m\n", snapshot.gps_alt_m);
 }
 
 /** @brief Draw helper for RTC telemetry page. */
 void HMI::drawRtcScreen(const DisplaySnapshot& snapshot) const
 {
+    auto& lcd = M5.Display;
     drawTitleBox("RTC");
     beginContentArea();
-    M5.Display.println("GPS UTC:");
-    M5.Display.printf("%s %s\n", snapshot.gps_utc_date.c_str(), snapshot.gps_utc_time.c_str());
-    M5.Display.println("RTC:");
-    M5.Display.println(snapshot.gps_rtc_time.c_str());
+    lcd.println("GPS UTC:");
+    lcd.printf("%s %s\n", snapshot.gps_utc_date.c_str(), snapshot.gps_utc_time.c_str());
+    lcd.println("RTC:");
+    lcd.println(snapshot.gps_rtc_time.c_str());
 }
 
 /** @brief Draw helper for interactive scale calibration page. */
 void HMI::drawCalibrationScreen(const DisplaySnapshot& snapshot) const
 {
+    auto& lcd = M5.Display;
     drawTitleBox("Scale Calibration");
     beginContentArea();
     if (!calib_in_progress_) {
-        M5.Display.println("Scale Calib");
-        M5.Display.println("Put known weight");
-        M5.Display.println("BtnB: start");
+        lcd.println("Scale Calib");
+        lcd.println("Put known weight");
+        lcd.println("BtnB: start");
         return;
     }
 
-    M5.Display.println("Calibrating...");
-    M5.Display.printf("Known: %.2f kg\n", calib_known_weight_);
-    M5.Display.printf("Raw:   %.3f kg\n", snapshot.weight_g);
-    M5.Display.println("BtnB: finish");
+    lcd.println("Calibrating...");
+    lcd.printf("Known: %.2f kg\n", calib_known_weight_);
+    lcd.printf("Raw:   %.3f kg\n", snapshot.weight_g);
+    lcd.println("BtnB: finish");
 }

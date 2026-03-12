@@ -7,7 +7,7 @@
  * Project:     SmartFranklin IoT Device Controller
  * Description: FreeRTOS task wrapper for HMI runtime lifecycle.
  *              Owns task-level startup/retry behavior, periodic execution,
- *              long-press reboot handling, and liveness reporting.
+ *              and long-press reboot handling.
  *
  * Author:      Laurent Burais
  * Date:        12 March 2026
@@ -22,20 +22,11 @@
  *   - Retry initialization when startup fails
  *   - Execute periodic HMI processing loop at fixed cadence
  *   - Handle Button B long-press reboot gesture
- *   - Expose task liveness through `isHmiTaskRunning()`
  *
  * Runtime model:
  *   1. Task starts and attempts HMI initialization.
  *   2. If init fails, task retries every second.
- *   3. On success, task enters steady 20 ms processing loop.
- *   4. Each loop refreshes heartbeat used by liveness helper.
- *
- * Liveness criteria (`isHmiTaskRunning`):
- *   - Task handle exists
- *   - HMI module is initialized
- *   - FreeRTOS state is running/ready/blocked
- *   - Loop heartbeat is recent
- *   - HMI runtime reports healthy
+ *   3. On success, task enters steady processing loop.
  *
  * ============================================================================
  * MIT License
@@ -68,46 +59,23 @@
 
 #include "hmi.h"
 #include "tasks.h"
+#include "config_store.h"
 
 namespace {
-
-/** @brief Task loop period for HMI processing cadence. */
-static constexpr TickType_t HMI_TASK_PERIOD_TICKS = pdMS_TO_TICKS(20);
 
 /** @brief Button B hold duration required to trigger reboot. */
 static constexpr unsigned long HMI_REBOOT_HOLD_MS = 3000;
 
-/** @brief Indicates task has successfully completed HMI startup. */
-volatile bool g_hmiTaskStarted = false;
-
-/** @brief Timestamp of most recent successful loop iteration. */
-volatile uint32_t g_lastHmiLoopMs = 0;
-
 /** @brief Task-owned HMI runtime instance. */
 HMI g_hmi;
 
-}  // namespace
-
-/**
- * @brief Returns whether HMI task and module are alive and healthy.
- *
- * The helper combines scheduler state and module status so supervising code
- * can reason about task health from a single boolean.
- *
- * @return true when task state, heartbeat and HMI health are valid.
- */
-bool isHmiTaskRunning()
+uint32_t hmiLoopMs()
 {
-    if (taskHmiHandle == nullptr || !g_hmi.isInitialized()) {
-        return false;
-    }
-
-    const eTaskState state = eTaskGetState(taskHmiHandle);
-    const bool activeState = (state == eRunning) || (state == eReady) || (state == eBlocked);
-    const bool recentLoop = (millis() - g_lastHmiLoopMs) <= ((20UL * 2UL) + 5000UL);
-
-    return g_hmiTaskStarted && activeState && recentLoop && g_hmi.isHealthy();
+    const int loopMs = CONFIG.task_hmi_loop_ms;
+    return (loopMs > 0) ? static_cast<uint32_t>(loopMs) : 20UL;
 }
+
+}  // namespace
 
 /**
  * @brief FreeRTOS HMI task entrypoint.
@@ -129,13 +97,11 @@ void taskHmi(void *pvParameters)
     (void)pvParameters;
 
     M5_LOGI("[HMI] Task started");
+
     while (!g_hmi.init()) {
         M5_LOGW("[HMI] init failed, retry in 1s");
-        g_hmiTaskStarted = false;
-        g_lastHmiLoopMs = millis();
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
-    g_hmiTaskStarted = true;
 
     // Keep Button B long-press handling in the same task that updates buttons.
     unsigned long rebootPressStart = 0;
@@ -155,7 +121,6 @@ void taskHmi(void *pvParameters)
             rebootPressStart = 0;
         }
 
-        g_lastHmiLoopMs = millis();
-        vTaskDelay(HMI_TASK_PERIOD_TICKS);
+        vTaskDelay(pdMS_TO_TICKS(hmiLoopMs()));
     }
 }
