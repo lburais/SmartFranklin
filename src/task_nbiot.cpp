@@ -96,7 +96,7 @@
  *   - tasks.h (Task definitions and priorities)
  *   - nb_iot2.h (NB-IoT abstraction layer)
  *   - config_store.h (Configuration access)
- *   - mqtt_layer.h (MQTT publishing interface)
+ *   - mqtt.h (MQTT publishing interface)
  * 
  * Limitations:
  *   - Single SIM/Network: No multi-SIM or network failover
@@ -146,7 +146,7 @@
 #include "tasks.h"
 #include "nb_iot2.h"
 #include "config_store.h"
-#include "mqtt_layer.h"
+#include "mqtt.h"
 
 // ============================================================================
 // FreeRTOS Task Implementation

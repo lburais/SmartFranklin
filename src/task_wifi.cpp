@@ -38,7 +38,7 @@
  * Dependencies:
  *   - WiFi.h (ESP32 built-in)
  *   - HTTPClient.h (for captive portal detection)
- *   - mqtt_layer.h (MQTT publishing)
+ *   - mqtt.h (MQTT publishing)
  *   - config_store.h (persistent configuration)
  *   - FreeRTOS (built-in ESP32)
  * 
@@ -68,7 +68,7 @@
  */
 
 #include "tasks.h"
-#include "mqtt_layer.h"
+#include "mqtt.h"
 #include "config_store.h"
 
 #include <M5Unified.h>

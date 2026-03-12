@@ -50,7 +50,7 @@
  * 
  * Dependencies:
  *   - Arduino.h: String class and basic types
- *   - mqtt_layer.h: MQTT subscription and message handling
+ *   - mqtt.h: MQTT subscription and message handling
  *   - data_model.h: Global data structure access
  *   - M5Unified.h: Display and UI management
  * 

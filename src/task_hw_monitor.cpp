@@ -86,7 +86,7 @@
  *   - Arduino.h (FreeRTOS task functions)
  *   - tasks.h (Task definitions and priorities)
  *   - m5_hw.h (M5Stack hardware abstraction - not directly used here)
- *   - mqtt_layer.h (MQTT publishing interface)
+ *   - mqtt.h (MQTT publishing interface)
  *   - M5Unified.h (M5Stack unified sensor and power interface)
  * 
  * Limitations:
@@ -132,7 +132,7 @@
 #include <Arduino.h>
 #include "tasks.h"
 #include "m5_hw.h"
-#include "mqtt_layer.h"
+#include "mqtt.h"
 #include <M5Unified.h>
 
 // ============================================================================

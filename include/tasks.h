@@ -85,18 +85,13 @@
  */
 #define PERIOD_DISTANCE     60000
 
-/**
- * @brief Sampling period for GPS task updates.
- */
-#define PERIOD_GPS          60000
-
 // ============================================================================
 // External Task Handle Declarations
 // ============================================================================
 // FreeRTOS task handles for runtime task management and control
 
 extern TaskHandle_t taskWiFiHandle;             // WiFi connectivity management
-extern TaskHandle_t taskMqttBrokerHandle;       // MQTT broker communication
+extern TaskHandle_t taskMqttHandle;             // MQTT client+broker communication
 extern TaskHandle_t taskDistanceHandle;         // Distance sensor acquisition
 extern TaskHandle_t taskWeightHandle;           // Weight sensor acquisition
 extern TaskHandle_t taskTiltHandle;             // Tilt sensor acquisition
@@ -124,16 +119,16 @@ extern TaskHandle_t taskNbiotHandle;            // NB-IoT cellular communication
 void taskWiFi(void *pvParameters);
 
 /**
- * @brief MQTT broker communication task.
+ * @brief Unified MQTT communication task.
  * 
- * Maintains connection to external MQTT broker, publishes sensor data,
- * processes incoming command messages, and manages message queues.
- * Critical for cloud integration and remote device control.
+ * Handles both local broker servicing and external MQTT client processing.
+ * Publishes sensor data, processes incoming command messages, and manages
+ * MQTT runtime health in a single FreeRTOS task.
  * 
  * @param pvParameters FreeRTOS task parameter (unused)
  * @return void (infinite loop, never returns)
  */
-void taskMqttBroker(void *pvParameters);
+void taskMqtt(void *pvParameters);
 
 /**
  * @brief Distance sensor data acquisition task.
@@ -195,15 +190,6 @@ void taskRtc(void *pvParameters);
 void taskGps(void *pvParameters);
 
 /**
- * @brief Returns whether the GPS task is currently alive and healthy.
- *
- * Checks task handle state, recent loop activity, and module health.
- *
- * @return true if GPS task is running and healthy, otherwise false
- */
-bool isGpsTaskRunning();
-
-/**
  * @brief BLE battery management system (BMS) monitoring task.
  * 
  * Communicates with BMS devices via Bluetooth Low Energy, retrieves battery
@@ -225,15 +211,6 @@ void taskBmsBle(void *pvParameters);
  * @return void (infinite loop, never returns)
  */
 void taskHmi(void *pvParameters);
-
-/**
- * @brief Returns whether the HMI task is currently alive and healthy.
- *
- * Checks task handle state and recent heartbeat updates.
- *
- * @return true if HMI task is running, otherwise false
- */
-bool isHmiTaskRunning();
 
 /**
  * @brief Hardware monitor task.

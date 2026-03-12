@@ -37,7 +37,7 @@
  *   - ArduinoJson (JSON parsing library)
  *   - command_handler.h (header declarations)
  *   - data_model.h (global DATA object and state variables)
- *   - mqtt_layer.h (MQTT publishing)
+ *   - mqtt.h (MQTT publishing)
  *   - tasks.h (FreeRTOS task management)
  * 
  * Error Handling:
@@ -73,7 +73,7 @@
 
 #include "command_handler.h"
 #include "data_model.h"
-#include "mqtt_layer.h"
+#include "mqtt.h"
 #include "tasks.h"
 
 #include <ArduinoJson.h>

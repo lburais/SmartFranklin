@@ -77,7 +77,7 @@
  *   - tasks.h (Task definitions and PERIOD_TILT constant)
  *   - data_model.h (Global DATA structure and mutex)
  *   - pahub_channels.h (shared sampling-period constants)
- *   - mqtt_layer.h (MQTT publishing interface)
+ *   - mqtt.h (MQTT publishing interface)
  * 
  * Limitations:
  *   - Gimbal Lock: No issues with atan2-based calculation
@@ -127,7 +127,7 @@
 #include "tasks.h"
 #include "data_model.h"
 #include "pahub_channels.h"
-#include "mqtt_layer.h"
+#include "mqtt.h"
 
 // ============================================================================
 // IMU Initialization Function

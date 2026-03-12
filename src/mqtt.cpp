@@ -1,93 +1,35 @@
 /*
  * ============================================================================
- * MQTT Layer Module - SmartFranklin
+ * MQTT Implementation Module - SmartFranklin
  * ============================================================================
- * 
- * File:        mqtt_layer.cpp
+ *
+ * File:        mqtt.cpp
  * Project:     SmartFranklin IoT Device Controller
- * Description: ESP-IDF MQTT client wrapper providing high-level MQTT operations.
- *              Handles connection management, publishing, subscribing, and message
- *              callbacks with comprehensive error handling and logging.
- * 
+ * Description: ESP-IDF MQTT client wrapper implementation used by runtime
+ *              tasks for broker connectivity, publish/subscribe operations,
+ *              and message callback dispatching.
+ *
  * Author:      Laurent Burais
- * Date:        5 March 2026
- * Version:     1.0
- * 
+ * Date:        12 March 2026
+ * Version:     1.1
+ *
  * Overview:
- *   This module provides a clean, high-level interface to MQTT functionality
- *   using the ESP-IDF MQTT client library. It abstracts the complexities of
- *   MQTT protocol handling, connection management, and event processing,
- *   providing simple publish/subscribe operations for the rest of SmartFranklin.
- * 
- * Architecture:
- *   - ESP-IDF MQTT Client: Uses esp-mqtt library for robust MQTT implementation
- *   - Event-Driven: Asynchronous event handling for connection and messages
- *   - Callback-Based: Message reception through registered callback function
- *   - Namespace Encapsulation: All functions in sf_mqtt namespace
- *   - Thread-Safe: Designed for use in FreeRTOS environment
- *   - Error Handling: Comprehensive logging and error reporting
- * 
- * Key Features:
- *   - Automatic reconnection on network failures
- *   - Configurable keep-alive and clean session settings
- *   - QoS support (0, 1, 2) for publish and subscribe operations
- *   - Message retention support for persistent messages
- *   - Authentication support (username/password)
- *   - Client ID configuration for broker identification
- *   - Detailed logging with ESP_LOG levels (Error, Warning, Info, Debug)
- * 
- * MQTT Protocol Support:
- *   - MQTT 3.1.1 compliant (ESP-IDF esp-mqtt implementation)
- *   - TCP/TLS transport (configurable via URI)
- *   - QoS levels: At most once (0), At least once (1), Exactly once (2)
- *   - Retained messages for persistent state
- *   - Last Will and Testament (LWT) support (configurable)
- *   - Keep-alive mechanism for connection monitoring
- * 
- * Configuration Structure:
- *   The Config struct provides comprehensive MQTT client configuration:
- *   - uri: Broker URI (tcp://host:port or tls://host:port)
- *   - username/password: Authentication credentials (optional)
- *   - client_id: Unique client identifier (optional, auto-generated if empty)
- *   - keepalive_sec: Keep-alive interval in seconds (default 60)
- *   - clean_session: Clean session flag (default true)
- * 
- * Event Handling:
- *   The event_handler_cb function processes all MQTT events:
- *   - MQTT_EVENT_CONNECTED: Connection established
- *   - MQTT_EVENT_DISCONNECTED: Connection lost
- *   - MQTT_EVENT_DATA: Message received (triggers callback)
- *   - MQTT_EVENT_ERROR: Connection or protocol errors
- *   - Other events: Logged for debugging
- * 
- * Message Callbacks:
- *   Incoming messages are delivered via MessageCallback:
- *   - Signature: void callback(const std::string &topic, const std::string &payload)
- *   - Called asynchronously when messages arrive
- *   - Topic and payload provided as std::string objects
- *   - Thread context: ESP-IDF MQTT task (not main application task)
- * 
- * Dependencies:
- *   - esp-mqtt library (ESP-IDF component)
- *   - mqtt_client.h (ESP-IDF MQTT client header)
- *   - esp_log.h (ESP-IDF logging facilities)
- *   - mqtt_layer.h (Header declarations and Config/MessageCallback types)
- *   - <cstring> (C string manipulation)
- *   - <string> (C++ string class)
- * 
- * Error Handling:
- *   - Initialization failures: Logged and return false
- *   - Connection failures: Automatic retry by ESP-IDF client
- *   - Publish failures: Logged and return false
- *   - Subscribe failures: Logged and return false
- *   - Invalid parameters: Checked and handled gracefully
- * 
- * Performance Considerations:
- *   - Memory usage: ~8-16KB for MQTT client and buffers
- *   - Network overhead: Minimal, efficient binary protocol
- *   - CPU usage: Low when idle, moderate during message processing
- *   - Thread safety: Safe for concurrent access from multiple tasks
- * 
+ *   This module implements the `sf_mqtt` API declared in `mqtt.h`.
+ *   It wraps ESP-IDF MQTT client setup and event handling while keeping
+ *   a small, task-safe interface for other SmartFranklin modules.
+ *
+ * Responsibilities:
+ *   - Initialize and start external MQTT client from runtime config.
+ *   - Track connection state from MQTT events.
+ *   - Forward inbound messages to registered callback.
+ *   - Publish outbound messages to external broker.
+ *   - Fall back to local broker publication when external client is absent.
+ *
+ * Event Model:
+ *   - MQTT events are processed in `handle_mqtt_event(...)`.
+ *   - Incoming payloads are copied into `std::string` and dispatched.
+ *   - Connection state is maintained by `s_connected`.
+ *
  * ============================================================================
  * MIT License
  * ============================================================================
@@ -95,7 +37,6 @@
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
- * in this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
@@ -114,7 +55,7 @@
  * ============================================================================
  */
 
-#include "mqtt_layer.h"
+#include "mqtt.h"
 
 #include <cstring>
 #include <esp_idf_version.h>
@@ -216,6 +157,25 @@ static void handle_mqtt_event(esp_mqtt_event_handle_t event)
 
     case MQTT_EVENT_ERROR:
         ESP_LOGE(TAG, "MQTT_EVENT_ERROR");
+        if (!event->error_handle) {
+            ESP_LOGE(TAG, "MQTT error details unavailable (null error_handle)");
+            break;
+        }
+
+        ESP_LOGE(TAG,
+                 "MQTT error details: type=%d tls_last_esp_err=0x%x tls_stack_err=0x%x tls_cert_flags=0x%x sock_errno=%d (%s)",
+                 event->error_handle->error_type,
+                 event->error_handle->esp_tls_last_esp_err,
+                 event->error_handle->esp_tls_stack_err,
+                 event->error_handle->esp_tls_cert_verify_flags,
+                 event->error_handle->esp_transport_sock_errno,
+                 strerror(event->error_handle->esp_transport_sock_errno));
+
+        if (event->error_handle->error_type == MQTT_ERROR_TYPE_CONNECTION_REFUSED) {
+            ESP_LOGE(TAG,
+                     "MQTT connection refused: return_code=0x%x",
+                     event->error_handle->connect_return_code);
+        }
         break;
 
     default:
@@ -300,7 +260,7 @@ static esp_err_t event_handler_cb(esp_mqtt_event_handle_t event)
  *       Call once during application initialization.
  *       Example: sf_mqtt::init(config, messageHandler);
  * 
- * @see Config - Configuration structure definition in mqtt_layer.h
+ * @see Config - Configuration structure definition in mqtt.h
  * @see MessageCallback - Callback function signature
  * @see esp_mqtt_client_init() - ESP-IDF MQTT client initialization
  */
@@ -496,7 +456,12 @@ bool publish(const std::string &topic,
              bool retain)
 {
     if (!s_client) {
-        ESP_LOGW(TAG, "publish() called but MQTT client not initialized");
+        if (publish_local(topic, payload, qos, retain)) {
+            ESP_LOGD(TAG, "Publish routed to local broker: %s", topic.c_str());
+            return true;
+        }
+
+        ESP_LOGD(TAG, "publish() skipped: MQTT client not initialized and local broker not ready");
         return false;
     }
 

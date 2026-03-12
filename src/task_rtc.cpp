@@ -78,7 +78,7 @@
  *   - tasks.h (Task definitions and PERIOD_RTC constant)
  *   - data_model.h (Global DATA structure and mutex)
  *   - pahub_channels.h (PAHub address constants for external RTC fallback)
- *   - mqtt_layer.h (MQTT publishing interface)
+ *   - mqtt.h (MQTT publishing interface)
  * 
  * Limitations:
  *   - No NTP Synchronization: RTC relies on manual setting or battery backup
@@ -128,7 +128,7 @@
 #include "tasks.h"
 #include "data_model.h"
 #include "pahub_channels.h"
-#include "mqtt_layer.h"
+#include "mqtt.h"
 
 namespace {
 constexpr uint8_t RTC_ADDR_PCF8563 = 0x51;

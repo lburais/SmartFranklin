@@ -83,7 +83,7 @@
  *   - tasks.h (Task definitions and PERIOD_DISTANCE constant)
  *   - data_model.h (Global DATA structure and mutex)
  *   - pahub_channels.h (PA Hub channel assignments)
- *   - mqtt_layer.h (MQTT publishing interface)
+ *   - mqtt.h (MQTT publishing interface)
  * 
  * Limitations:
  *   - Single sensor support (no multi-sensor arrays)
@@ -135,7 +135,7 @@
 #include "data_model.h"
 #include "m5_hw.h"
 #include "pahub_channels.h"
-#include "mqtt_layer.h"
+#include "mqtt.h"
 
 // ============================================================================
 // Ultrasonic Sensor Configuration

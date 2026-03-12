@@ -81,7 +81,7 @@
  *   - tasks.h (Task definitions and priorities)
  *   - jbd_bms.h (JBD frame parsing functions)
  *   - data_model.h (Global DATA structure and mutex)
- *   - mqtt_layer.h (MQTT publishing interface)
+ *   - mqtt.h (MQTT publishing interface)
  * 
  * Configuration:
  *   - TARGET_NAME: "JBD-BMS" (BLE device name to scan for)
@@ -131,7 +131,7 @@
 #include "tasks.h"
 #include "jbd_bms.h"
 #include "data_model.h"
-#include "mqtt_layer.h"
+#include "mqtt.h"
 
 // ============================================================================
 // Global BLE Connection State

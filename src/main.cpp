@@ -59,7 +59,7 @@
 
 #include "tasks.h"
 #include "wifi_setup.h"
-#include "mqtt_layer.h"
+#include "mqtt.h"
 #include "command_handler.h"
 #include "web_dashboard.h"
 #include "config_store.h"
@@ -72,7 +72,7 @@
 // FreeRTOS task handles for managing concurrent operations across both cores
 
 TaskHandle_t taskWiFiHandle             = nullptr;  // WiFi connectivity management
-TaskHandle_t taskMqttBrokerHandle       = nullptr;  // MQTT broker communication
+TaskHandle_t taskMqttHandle             = nullptr;  // MQTT client+broker communication
 TaskHandle_t taskDistanceHandle         = nullptr;  // Distance sensor reading
 TaskHandle_t taskWeightHandle           = nullptr;  // Weight sensor reading
 TaskHandle_t taskTiltHandle             = nullptr;  // Tilt sensor reading
@@ -85,8 +85,38 @@ TaskHandle_t taskNbiotHandle            = nullptr;  // NB-IoT cellular communica
 
 static constexpr uint8_t DISPLAY_UI_ROTATION = 3;
 static constexpr uint8_t DISPLAY_UI_BRIGHTNESS = 255;
-static constexpr uint16_t COLOR_SPLASH_BG = 0xFD20;   // orange
-static constexpr uint16_t COLOR_SPLASH_TEXT = 0xFFFF; // white
+
+namespace {
+
+/**
+ * @brief Builds a valid MQTT URI from host/URI and configured port.
+ *
+ * Rules:
+ * - If host already includes scheme (e.g. mqtt://...), keep as-is.
+ * - If no scheme and no explicit port, append `ext_mqtt_port`.
+ * - If no scheme and port already present in host, preserve host:port.
+ */
+std::string buildMqttUri(const String& hostOrUri, int port)
+{
+    std::string uri = std::string(hostOrUri.c_str());
+    if (uri.empty()) {
+        return uri;
+    }
+
+    if (uri.find("://") != std::string::npos) {
+        return uri;
+    }
+
+    const bool hasExplicitPort = uri.find(':') != std::string::npos;
+    if (!hasExplicitPort) {
+        const int effectivePort = (port > 0) ? port : 1883;
+        uri += ":" + std::to_string(effectivePort);
+    }
+
+    return std::string("mqtt://") + uri;
+}
+
+} // namespace
 
 // ============================================================================
 // setup() - System Initialization
@@ -105,26 +135,6 @@ void setup() {
     cfg.internal_imu = true;   // Enable internal 6-axis IMU (accelerometer + gyroscope)
     cfg.internal_rtc = true;   // Enable internal real-time clock for timekeeping
     M5.begin(cfg);
-
-    // Startup splash shown before starting background tasks.
-    M5.Display.wakeup();
-    M5.Display.setBrightness(DISPLAY_UI_BRIGHTNESS);
-    M5.Display.setRotation(DISPLAY_UI_ROTATION);
-    M5.Display.setTextSize(2);
-    M5.Display.fillScreen(COLOR_SPLASH_BG);
-    M5.Display.setTextColor(COLOR_SPLASH_TEXT, COLOR_SPLASH_BG);
-    const char* splash = "SmartFranklin";
-    int16_t splashX = (M5.Display.width() - M5.Display.textWidth(splash)) / 2;
-    if (splashX < 0) {
-        splashX = 0;
-    }
-    int16_t splashY = (M5.Display.height() - M5.Display.fontHeight()) / 2;
-    if (splashY < 0) {
-        splashY = 0;
-    }
-    M5.Display.setCursor(splashX, splashY);
-    M5.Display.print(splash);
-    delay(250);
 
     // Initialize serial communication at 115200 baud
     Serial.begin(115200);
@@ -167,10 +177,7 @@ void setup() {
     // --- MQTT Layer Setup ---
     // Configure and initialize ESP-MQTT client for external broker communication
     if (CONFIG.ext_mqtt_enabled && !CONFIG.ext_mqtt_host.isEmpty()) {
-        std::string uri = std::string(CONFIG.ext_mqtt_host.c_str());
-        if (uri.find("://") == std::string::npos) {
-            uri = std::string("mqtt://") + uri;
-        }
+        std::string uri = buildMqttUri(CONFIG.ext_mqtt_host, CONFIG.ext_mqtt_port);
 
         sf_mqtt::Config mcfg;
         mcfg.uri       = uri;                                    // MQTT broker URI
@@ -204,10 +211,14 @@ void setup() {
     // Priority levels: 1 (low) to 3 (high); higher = more CPU scheduling time
     
     xTaskCreatePinnedToCore(taskHmi,              "HMI",      8192, nullptr, 3,  &taskHmiHandle,            1);
+
+    // Start MQTT processing as early as possible after HMI so publishers
+    // can use the MQTT client path sooner during startup.
+    xTaskCreatePinnedToCore(taskMqtt,             "MQTT",     4096, nullptr, 3,  &taskMqttHandle,            1);
+
     xTaskCreatePinnedToCore(taskWatchdog,         "WATCHDOG", 2048, nullptr, 3,  nullptr,                    0);
 
     xTaskCreatePinnedToCore(taskHwMonitor,        "HW_MON",   4096, nullptr, 1,  nullptr,                    0);
-    xTaskCreatePinnedToCore(taskMqttBroker,       "MQTT_BRK", 4096, nullptr, 3,  &taskMqttBrokerHandle,      1);
 
     if (i2c_report.distance_on_wire
         || i2c_report.distance_on_wire_pahub

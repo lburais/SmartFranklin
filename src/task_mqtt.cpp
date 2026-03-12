@@ -1,12 +1,12 @@
 /*
  * ============================================================================
- * MQTT Broker Task Module - SmartFranklin
+ * MQTT Task Module - SmartFranklin
  * ============================================================================
  * 
- * File:        task_mqtt_broker.cpp
+ * File:        task_mqtt.cpp
  * Project:     SmartFranklin IoT Device Controller
- * Description: FreeRTOS task for maintaining MQTT broker connection and message
- *              processing. Handles connection management, subscription maintenance,
+ * Description: FreeRTOS task for unified MQTT processing (local broker + external
+ *              client). Handles broker servicing, connection maintenance,
  *              and incoming message dispatching to registered callbacks.
  * 
  * Author:      Laurent Burais
@@ -75,7 +75,7 @@
  *   - M5Unified.h (M5Stack logging utilities)
  *   - M5Utility.h (M5Stack utility functions)
  *   - tasks.h (Task definitions and priorities)
- *   - mqtt_layer.h (MQTT abstraction layer with sf_mqtt namespace)
+ *   - mqtt.h (MQTT abstraction layer with sf_mqtt namespace)
  * 
  * Configuration Integration:
  *   - CONFIG.mqtt_broker: Broker hostname/IP address
@@ -129,16 +129,85 @@
 #include <Arduino.h>
 #include <M5Unified.h>
 #include <M5Utility.h>
+#include <sMQTTBroker.h>
 
 #include "tasks.h"
-#include "mqtt_layer.h"
+#include "mqtt.h"
+#include "config_store.h"
+
+namespace {
+
+sMQTTBroker             s_localBroker;
+bool                    s_localBrokerStarted = false;
+
+uint32_t mqttLoopMs()
+{
+    const int loopMs = CONFIG.task_mqtt_loop_ms;
+    return (loopMs > 0) ? static_cast<uint32_t>(loopMs) : 20UL;
+}
+
+unsigned short localBrokerPort()
+{
+    const int cfgPort = CONFIG.ext_mqtt_port;
+    if (cfgPort <= 0 || cfgPort > 65535) {
+        return 1883;
+    }
+    return static_cast<unsigned short>(cfgPort);
+}
+
+void ensureLocalBrokerStarted()
+{
+    static uint32_t nextRetryAtMs = 0;
+
+    if (s_localBrokerStarted) {
+        return;
+    }
+
+    const uint32_t now = millis();
+    if (now < nextRetryAtMs) {
+        return;
+    }
+
+    const unsigned short port = localBrokerPort();
+    if (s_localBroker.init(port)) {
+        s_localBrokerStarted = true;
+        M5_LOGI("[MQTT] Local broker started on port %u", port);
+        return;
+    }
+
+    nextRetryAtMs = now + 5000;
+    M5_LOGW("[MQTT] Local broker init failed on port %u, retrying in 5s", port);
+}
+
+} // namespace
+
+namespace sf_mqtt {
+
+bool publish_local(const std::string &topic,
+                   const std::string &payload,
+                   int qos,
+                   bool retain)
+{
+    if (!s_localBrokerStarted) {
+        return false;
+    }
+
+    const int normalizedQos = (qos < 0) ? 0 : ((qos > 2) ? 2 : qos);
+    s_localBroker.publish(topic,
+                          payload,
+                          static_cast<unsigned char>(normalizedQos),
+                          retain);
+    return true;
+}
+
+} // namespace sf_mqtt
 
 // ============================================================================
 // FreeRTOS Task Implementation
 // ============================================================================
 
 /**
- * @brief FreeRTOS task for MQTT broker connection and message processing.
+ * @brief FreeRTOS task for unified MQTT processing.
  * 
  * Main task function that maintains the MQTT broker connection and processes
  * incoming messages. Runs indefinitely, calling the MQTT library's loop
@@ -148,8 +217,7 @@
  * Task Behavior:
  *   - Initialize with startup logging to serial console
  *   - Enter infinite loop for continuous MQTT processing
- *   - Call sf_mqtt::loop() to handle connection and message processing
- *   - Delay 100ms between loop iterations (10Hz processing rate)
+ *   - Delay 20ms between loop iterations (50Hz processing rate)
  *   - Handle reconnection, keep-alive, and message routing automatically
  * 
  * Loop Processing:
@@ -160,7 +228,7 @@
  *   - Error Recovery: Handle network errors and reconnection
  * 
  * Task Configuration:
- *   - Update Rate: 10Hz (100ms delay between loop calls)
+ *   - Update Rate: 50Hz (20ms delay between loop calls)
  *   - Priority: tskIDLE_PRIORITY + 1 (standard priority)
  *   - Stack Size: 4096 bytes (sufficient for MQTT processing)
  *   - Core Affinity: No restriction (runs on any core)
@@ -175,7 +243,7 @@
  *   - CPU Usage: Low (mostly network I/O waiting)
  *   - Memory Usage: Minimal (MQTT library state)
  *   - Network Usage: Efficient MQTT protocol
- *   - Responsiveness: 100ms loop interval
+ *   - Responsiveness: 20ms loop interval
  *   - Reliability: Automatic reconnection and error recovery
  * 
  * Integration:
@@ -190,21 +258,26 @@
  * 
  * @note This task is essential for MQTT functionality in SmartFranklin.
  *       All MQTT operations depend on this task running continuously.
- *       The 100ms loop interval provides good responsiveness without
+ *       The 20ms loop interval provides good responsiveness without
  *       excessive CPU usage.
  * 
- * @see sf_mqtt::loop() - MQTT library processing function
- * @see mqtt_layer.h - MQTT abstraction layer documentation
+ * @see mqtt.h - MQTT abstraction layer documentation
  */
-void taskMqttBroker(void *pv)
+void taskMqtt(void *pv)
 {
-    M5_LOGI("[MQTT] Broker task started");
+    (void)pv;
+
+    M5_LOGI("[MQTT] MQTT task started");
 
     for (;;) {
-        // Process MQTT connection and message handling
-        sf_mqtt::loop();
+        ensureLocalBrokerStarted();
 
-        // Delay for 100ms (10Hz processing rate)
-        vTaskDelay(pdMS_TO_TICKS(100));
+        if (s_localBrokerStarted) {
+            s_localBroker.update();
+        }
+
+        // Delay based on configurable task loop period.
+        vTaskDelay(pdMS_TO_TICKS(mqttLoopMs()));
     }
 }
+ 

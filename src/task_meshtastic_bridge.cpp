@@ -24,7 +24,7 @@
 #include "tasks.h"
 #include "config_store.h"
 #include "meshtastic_bridge.h"
-#include "mqtt_layer.h"
+#include "mqtt.h"
 #include "data_model.h"
 
 namespace {
