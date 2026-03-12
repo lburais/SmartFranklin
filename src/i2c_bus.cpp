@@ -1,21 +1,55 @@
 /*
  * ============================================================================
- * I2C Enumerator Implementation - SmartFranklin
+ * I2C Bus Implementation - SmartFranklin
  * ============================================================================
  *
- * File:        i2c_enumerator.cpp
+ * File:        i2c_bus.cpp
  * Project:     SmartFranklin IoT Device Controller
- * Description: Detects I2C device topology across Wire and Ex_I2C paths,
- *              probes PAHUB channels, and enriches reports with known labels.
+ * Description: Implements I2C topology discovery and targeted route detection
+ *              across Wire, Ex_I2C, and PAHub-multiplexed segments.
  *
  * Author:      Laurent Burais
- * Date:        10 March 2026
- * Version:     1.1
+ * Date:        12 March 2026
+ * Version:     1.2
  *
+ * Overview:
+ *   This module is responsible for:
+ *   - scanning and reporting the full I2C topology,
+ *   - identifying known device addresses with readable labels,
+ *   - probing Gravity dual-UART bridge candidates,
+ *   - resolving direct-vs-PAHub routing for a single target address.
+ *
+ * Dependencies:
+ *   - i2c_bus.h (public API)
+ *   - m5_hw.h/M5Unified (board pins and Ex_I2C access)
+ *   - Wire (base I2C bus operations)
+ *
+ * ============================================================================
+ * MIT License
+ * ============================================================================
+ * Copyright (c) 2026 Laurent Burais
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  * ============================================================================
  */
 
-#include "i2c_enumerator.h"
+#include "i2c_bus.h"
 
 #include <cstring>
 
@@ -868,6 +902,18 @@ GravityProbeResult probe_gravity_dual_uart_ex(const uint8_t address, const char*
 
 }  // namespace
 
+/**
+ * @brief Enumerates I2C devices and fills a structured topology report.
+ *
+ * The scan covers:
+ * - direct Wire,
+ * - Wire + PAHub channels,
+ * - direct Ex_I2C,
+ * - Ex_I2C + PAHub channels.
+ *
+ * @param i2c_report Output report structure populated with discoveries.
+ * @return Number of discovered device entries across all scanned segments.
+ */
 uint16_t enumerate_i2c_units(I2CEnumerationReport& i2c_report)
 {
     uint16_t discovered_entries = 0;
@@ -1068,4 +1114,50 @@ uint16_t enumerate_i2c_units(I2CEnumerationReport& i2c_report)
     i2c_report.c6l_activity_detected = c6l_activity_detected;
 
     return discovered_entries;
+}
+
+/**
+ * @brief Resolves the Wire route for one target I2C address.
+ *
+ * Detection order:
+ * 1. Direct Wire probe.
+ * 2. PAHub presence probe.
+ * 3. PAHub channel scan (0..7).
+ *
+ * @param target_address 7-bit I2C address to locate.
+ * @param result Output with resolved bus mode and PAHub channel.
+ * @return true when target is reachable on direct Wire or via PAHub.
+ */
+bool detect_wire_bus_path(const uint8_t target_address, I2CBusPathResult& result)
+{
+    result.bus_mode = I2CBusMode::Unset;
+    result.pahub_channel = -1;
+
+    // First try direct Wire routing without any PAHub multiplexing.
+    if (wire_device_exists(target_address)) {
+        result.bus_mode = I2CBusMode::WireDirect;
+        return true;
+    }
+
+    // If PAHub is absent, no multiplexed route can be resolved.
+    if (!wire_device_exists(PAHUB_ADDRESS)) {
+        return false;
+    }
+
+    // Scan all PAHub channels for the requested target address.
+    for (uint8_t channel = 0; channel < PAHUB_CHANNEL_COUNT; ++channel) {
+        if (!wire_pahub_select_channel(channel)) {
+            continue;
+        }
+
+        if (wire_device_exists(target_address)) {
+            wire_pahub_disable_all_channels();
+            result.bus_mode = I2CBusMode::WirePaHub;
+            result.pahub_channel = static_cast<int8_t>(channel);
+            return true;
+        }
+    }
+
+    wire_pahub_disable_all_channels();
+    return false;
 }

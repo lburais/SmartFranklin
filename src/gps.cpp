@@ -7,17 +7,16 @@
  * Project:     SmartFranklin IoT Device Controller
  * Description: Gravity DFR1103 GNSS/RTC implementation over I2C (Wire)
  *              with optional PA Hub channel routing. Reads GNSS + RTC values,
- *              updates the shared DATA model, publishes MQTT topics, and
- *              provides health information used by the GPS FreeRTOS task.
+ *              updates the shared DATA model, and publishes MQTT topics.
  *
  * Author:      Laurent Burais
- * Date:        10 March 2026
- * Version:     1.0
+ * Date:        12 March 2026
+ * Version:     1.1
  *
  * Overview:
- *   This module encapsulates all low-level interaction with the Gravity
- *   DFR1103 unit. It hides I2C path detection, GNSS/RTC sampling, data
- *   conversion, and publication details from the task layer.
+ *   This module encapsulates low-level interaction with the Gravity DFR1103
+ *   unit. It hides bus-path discovery, GNSS/RTC sampling, data conversion,
+ *   and MQTT publication details from the task layer.
  *
  * I2C Routing Strategy:
  *   1. Try direct Wire access to DFR1103 address (0x66).
@@ -49,12 +48,12 @@
  *   - smartfranklin/gps/utc/date
  *   - smartfranklin/gps/utc/time
  *   - smartfranklin/gps/rtc/time
- *
- * Health Model:
- *   - m_initialized tracks successful startup.
- *   - m_lastReadOk tracks validity of latest sample.
- *   - m_lastReadMs tracks freshness of latest valid cycle.
- *   - isHealthy() returns true only if all three checks pass.
+ *   - smartfranklin/system/gps/i2c/mode
+ *   - smartfranklin/system/gps/i2c/pahub_channel
+ *   - smartfranklin/system/gps/i2c/sda
+ *   - smartfranklin/system/gps/i2c/scl
+ *   - smartfranklin/system/gps/i2c/address
+ *   - smartfranklin/system/gps/i2c/device_name
  *
  * Error Handling:
  *   - Missing device during initialization returns false.
@@ -72,14 +71,13 @@
  *   - DFRobot_GNSSAndRTC (DFR1103 driver)
  *   - Wire (I2C transport)
  *   - data_model.h (shared runtime state)
- *   - mqtt_layer.h (topic publishing)
+ *   - mqtt.h (topic publishing)
  *   - pahub_channels.h (PA Hub address)
- *   - tasks.h (period constants for health timeout)
  *
  * Limitations:
  *   - Assumes factory DFR1103 I2C address (0x66).
  *   - Single active DFR1103 instance is supported.
- *   - Health is based on sample validity/freshness, not HDOP or geofence quality.
+ *   - No HDOP/quality filter is applied before publishing fix telemetry.
  *
  * ============================================================================
  * MIT License
@@ -113,27 +111,17 @@
 #include <cmath>
 
 #include "data_model.h"
-#include "mqtt_layer.h"
+#include "i2c_bus.h"
+#include "mqtt.h"
 #include "pahub_channels.h"
-#include "tasks.h"
 
 namespace {
 // ============================================================================
 // Module-Private Constants And Helpers
 // ============================================================================
 
-/**
- * @brief Number of PA Hub channels to scan for DFR1103.
- */
-constexpr uint8_t PAHUB_CHANNEL_COUNT = 8;
-
-/**
- * @brief Health timeout window for GPS task status checks.
- *
- * Health is considered valid only if the latest read cycle succeeded and the
- * elapsed time since that read is within this window.
- */
-constexpr uint32_t GPS_HEALTH_TIMEOUT_MS = (PERIOD_GPS * 3UL) + 5000UL;
+/** @brief Human-readable product name for the GPS device on this module. */
+constexpr const char* GPS_DEVICE_FULL_NAME = "DFRobot Gravity GNSS positioning and timing module (DFR1103)";
 
 /**
  * @brief Converts hemisphere-tagged coordinates to signed decimal degrees.
@@ -154,24 +142,54 @@ static double applyDirection(const double value, const char direction)
     }
     return value;
 }
+
+/**
+ * @brief Converts an I2C bus mode enum to a compact MQTT-friendly string.
+ */
+const char* i2cModeToString(const I2CBusMode mode)
+{
+    switch (mode) {
+    case I2CBusMode::WireDirect:
+        return "wire";
+    case I2CBusMode::WirePaHub:
+        return "wire_pahub";
+    case I2CBusMode::Unset:
+    default:
+        return "unset";
+    }
+}
+
+/**
+ * @brief Publishes GPS I2C route and pin configuration under system topics.
+ */
+void publishGpsI2cConfiguration(const I2CBusPathResult& i2c_path,
+                                const int8_t wireSda,
+                                const int8_t wireScl,
+                                const uint8_t i2cAddress)
+{
+    char pahubChannelBuf[12] = {0};
+    char sdaBuf[12] = {0};
+    char sclBuf[12] = {0};
+    char addressBuf[8] = {0};
+
+    snprintf(pahubChannelBuf, sizeof(pahubChannelBuf), "%d", i2c_path.pahub_channel);
+    snprintf(sdaBuf, sizeof(sdaBuf), "%d", wireSda);
+    snprintf(sclBuf, sizeof(sclBuf), "%d", wireScl);
+    snprintf(addressBuf, sizeof(addressBuf), "0x%02X", i2cAddress);
+
+    sf_mqtt::publish("smartfranklin/system/gps/i2c/mode", i2cModeToString(i2c_path.bus_mode));
+    sf_mqtt::publish("smartfranklin/system/gps/i2c/pahub_channel", pahubChannelBuf);
+    sf_mqtt::publish("smartfranklin/system/gps/i2c/sda", sdaBuf);
+    sf_mqtt::publish("smartfranklin/system/gps/i2c/scl", sclBuf);
+    sf_mqtt::publish("smartfranklin/system/gps/i2c/address", addressBuf);
+    sf_mqtt::publish("smartfranklin/system/gps/i2c/device_name", GPS_DEVICE_FULL_NAME);
+}
 }  // namespace
 
 /**
  * @brief Global GPS module singleton used by taskGps.
  */
 GPS GPS_MODULE;
-
-/**
- * @brief Probes a device address on Wire.
- * @param address I2C address to probe.
- * @return true when device responds with ACK.
- */
-bool GPS::probeAddressOnWire(const uint8_t address)
-{
-    // A successful endTransmission() means the device ACKed this address.
-    Wire.beginTransmission(address);
-    return Wire.endTransmission() == 0;
-}
 
 /**
  * @brief Selects one PA Hub channel for downstream Wire access.
@@ -194,55 +212,6 @@ void GPS::disablePaHubChannels()
     Wire.beginTransmission(PAHUB_ADDRESS);
     Wire.write(static_cast<uint8_t>(0x00));
     Wire.endTransmission();
-}
-
-/**
- * @brief Detects the path used to reach DFR1103 over Wire.
- *
- * Detection order:
- * 1. Direct Wire path (module connected directly to Port A bus).
- * 2. PA Hub path (scan channels 0..7 and probe module address).
- *
- * On success, the function stores route details in m_busMode/m_pahubChannel.
- * On failure, route state is reset to Unset/-1.
- *
- * @return true when direct or PA Hub path is found.
- */
-bool GPS::detectBusPath()
-{
-    // First try direct Wire routing (no PA Hub multiplexing).
-    if (probeAddressOnWire(DFR1103_I2C_ADDRESS)) {
-        m_busMode = BusMode::WireDirect;
-        m_pahubChannel = -1;
-        M5_LOGI("[GPS] DFR1103 detected on direct Wire bus");
-        return true;
-    }
-
-    // If PA Hub itself is unreachable, no multiplexed route is possible.
-    if (!probeAddressOnWire(PAHUB_ADDRESS)) {
-        m_busMode = BusMode::Unset;
-        m_pahubChannel = -1;
-        return false;
-    }
-
-    // Then scan all PA Hub channels to find where DFR1103 is routed.
-    for (uint8_t channel = 0; channel < PAHUB_CHANNEL_COUNT; ++channel) {
-        if (!selectPaHubChannel(channel)) {
-            continue;
-        }
-
-        if (probeAddressOnWire(DFR1103_I2C_ADDRESS)) {
-            m_busMode = BusMode::WirePaHub;
-            m_pahubChannel = static_cast<int8_t>(channel);
-            M5_LOGI("[GPS] DFR1103 detected on PAHub channel %u", channel);
-            return true;
-        }
-    }
-
-    disablePaHubChannels();
-    m_busMode = BusMode::Unset;
-    m_pahubChannel = -1;
-    return false;
 }
 
 /**
@@ -270,15 +239,31 @@ bool GPS::init()
     Wire.begin(m_wireSda, m_wireScl, 400000U);
     Wire.setPins(m_wireSda, m_wireScl);
 
-    if (!detectBusPath()) {
+    I2CBusPathResult i2c_path;
+    if (!detect_wire_bus_path(DFR1103_I2C_ADDRESS, i2c_path)) {
         M5_LOGW("[GPS] DFR1103 was not detected on supported Wire paths");
+        m_i2c_path = {};
+        publishGpsI2cConfiguration(m_i2c_path, m_wireSda, m_wireScl, DFR1103_I2C_ADDRESS);
         m_initialized = false;
         return false;
     }
 
-    if (m_busMode == BusMode::WirePaHub && m_pahubChannel >= 0) {
-        if (!selectPaHubChannel(static_cast<uint8_t>(m_pahubChannel))) {
-            M5_LOGE("[GPS] failed to select PAHub channel %d", m_pahubChannel);
+    m_i2c_path = i2c_path;
+    publishGpsI2cConfiguration(m_i2c_path, m_wireSda, m_wireScl, DFR1103_I2C_ADDRESS);
+
+    if (m_i2c_path.bus_mode == I2CBusMode::WireDirect) {
+        M5_LOGI("[GPS] DFR1103 detected on direct Wire bus");
+    } else if (m_i2c_path.bus_mode == I2CBusMode::WirePaHub) {
+        M5_LOGI("[GPS] DFR1103 detected on PAHub channel %d", m_i2c_path.pahub_channel);
+    } else {
+        m_i2c_path = {};
+        m_initialized = false;
+        return false;
+    }
+
+    if (m_i2c_path.bus_mode == I2CBusMode::WirePaHub && m_i2c_path.pahub_channel >= 0) {
+        if (!selectPaHubChannel(static_cast<uint8_t>(m_i2c_path.pahub_channel))) {
+            M5_LOGE("[GPS] failed to select PAHub channel %d", m_i2c_path.pahub_channel);
             m_initialized = false;
             return false;
         }
@@ -290,7 +275,7 @@ bool GPS::init()
     // DFRobot begin() touches Wire state internally, re-apply selected bus pins.
     Wire.begin(m_wireSda, m_wireScl, 400000U);
 
-    if (m_busMode == BusMode::WirePaHub) {
+    if (m_i2c_path.bus_mode == I2CBusMode::WirePaHub) {
         disablePaHubChannels();
     }
 
@@ -300,8 +285,6 @@ bool GPS::init()
     }
 
     m_unit.enablePower();
-    m_lastReadOk = false;
-    m_lastReadMs = millis();
 
     M5_LOGI("[GPS] DFR1103 initialization complete");
     return true;
@@ -319,10 +302,9 @@ bool GPS::init()
  */
 void GPS::readAndPublish()
 {
-    if (m_busMode == BusMode::WirePaHub && m_pahubChannel >= 0) {
-        if (!selectPaHubChannel(static_cast<uint8_t>(m_pahubChannel))) {
-            M5_LOGW("[GPS] failed to reselect PAHub channel %d", m_pahubChannel);
-            m_lastReadOk = false;
+    if (m_i2c_path.bus_mode == I2CBusMode::WirePaHub && m_i2c_path.pahub_channel >= 0) {
+        if (!selectPaHubChannel(static_cast<uint8_t>(m_i2c_path.pahub_channel))) {
+            M5_LOGW("[GPS] failed to reselect PAHub channel %d", m_i2c_path.pahub_channel);
             return;
         }
     }
@@ -336,7 +318,7 @@ void GPS::readAndPublish()
     const uint8_t satellites = m_unit.getNumSatUsed();
     const auto rtc = m_unit.getRTCTime();
 
-    if (m_busMode == BusMode::WirePaHub) {
+    if (m_i2c_path.bus_mode == I2CBusMode::WirePaHub) {
         disablePaHubChannels();
     }
 
@@ -407,8 +389,6 @@ void GPS::readAndPublish()
     sf_mqtt::publish("smartfranklin/gps/utc/time", utcTimeBuf);
     sf_mqtt::publish("smartfranklin/gps/rtc/time", rtcTimeBuf);
 
-    m_lastReadOk = validNumbers;
-    m_lastReadMs = millis();
 }
 
 /**
@@ -425,30 +405,4 @@ void GPS::process()
     }
 
     readAndPublish();
-}
-
-/**
- * @brief Returns module initialization state.
- */
-bool GPS::isInitialized() const
-{
-    return m_initialized;
-}
-
-/**
- * @brief Returns module health based on read success and freshness.
- *
- * Health is true only when:
- * - module initialization succeeded,
- * - the latest read cycle was valid,
- * - and that read is still within GPS_HEALTH_TIMEOUT_MS.
- */
-bool GPS::isHealthy() const
-{
-    if (!m_initialized || !m_lastReadOk) {
-        return false;
-    }
-
-    // Read is considered stale once timeout window is exceeded.
-    return (millis() - m_lastReadMs) <= GPS_HEALTH_TIMEOUT_MS;
 }

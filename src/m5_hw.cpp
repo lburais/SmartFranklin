@@ -94,7 +94,7 @@
  */
 
 #include "m5_hw.h"
-#include "i2c_enumerator.h"
+#include "i2c_bus.h"
 
 // ============================================================================
 // Global Hardware Instance (Singleton Pattern)
