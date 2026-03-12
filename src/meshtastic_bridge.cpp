@@ -1,3 +1,20 @@
+/*
+ * ============================================================================
+ * Meshtastic Bridge Implementation - SmartFranklin
+ * ============================================================================
+ *
+ * File:        meshtastic_bridge.cpp
+ * Project:     SmartFranklin IoT Device Controller
+ * Description: Thread-safe bridge utilities around the Meshtastic serial API,
+ *              including TX/RX, readiness tracking, and MQTT ingress handling.
+ *
+ * Author:      Laurent Burais
+ * Date:        10 March 2026
+ * Version:     1.1
+ *
+ * ============================================================================
+ */
+
 #include "meshtastic_bridge.h"
 
 #include <Arduino.h>

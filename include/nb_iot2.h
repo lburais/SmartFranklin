@@ -72,7 +72,7 @@
  * Integration:
  *   - Configuration Store: Cellular settings from CONFIG structure
  *   - Data Model: GNSS position updates to global DATA
- *   - MQTT Bridge: Cellular MQTT as backup to WiFi MQTT
+ *   - MQTT Integration: Cellular MQTT as backup to WiFi MQTT
  *   - Status Display: Network status in M5Stack interface
  *   - Error Handling: Cellular failures logged and handled gracefully
  * 

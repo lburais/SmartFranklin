@@ -39,12 +39,7 @@
  *      - Host, Port, Credentials: Cloud connectivity
  *      - Enable/Disable: Toggle cloud integration
  * 
- *   4. MQTT Bridge
- *      - Topic Prefixes: Local/Cloud message separation
- *      - QoS Level: Reliability setting (0, 1, or 2)
- *      - Loop Detection: Prevent message routing loops
- * 
- *   5. NB-IoT Cellular
+ *   4. NB-IoT Cellular
  *      - APN: Carrier network access point name
  *      - MQTT Details: Cellular backup connectivity
  * 
@@ -149,14 +144,6 @@ static const char *CFG_PATH = "/config.json";
  *   - ext_mqtt_pass: "" (no authentication)
  *   - ext_mqtt_enabled: false (disabled by default)
  * 
- *   MQTT Bridge (Local ↔ Cloud relay):
- *   - mqtt_bridge_enabled: true (enabled by default)
- *   - mqtt_bridge_prefix_internal: "local/" (local topic prefix)
- *   - mqtt_bridge_prefix_external: "cloud/" (cloud topic prefix)
- *   - mqtt_bridge_qos: 1 (at-least-once delivery)
- *   - mqtt_bridge_retain: false (don't retain messages)
- *   - mqtt_bridge_loop_detection: true (prevent message loops)
- * 
  *   NB-IoT Cellular:
  *   - nbiot_enabled: true (enabled by default)
  *   - nbiot_apn: "iot.1nce.net" (1NCE carrier APN)
@@ -206,14 +193,6 @@ bool config_load()
         CONFIG.ext_mqtt_user = "";         // No authentication
         CONFIG.ext_mqtt_pass = "";         // No authentication
         CONFIG.ext_mqtt_enabled = false;   // Cloud disabled until configured
-
-        // --- MQTT Bridge (Local ↔ Cloud Message Relay) ---
-        CONFIG.mqtt_bridge_enabled = true;              // Bridge enabled by default
-        CONFIG.mqtt_bridge_prefix_internal = "local/";  // Local message prefix
-        CONFIG.mqtt_bridge_prefix_external = "cloud/";  // Cloud message prefix
-        CONFIG.mqtt_bridge_qos = 1;                      // At-least-once delivery
-        CONFIG.mqtt_bridge_retain = false;               // Don't persist messages
-        CONFIG.mqtt_bridge_loop_detection = true;        // Prevent routing loops
 
         // --- NB-IoT Cellular Connectivity ---
         CONFIG.nbiot_enabled   = true;                  // Cellular enabled by default
@@ -276,18 +255,6 @@ bool config_load()
     CONFIG.ext_mqtt_enabled = doc["ext_mqtt_enabled"] | false;   // Enable/disable flag
 
     // =========================================================================
-    // MQTT Bridge Settings (Local ↔ Cloud Message Relay)
-    // =========================================================================
-    // Configuration for relaying messages between local and cloud MQTT brokers
-    
-    CONFIG.mqtt_bridge_enabled = doc["mqtt_bridge_enabled"] | true;    // Bridge enable flag
-    CONFIG.mqtt_bridge_prefix_internal = doc["mqtt_bridge_prefix_internal"] | "local/";   // Local topic prefix
-    CONFIG.mqtt_bridge_prefix_external = doc["mqtt_bridge_prefix_external"] | "cloud/";   // Cloud topic prefix
-    CONFIG.mqtt_bridge_qos = doc["mqtt_bridge_qos"] | 1;                // Quality of Service (0/1/2)
-    CONFIG.mqtt_bridge_retain = doc["mqtt_bridge_retain"] | false;      // Message retention flag
-    CONFIG.mqtt_bridge_loop_detection = doc["mqtt_bridge_loop_detection"] | true;  // Loop prevention
-
-    // =========================================================================
     // NB-IoT Cellular Configuration
     // =========================================================================
     // Settings for 4G LTE-M/NB-IoT cellular backup connectivity
@@ -336,7 +303,6 @@ bool config_load()
  *   - Authentication (admin_user, admin_pass)
  *   - Hardware calibration (scale_cal_factor)
  *   - MQTT broker settings (external and NB-IoT)
- *   - MQTT bridge configuration (prefixes, QoS, loop detection)
  * 
  * Return Value:
  *   - true: File written successfully
@@ -385,18 +351,6 @@ bool config_save()
     doc["ext_mqtt_user"] = CONFIG.ext_mqtt_user;            // Broker username
     doc["ext_mqtt_pass"] = CONFIG.ext_mqtt_pass;            // Broker password
     doc["ext_mqtt_enabled"] = CONFIG.ext_mqtt_enabled;      // Enable/disable flag
-
-    // =========================================================================
-    // MQTT Bridge Settings
-    // =========================================================================
-    // Serialize local-to-cloud message relay configuration
-    
-    doc["mqtt_bridge_enabled"] = CONFIG.mqtt_bridge_enabled;            // Bridge enable flag
-    doc["mqtt_bridge_prefix_internal"] = CONFIG.mqtt_bridge_prefix_internal;  // Local prefix
-    doc["mqtt_bridge_prefix_external"] = CONFIG.mqtt_bridge_prefix_external;  // Cloud prefix
-    doc["mqtt_bridge_qos"] = CONFIG.mqtt_bridge_qos;                    // Quality of Service
-    doc["mqtt_bridge_retain"] = CONFIG.mqtt_bridge_retain;              // Message retention
-    doc["mqtt_bridge_loop_detection"] = CONFIG.mqtt_bridge_loop_detection;    // Loop prevention
 
     // =========================================================================
     // NB-IoT Cellular Configuration

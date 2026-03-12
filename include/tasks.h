@@ -73,7 +73,7 @@
 /**
  * @brief Sampling period for tilt task updates.
  */
-#define PERIOD_TILT         60000
+#define PERIOD_TILT         1000
 
 /**
  * @brief Sampling period for RTC task updates.
@@ -103,7 +103,7 @@ extern TaskHandle_t taskTiltHandle;             // Tilt sensor acquisition
 extern TaskHandle_t taskRtcHandle;              // Real-time clock synchronization
 extern TaskHandle_t taskGpsHandle;              // Gravity DFR1103 GPS/RTC acquisition
 extern TaskHandle_t taskBmsBleHandle;           // BLE battery management system
-extern TaskHandle_t taskDisplayHandle;          // M5Stack display updates
+extern TaskHandle_t taskHmiHandle;              // HMI/display updates
 extern TaskHandle_t taskMeshtasticBridgeHandle; // Meshtastic mesh networking bridge
 extern TaskHandle_t taskNbiotHandle;            // NB-IoT cellular communication
 
@@ -216,16 +216,24 @@ bool isGpsTaskRunning();
 void taskBmsBle(void *pvParameters);
 
 /**
- * @brief M5Stack display rendering task.
- * 
- * Updates device display with real-time system status, sensor values,
- * WiFi/MQTT connection state, battery level, and user interface elements.
- * Handles touch input and display refresh cycles.
- * 
+ * @brief HMI display and button task.
+ *
+ * Runs the HMI rendering loop, handles screen navigation/calibration inputs,
+ * and applies Button B long-press reboot behavior.
+ *
  * @param pvParameters FreeRTOS task parameter (unused)
  * @return void (infinite loop, never returns)
  */
-void taskDisplay(void *pvParameters);
+void taskHmi(void *pvParameters);
+
+/**
+ * @brief Returns whether the HMI task is currently alive and healthy.
+ *
+ * Checks task handle state and recent heartbeat updates.
+ *
+ * @return true if HMI task is running, otherwise false
+ */
+bool isHmiTaskRunning();
 
 /**
  * @brief Hardware monitor task.

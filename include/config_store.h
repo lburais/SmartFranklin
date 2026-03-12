@@ -1,7 +1,30 @@
+/*
+ * ============================================================================
+ * Configuration Store Interface - SmartFranklin
+ * ============================================================================
+ *
+ * File:        config_store.h
+ * Project:     SmartFranklin IoT Device Controller
+ * Description: Declares persistent runtime configuration schema and load/save
+ *              entry points backed by SPIFFS.
+ *
+ * Author:      Laurent Burais
+ * Date:        10 March 2026
+ * Version:     1.1
+ *
+ * ============================================================================
+ */
+
 #pragma once
 
 #include <Arduino.h>
 
+/**
+ * @brief Persistent SmartFranklin configuration model.
+ *
+ * Fields are initialized with safe defaults used when no persisted config is
+ * available yet.
+ */
 struct SmartConfig {
     // WiFi
     String ap_ssid = "SmartFranklin-AP";
@@ -23,14 +46,6 @@ struct SmartConfig {
     String ext_mqtt_pass;
     bool ext_mqtt_enabled = false;
 
-    // MQTT bridge
-    bool mqtt_bridge_enabled = false;
-    String mqtt_bridge_prefix_internal = "local/";
-    String mqtt_bridge_prefix_external = "cloud/";
-    int mqtt_bridge_qos = 1;
-    bool mqtt_bridge_retain = false;
-    bool mqtt_bridge_loop_detection = true;
-
     // NB-IoT
     bool nbiot_enabled = false;
     String nbiot_apn = "iot.1nce.net";
@@ -49,5 +64,14 @@ struct SmartConfig {
 
 extern SmartConfig CONFIG;
 
+/**
+ * @brief Load persisted config from storage into @ref CONFIG.
+ * @return True on successful parse/load, false when defaults are kept.
+ */
 bool config_load();
+
+/**
+ * @brief Persist current @ref CONFIG values to storage.
+ * @return True when write succeeds, false otherwise.
+ */
 bool config_save();

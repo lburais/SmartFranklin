@@ -8,8 +8,8 @@
  *              BLE, NB-IoT, and Meshtastic bridge capabilities.
  * 
  * Author:      Laurent Burais
- * Date:        5 March 2026
- * Version:     1.0
+ * Date:        10 March 2026
+ * Version:     1.1
  * 
  * Features:
  *   - M5Stack hardware initialization (IMU, RTC, power management)
@@ -64,18 +64,7 @@
 #include "web_dashboard.h"
 #include "config_store.h"
 #include "captive_portal.h"
-#include "mqtt_bridge.h"
 #include "meshtastic_bridge.h"
-
-// Set to 1 to stop execution before DISTANCE task launch (debug only).
-#ifndef STOP_BEFORE_DISTANCE_TASK
-#define STOP_BEFORE_DISTANCE_TASK 0
-#endif
-
-// Set to 1 to run only the display + watchdog tasks for LCD diagnostics.
-#ifndef DISPLAY_DIAG_ONLY
-#define DISPLAY_DIAG_ONLY 0
-#endif
 
 // ============================================================================
 // Task Handle Declarations
@@ -90,7 +79,7 @@ TaskHandle_t taskTiltHandle             = nullptr;  // Tilt sensor reading
 TaskHandle_t taskRtcHandle              = nullptr;  // Real-time clock synchronization
 TaskHandle_t taskGpsHandle              = nullptr;  // Gravity DFR1103 GPS/RTC task
 TaskHandle_t taskBmsBleHandle           = nullptr;  // BLE battery management system
-TaskHandle_t taskDisplayHandle          = nullptr;  // M5Stack display updates
+TaskHandle_t taskHmiHandle              = nullptr;  // HMI/display task
 TaskHandle_t taskMeshtasticBridgeHandle = nullptr;  // Meshtastic mesh bridge
 TaskHandle_t taskNbiotHandle            = nullptr;  // NB-IoT cellular communication
 
@@ -137,9 +126,9 @@ void setup() {
     M5.Display.print(splash);
     delay(250);
 
-    // Initialize serial communication at 115200 baud for debugging
+    // Initialize serial communication at 115200 baud
     Serial.begin(115200);
-    
+
     // Initialize SPIFFS filesystem for configuration file persistence
     SPIFFS.begin(true);
 
@@ -203,10 +192,9 @@ void setup() {
         M5_LOGI("[MQTT] External MQTT disabled in config; skipping init");
     }
 
-    // --- Web Dashboard and Bridge Initialization ---
-    // Start web-based management interface and MQTT device bridge
+    // --- Web Dashboard Initialization ---
+    // Start web-based management interface
     web_dashboard_init();
-    mqtt_bridge_init();
 
     // =========================================================================
     // FreeRTOS Task Creation
@@ -215,14 +203,8 @@ void setup() {
     // Stack sizes: 2048-8192 bytes (larger for BLE/mesh operations)
     // Priority levels: 1 (low) to 3 (high); higher = more CPU scheduling time
     
-    xTaskCreatePinnedToCore(taskDisplay,          "DISPLAY",  8192, nullptr, 3,  &taskDisplayHandle,         1);
+    xTaskCreatePinnedToCore(taskHmi,              "HMI",      8192, nullptr, 3,  &taskHmiHandle,            1);
     xTaskCreatePinnedToCore(taskWatchdog,         "WATCHDOG", 2048, nullptr, 3,  nullptr,                    0);
-
-#if DISPLAY_DIAG_ONLY
-    M5_LOGW("[DISPLAY] DISPLAY_DIAG_ONLY=1: skipping non-display tasks");
-    M5_LOGI("SmartFranklin setup complete.");
-    return;
-#endif
 
     xTaskCreatePinnedToCore(taskHwMonitor,        "HW_MON",   4096, nullptr, 1,  nullptr,                    0);
     xTaskCreatePinnedToCore(taskMqttBroker,       "MQTT_BRK", 4096, nullptr, 3,  &taskMqttBrokerHandle,      1);
@@ -276,28 +258,8 @@ void setup() {
 // ============================================================================
 /**
  * Main loop executed repeatedly by the Arduino framework.
- * Bridges MQTT loop for message processing.
- * Long-pressing Button B performs a system reboot.
+ * Runtime work is handled by FreeRTOS tasks.
  */
 void loop() {
-    // Long press on Button B triggers restart without stealing short presses
-    // used by the display task (for example calibration actions).
-    static unsigned long rebootPressStart = 0;
-    if (M5.BtnB.isPressed()) {
-        if (rebootPressStart == 0) {
-            rebootPressStart = millis();
-        }
-        if (millis() - rebootPressStart > 3000) {
-            M5_LOGI("----- SmartFranklin restarted -----");
-            ESP.restart();
-        }
-    } else {
-        rebootPressStart = 0;
-    }
-
-    // Process MQTT bridge events and message delivery
-    mqtt_bridge_loop();
-    
-    // Yield to other tasks (50ms cycle time for main loop)
-    delay(50);
+    delay(100);
 }

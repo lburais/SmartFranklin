@@ -42,12 +42,6 @@
  *   - Admin authentication credentials
  *   - Hardware calibration factors
  * 
- *   MQTT Bridge (/bridge):
- *   - Bridge status and statistics
- *   - Message forwarding counters
- *   - Connection state monitoring
- *   - Loop detection status
- * 
  *   Firmware Update (/update):
  *   - Over-the-air (OTA) firmware upload
  *   - Progress indication and status
@@ -121,7 +115,6 @@
  *   - nb_iot2.h (NB-IoT status interface)
  *   - data_model.h (global DATA access)
  *   - config_store.h (configuration access)
- *   - mqtt_bridge.h (bridge status)
  *   - web_dashboard.h (header declarations)
  * 
  * Security Considerations:
@@ -174,7 +167,6 @@
 #include <WiFi.h>
 #include "data_model.h"
 #include "config_store.h"
-#include "mqtt_bridge.h"
 
 // ============================================================================
 // Global Web Server Instance
@@ -237,7 +229,6 @@ a.button { display: inline-block; padding: 10px 15px; background: #0078ff; color
 <h1>SmartFranklin</h1>
 <div class="card">
   <a class="button" href="/config">Configuration</a>
-  <a class="button" href="/bridge">MQTT Bridge</a>
   <a class="button" href="/update">Firmware Update</a>
   <a class="button" href="/diagnostics">Diagnostics</a>
 </div>

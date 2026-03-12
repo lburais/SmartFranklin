@@ -70,7 +70,7 @@
  * Integration Points:
  *   - Data Model: Publishes sensor data and receives commands
  *   - Command Handler: Processes incoming MQTT command messages
- *   - MQTT Bridge: Forwards messages between internal/external brokers
+ *   - MQTT Routing: Forwards messages between logical broker paths
  *   - Configuration Store: Loads broker settings from persistent storage
  *   - Status Reporting: Connection status in system health monitoring
  * 

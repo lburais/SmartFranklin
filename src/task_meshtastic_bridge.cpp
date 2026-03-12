@@ -1,3 +1,20 @@
+/*
+ * ============================================================================
+ * Meshtastic Bridge Task - SmartFranklin
+ * ============================================================================
+ *
+ * File:        task_meshtastic_bridge.cpp
+ * Project:     SmartFranklin IoT Device Controller
+ * Description: FreeRTOS task that drives Meshtastic connectivity, publishes
+ *              node reports to MQTT, and forwards inbound mesh text messages.
+ *
+ * Author:      Laurent Burais
+ * Date:        10 March 2026
+ * Version:     1.1
+ *
+ * ============================================================================
+ */
+
 #include <Arduino.h>
 #include <M5Unified.h>
 #include <string>
@@ -12,6 +29,9 @@
 
 namespace {
 
+/**
+ * @brief Convert Meshtastic node report callbacks into MQTT telemetry payloads.
+ */
 void publish_node_report(mt_node_t *node, mt_nr_progress_t progress)
 {
     if (progress == MT_NR_IN_PROGRESS && node != nullptr) {
@@ -59,6 +79,12 @@ void publish_node_report(mt_node_t *node, mt_nr_progress_t progress)
 
 } // namespace
 
+/**
+ * @brief Meshtastic bridge task loop.
+ *
+ * Maintains mesh link state, periodically requests node reports, stores last
+ * received text in the shared data model, and republishes key events to MQTT.
+ */
 void taskMeshtasticBridge(void *pv)
 {
     (void)pv;

@@ -13,7 +13,7 @@ SmartFranklin is an ESP32 IoT controller for **M5Stick C Plus2**, organized as c
 ## Task-Centric Capabilities
 
 - Main loop execution: HMI rendering, button event handling, and scale calibration state machine
-- Connectivity execution blocks: Wi-Fi AP+STA lifecycle, external MQTT session, and MQTT bridge routing
+- Connectivity execution blocks: Wi-Fi AP+STA lifecycle and external MQTT session
 - Sensor execution blocks: distance, weight, tilt, RTC, and GPS acquisition pipelines
 - Optional radio execution blocks: Meshtastic bridge (LoRa mesh) and NB-IoT2 cellular fallback
 - Battery and board telemetry execution blocks: BLE BMS metrics and M5 hardware status publication
@@ -28,12 +28,11 @@ SmartFranklin is an ESP32 IoT controller for **M5Stick C Plus2**, organized as c
 flowchart TD
     subgraph L1[Execution Layer]
         SETUP[setup\nBoot + init + task creation]
-        LOOP[loop\nHMI tick + MQTT bridge loop]
+        LOOP[loop\nHMI tick]
     end
 
     subgraph L2[Task Layer]
         T_HMI[HMI execution]
-        T_BRIDGE[MQTT bridge loop]
         T_WD[taskWatchdog]
         T_HW[taskHwMonitor]
         T_MQTT[taskMqttBroker]
@@ -50,7 +49,6 @@ flowchart TD
 
     subgraph L3[Unit Layer]
         U_HMI[Display + Buttons + Scale calibration UI]
-        U_BRIDGE[Command routing + local publish/subscribe]
         U_WD[System watchdog]
         U_M5[M5 hardware unit\nBattery/buttons/IMU telemetry]
         U_BROKER[External MQTT broker]
@@ -67,7 +65,6 @@ flowchart TD
 
     SETUP --> LOOP
     LOOP --> T_HMI
-    LOOP --> T_BRIDGE
     SETUP --> T_WD
     SETUP --> T_HW
     SETUP --> T_MQTT
@@ -82,7 +79,6 @@ flowchart TD
     SETUP --> T_NBIOT
 
     T_HMI --> U_HMI
-    T_BRIDGE --> U_BRIDGE
     T_WD --> U_WD
     T_HW --> U_M5
     T_MQTT --> U_BROKER
@@ -102,7 +98,6 @@ flowchart TD
 | Execution Block | Owned Units / Services | Primary Responsibility |
 |---|---|---|
 | `loop` + `HMI` | LCD, buttons, calibration workflow | Local operator interface, screen navigation, calibration state transitions |
-| `loop` + `mqtt_bridge_loop` | MQTT bridge | Local command/event routing and bridge service continuity |
 | `taskWatchdog` | System watchdog | System liveness supervision and recovery signaling |
 | `taskHwMonitor` | M5 internal telemetry | Board-level metrics publication (battery/buttons/IMU) |
 | `taskMqttBroker` | External MQTT endpoint | MQTT session lifecycle, publish/subscribe, command ingress |

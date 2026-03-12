@@ -1,3 +1,20 @@
+/*
+ * ============================================================================
+ * I2C Enumerator Interface - SmartFranklin
+ * ============================================================================
+ *
+ * File:        i2c_enumerator.h
+ * Project:     SmartFranklin IoT Device Controller
+ * Description: Declares I2C topology scan entry point used during startup
+ *              hardware discovery and reporting.
+ *
+ * Author:      Laurent Burais
+ * Date:        10 March 2026
+ * Version:     1.1
+ *
+ * ============================================================================
+ */
+
 #pragma once
 
 #include <cstdint>

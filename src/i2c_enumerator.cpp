@@ -1,3 +1,20 @@
+/*
+ * ============================================================================
+ * I2C Enumerator Implementation - SmartFranklin
+ * ============================================================================
+ *
+ * File:        i2c_enumerator.cpp
+ * Project:     SmartFranklin IoT Device Controller
+ * Description: Detects I2C device topology across Wire and Ex_I2C paths,
+ *              probes PAHUB channels, and enriches reports with known labels.
+ *
+ * Author:      Laurent Burais
+ * Date:        10 March 2026
+ * Version:     1.1
+ *
+ * ============================================================================
+ */
+
 #include "i2c_enumerator.h"
 
 #include <cstring>

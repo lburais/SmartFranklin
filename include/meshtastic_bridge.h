@@ -39,7 +39,7 @@
  *   - Configuration: Radio parameters and network settings
  * 
  * Integration with SmartFranklin:
- *   - MQTT Bridge: Mesh messages can be forwarded to MQTT brokers
+ *   - MQTT Integration: Mesh messages can be forwarded to MQTT brokers
  *   - Data Sharing: Sensor data distributed through mesh network
  *   - Remote Control: Commands received via mesh messaging
  *   - Backup Communication: Alternative to WiFi/cellular when unavailable
@@ -317,7 +317,7 @@ bool meshtastic_bridge_request_node_report(void (*callback)(mt_node_t *, mt_nr_p
  * 
  * Integration:
  *   - Event Loop: Call regularly in main loop or task
- *   - MQTT Bridge: Forward messages to MQTT broker
+ *   - MQTT Integration: Forward messages to MQTT broker
  *   - Command Processing: Parse commands from mesh messages
  *   - Logging: Store received messages for debugging
  * 
