@@ -177,10 +177,10 @@ bool config_load()
     if (!SPIFFS.exists(CFG_PATH)) {
 
         // --- WiFi & Hardware Calibration ---
-        CONFIG.ap_ssid  = "SmartFranklin-AP"; // Default Access Point SSID
-        CONFIG.ap_pass  = "smartfranklin";    // Default Access Point password
-        CONFIG.sta_ssid = "";                 // No external network configured
-        CONFIG.sta_pass = "";                 // No password set
+        CONFIG.ap_ssid  = "SmartFranklin-AP"; 
+        CONFIG.ap_pass  = "smartfranklin";
+        CONFIG.sta_ssid = "jrdl"; 
+        CONFIG.sta_pass = "05121996190119942106196801071964";
         CONFIG.scale_cal_factor = 1.0f;    // Uncalibrated weight sensor
 
         // --- Web Dashboard Authentication ---
@@ -188,11 +188,11 @@ bool config_load()
         CONFIG.admin_pass = "admin";       // ⚠️  Default credentials - CHANGE!
 
         // --- External MQTT Broker (Cloud Connectivity) ---
-        CONFIG.ext_mqtt_host = "";         // No broker configured yet
-        CONFIG.ext_mqtt_port = 1883;       // Standard MQTT port
-        CONFIG.ext_mqtt_user = "";         // No authentication
-        CONFIG.ext_mqtt_pass = "";         // No authentication
-        CONFIG.ext_mqtt_enabled = false;   // Cloud disabled until configured
+        CONFIG.ext_mqtt_host = "localhost";
+        CONFIG.ext_mqtt_port = 1883;
+        CONFIG.ext_mqtt_user = "Servers";
+        CONFIG.ext_mqtt_pass = "FRA13941";
+        CONFIG.ext_mqtt_enabled = true;  // Cloud disabled until configured
 
         // --- NB-IoT Cellular Connectivity ---
         CONFIG.nbiot_enabled   = true;                  // Cellular enabled by default
@@ -208,6 +208,11 @@ bool config_load()
         CONFIG.meshtastic_baud           = 115200;               // Default UART baud
         CONFIG.meshtastic_pin_rx         = 33;                   // Default RX pin
         CONFIG.meshtastic_pin_tx         = 32;                   // Default TX pin
+
+        // --- Task Timing Configuration ---
+        CONFIG.task_gps_loop_ms          = 60000;
+        CONFIG.task_mqtt_loop_ms         = 20;
+        CONFIG.task_hmi_loop_ms          = 20;
 
         return true;
     }
@@ -234,10 +239,10 @@ bool config_load()
     // =========================================================================
     // Load WiFi connection parameters and web dashboard authentication
     
-    CONFIG.ap_ssid = doc["ap_ssid"] | "SmartFranklin-AP";   // AP SSID (local network)
-    CONFIG.ap_pass = doc["ap_pass"] | "smartfranklin";      // AP password
-    CONFIG.sta_ssid = doc["sta_ssid"] | "";                 // Station SSID (external network)
-    CONFIG.sta_pass = doc["sta_pass"] | "";                 // Station password
+    CONFIG.ap_ssid = doc["ap_ssid"] | "SmartFranklin-AP";
+    CONFIG.ap_pass = doc["ap_pass"] | "smartfranklin";
+    CONFIG.sta_ssid = doc["sta_ssid"] | "jrdl";
+    CONFIG.sta_pass = doc["sta_pass"] | "05121996190119942106196801071964";
     CONFIG.scale_cal_factor = doc["scale_cal_factor"] | 1.0f;  // Weight sensor calibration
 
     CONFIG.admin_user = doc["admin_user"] | "admin";    // Web dashboard username
@@ -248,11 +253,13 @@ bool config_load()
     // =========================================================================
     // Cloud connectivity settings for remote MQTT broker
     
-    CONFIG.ext_mqtt_host = doc["ext_mqtt_host"] | "";           // Broker hostname/IP
-    CONFIG.ext_mqtt_port = doc["ext_mqtt_port"] | 1883;          // Broker port (default 1883)
-    CONFIG.ext_mqtt_user = doc["ext_mqtt_user"] | "";            // Broker username
-    CONFIG.ext_mqtt_pass = doc["ext_mqtt_pass"] | "";            // Broker password
-    CONFIG.ext_mqtt_enabled = doc["ext_mqtt_enabled"] | false;   // Enable/disable flag
+    // Keep defaults consistent with the no-file bootstrap branch so older
+    // config files automatically inherit MQTT settings when keys are absent.
+    CONFIG.ext_mqtt_host = doc["ext_mqtt_host"] | "localhost";
+    CONFIG.ext_mqtt_port = doc["ext_mqtt_port"] | 1883;           // Broker port (default 1883)
+    CONFIG.ext_mqtt_user = doc["ext_mqtt_user"] | "Servers";      // Broker username
+    CONFIG.ext_mqtt_pass = doc["ext_mqtt_pass"] | "FRA13941";     // Broker password
+    CONFIG.ext_mqtt_enabled = doc["ext_mqtt_enabled"] | true;      // Enable/disable flag
 
     // =========================================================================
     // NB-IoT Cellular Configuration
@@ -275,6 +282,14 @@ bool config_load()
     CONFIG.meshtastic_baud           = doc["meshtastic_baud"] | 115200;
     CONFIG.meshtastic_pin_rx         = doc["meshtastic_pin_rx"] | 33;
     CONFIG.meshtastic_pin_tx         = doc["meshtastic_pin_tx"] | 32;
+
+    // =========================================================================
+    // Task Timing Configuration
+    // =========================================================================
+
+    CONFIG.task_gps_loop_ms = doc["task_gps_loop_ms"] | 60000;
+    CONFIG.task_mqtt_loop_ms = doc["task_mqtt_loop_ms"] | 20;
+    CONFIG.task_hmi_loop_ms = doc["task_hmi_loop_ms"] | 20;
 
     return true;
 }
@@ -373,6 +388,14 @@ bool config_save()
     doc["meshtastic_baud"]           = CONFIG.meshtastic_baud;
     doc["meshtastic_pin_rx"]         = CONFIG.meshtastic_pin_rx;
     doc["meshtastic_pin_tx"]         = CONFIG.meshtastic_pin_tx;
+
+    // =========================================================================
+    // Task Timing Configuration
+    // =========================================================================
+
+    doc["task_gps_loop_ms"] = CONFIG.task_gps_loop_ms;
+    doc["task_mqtt_loop_ms"] = CONFIG.task_mqtt_loop_ms;
+    doc["task_hmi_loop_ms"] = CONFIG.task_hmi_loop_ms;
 
     // Open configuration file for writing (creates or overwrites existing)
     File f = SPIFFS.open(CFG_PATH, "w");
