@@ -157,7 +157,6 @@
 
 #include "m5_hw.h"
 #include "m5_hw.h"  // Note: Duplicate include (should be removed)
-#include "nb_iot2.h"
 #include "web_dashboard.h"
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
@@ -439,21 +438,6 @@ void web_dashboard_init()
     // NB-IoT Status API Endpoint
     // =========================================================================
     // Returns cellular modem and network status
-    // No authentication required for status monitoring
-    server.on("/api/nbiot", HTTP_GET, [](AsyncWebServerRequest *request){ 
-        JsonDocument doc; 
-        NbIotStatus st = NB_IOT2.getStatus(); 
-        doc["modem_ready"]      = st.modem_ready; 
-        doc["network_attached"] = st.network_attached; 
-        doc["pdp_active"]       = st.pdp_active; 
-        doc["mqtt_connected"]   = st.mqtt_connected; 
-        doc["ip"]               = st.ip; 
-        doc["rssi"]             = st.rssi; 
-        doc["operator"]         = st.operator_name; 
-        String out; 
-        serializeJson(doc, out); 
-        request->send(200, "application/json", out); 
-    });
 
     // =========================================================================
     // OTA Firmware Update Integration

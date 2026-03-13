@@ -40,23 +40,15 @@ struct SmartConfig {
     String admin_pass = "admin";
 
     // External MQTT
-    String ext_mqtt_host;
+    String ext_mqtt_host = "localhost";
     int ext_mqtt_port = 1883;
-    String ext_mqtt_user;
-    String ext_mqtt_pass;
-    bool ext_mqtt_enabled = false;
+    String ext_mqtt_user = "Servers";
+    String ext_mqtt_pass = "FRA13941";
+    bool ext_mqtt_enabled = true;
 
-    // NB-IoT
-    bool nbiot_enabled = false;
-    String nbiot_apn = "iot.1nce.net";
-    String nbiot_mqtt_host;
-    int nbiot_mqtt_port = 1883;
-    String nbiot_mqtt_user;
-    String nbiot_mqtt_pass;
 
     // Meshtastic bridge
     bool meshtastic_bridge_enabled = false;
-    String meshtastic_mqtt_prefix = "smartfranklin/mesh/in/";
     int meshtastic_baud = 115200;
     int meshtastic_pin_rx = 33;
     int meshtastic_pin_tx = 32;

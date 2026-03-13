@@ -27,7 +27,10 @@
 #include "mqtt.h"
 #include "data_model.h"
 
+
 namespace {
+
+constexpr const char *MESHTASTIC_MQTT_PREFIX = "smartfranklin/meshtastic/";
 
 /**
  * @brief Convert Meshtastic node report callbacks into MQTT telemetry payloads.
@@ -63,16 +66,16 @@ void publish_node_report(mt_node_t *node, mt_nr_progress_t progress)
 
         String payload;
         serializeJson(doc, payload);
-        sf_mqtt::publish("smartfranklin/meshtastic/node_report",
+        sf_mqtt::publish(std::string(MESHTASTIC_MQTT_PREFIX) + "node_report",
                          std::string(payload.c_str()));
         return;
     }
 
     if (progress == MT_NR_DONE) {
-        sf_mqtt::publish("smartfranklin/meshtastic/node_report_status",
+        sf_mqtt::publish(std::string(MESHTASTIC_MQTT_PREFIX) + "node_report_status",
                          std::string("done"));
     } else if (progress == MT_NR_INVALID) {
-        sf_mqtt::publish("smartfranklin/meshtastic/node_report_status",
+        sf_mqtt::publish(std::string(MESHTASTIC_MQTT_PREFIX) + "node_report_status",
                          std::string("invalid"));
     }
 }
@@ -98,10 +101,10 @@ void taskMeshtasticBridge(void *pv)
 
     M5_LOGI("[MESHTASTIC] Bridge task started");
     meshtastic_bridge_init();
-    sf_mqtt::publish("smartfranklin/meshtastic/status", std::string("starting"));
+    sf_mqtt::publish(std::string(MESHTASTIC_MQTT_PREFIX) + "status", std::string("starting"));
 
-    std::string ingressTopic = std::string(CONFIG.meshtastic_mqtt_prefix.c_str()) + "#";
-    sf_mqtt::subscribe(ingressTopic, 1);
+    // Example: subscribe to a topic with the prefix if needed
+    // sf_mqtt::subscribe(std::string(MESHTASTIC_MQTT_PREFIX) + "some_topic", 1);
 
     bool lastReady = false;
     bool firstReadySample = true;
@@ -113,7 +116,7 @@ void taskMeshtasticBridge(void *pv)
 
         bool ready = meshtastic_bridge_is_ready();
         if (firstReadySample || ready != lastReady) {
-            sf_mqtt::publish("smartfranklin/meshtastic/status",
+            sf_mqtt::publish(std::string(MESHTASTIC_MQTT_PREFIX) + "status",
                              std::string(ready ? "connected" : "disconnected"));
             lastReady = ready;
             firstReadySample = false;
@@ -122,7 +125,7 @@ void taskMeshtasticBridge(void *pv)
         uint32_t nowMs = millis();
         if (ready && (lastNodeReportRequestMs == 0 || (nowMs - lastNodeReportRequestMs) >= nodeReportPeriodMs)) {
             bool requested = meshtastic_bridge_request_node_report(publish_node_report);
-            sf_mqtt::publish("smartfranklin/meshtastic/node_report_status",
+            sf_mqtt::publish(std::string(MESHTASTIC_MQTT_PREFIX) + "node_report_status",
                              std::string(requested ? "requested" : "request_failed"));
             lastNodeReportRequestMs = nowMs;
         }
@@ -134,7 +137,7 @@ void taskMeshtasticBridge(void *pv)
                 DATA.last_mesh_msg = msg;
             }
 
-            sf_mqtt::publish("smartfranklin/meshtastic/text",
+            sf_mqtt::publish(std::string(MESHTASTIC_MQTT_PREFIX) + "text",
                              std::string(msg.c_str()));
         }
 

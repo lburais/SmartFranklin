@@ -113,7 +113,7 @@ void meshtastic_bridge_handle_mqtt(const String &topic, const String &payload)
         return;
     }
 
-    if (!topic.startsWith(CONFIG.meshtastic_mqtt_prefix)) {
+    // ...removed meshtastic_mqtt_prefix usage...
         return;
     }
 

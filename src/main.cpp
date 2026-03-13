@@ -17,8 +17,7 @@
  *   - MQTT broker integration for remote command handling
  *   - Multi-sensor support (distance, weight, tilt, RTC)
  *   - BLE communication for battery management systems
- *   - Meshtastic bridge for mesh networking
- *   - NB-IoT connectivity
+*   - Meshtastic bridge for mesh networking
  *   - Web dashboard for device management
  *   - Configuration persistence via SPIFFS
  * 
@@ -81,7 +80,6 @@ TaskHandle_t taskGpsHandle              = nullptr;  // Gravity DFR1103 GPS/RTC t
 TaskHandle_t taskBmsBleHandle           = nullptr;  // BLE battery management system
 TaskHandle_t taskHmiHandle              = nullptr;  // HMI/display task
 TaskHandle_t taskMeshtasticBridgeHandle = nullptr;  // Meshtastic mesh bridge
-TaskHandle_t taskNbiotHandle            = nullptr;  // NB-IoT cellular communication
 
 static constexpr uint8_t DISPLAY_UI_ROTATION = 3;
 static constexpr uint8_t DISPLAY_UI_BRIGHTNESS = 255;
@@ -155,15 +153,12 @@ void setup() {
         || i2c_report.gravity_on_ex
         || i2c_report.gravity_on_ex_pahub;
 
+    xTaskCreatePinnedToCore(taskWiFi,            "WIFI",      2048, nullptr, 3,  &taskWiFiHandle,            1);
+
     // --- WiFi Dual-Mode Setup ---
     // Initialize both AP (access point) and STA (station) modes
     // Allows device to work as standalone hotspot and connect to external network
-    setupWiFiApSta(
-        "SmartFranklin-AP",              // Access point SSID for direct connection
-        "smartfranklin",                 // Access point password
-        CONFIG.sta_ssid.c_str(),         // Station SSID from persistent config
-        CONFIG.sta_pass.c_str()          // Station password from persistent config
-    );
+    // ...existing code...
 
     // If station connection fails, start captive portal for WiFi setup
     if (WiFi.status() != WL_CONNECTED) {
@@ -252,14 +247,7 @@ void setup() {
         M5_LOGW("[TASK] Skipping MESH_BR task: enumeration/probe does not confirm C6L path");
     }
 
-    const bool has_negative_nbiot_probe = gravity_path_detected
-        && i2c_report.gravity_probe_ran
-        && !i2c_report.nb_iot2_confirmed;
-    if (CONFIG.nbiot_enabled && !has_negative_nbiot_probe) {
-        xTaskCreatePinnedToCore(taskNbiot, "NB_IOT", 8192, nullptr, 2, &taskNbiotHandle, 0);
-    } else {
-        M5_LOGW("[TASK] Skipping NB_IOT task: enumeration/probe does not confirm NB-IoT2 path");
-    }
+    // NB-IoT2 task creation fully removed
 
     M5_LOGI("SmartFranklin setup complete.");
 }
