@@ -37,7 +37,7 @@
  *   2. Weight/Load Measurement
  *      - weight_raw: Raw ADC value from weight sensor (24-bit)
  *      - weight_kg: Calibrated weight in kilograms
- *      - Updated by: taskWeight (periodic sensor acquisition)
+ *      - Updated by: taskGaz (periodic sensor acquisition)
  * 
  *   3. Distance/Proximity Measurement
  *      - distance_mm: Distance in millimeters (ultrasonic or LIDAR)
@@ -118,7 +118,7 @@
 // and write to this object for inter-task communication and data publishing.
 //
 // Access Pattern:
-//   - Sensor tasks (taskBmsBle, taskWeight, taskDistance, etc.) continuously
+//   - Sensor tasks (taskBmsBle, taskGaz, taskDistance, etc.) continuously
 //     update DATA with latest readings
 //   - Communication tasks (taskMqttBroker, taskDisplay) read DATA to publish
 //     or display current system state

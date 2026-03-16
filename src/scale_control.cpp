@@ -72,13 +72,9 @@
  */
 
 #include "scale_control.h"
-#include <M5UnitUnifiedWEIGHT.h>
 
-// ============================================================================
-// External Hardware Instance
-// ============================================================================
-// Reference to the M5Unit WEIGHT sensor instance initialized in main module
-extern m5::unit::UnitWeightI2C scale;
+#include "config_store.h"
+#include "gaz.h"
 
 // ============================================================================
 // Weight Measurement Functions
@@ -112,8 +108,7 @@ extern m5::unit::UnitWeightI2C scale;
  */
 float scale_get_raw()
 {
-    // TODO: Enable when hardware is available for testing
-    return 0; // return scale.getRaw();
+    return GAZ_MODULE.readCalibrationSample();
 }
 
 /**
@@ -147,9 +142,13 @@ float scale_get_raw()
  */
 void scale_tare()
 {
-    // TODO: Enable when hardware is available for testing
-    // Uncomment the following line to perform zero-point calibration:
-    // scale.tare();
+    if (!GAZ_MODULE.isInitialized()) {
+        return;
+    }
+
+    if (GAZ_MODULE.tare()) {
+        GAZ_MODULE.applyCalibration(1.0f);
+    }
 }
 
 /**
@@ -186,7 +185,11 @@ void scale_tare()
  */
 void scale_set_cal_factor(float factor)
 {
-    // TODO: Enable when hardware is available for testing
-    // Uncomment the following line to apply calibration scale factor:
-    // scale.setScale(factor);
+    if (!GAZ_MODULE.isInitialized()) {
+        return;
+    }
+
+    if (GAZ_MODULE.applyCalibration(factor)) {
+        CONFIG.scale_cal_factor = factor;
+    }
 }

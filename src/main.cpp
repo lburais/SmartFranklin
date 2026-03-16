@@ -74,6 +74,7 @@ TaskHandle_t taskWiFiHandle             = nullptr;  // WiFi connectivity managem
 TaskHandle_t taskMqttHandle             = nullptr;  // MQTT client+broker communication
 TaskHandle_t taskDistanceHandle         = nullptr;  // Distance sensor reading
 TaskHandle_t taskWeightHandle           = nullptr;  // Weight sensor reading
+TaskHandle_t taskGazHandle              = nullptr;  // Gaz/weight sensor reading
 TaskHandle_t taskTiltHandle             = nullptr;  // Tilt sensor reading
 TaskHandle_t taskRtcHandle              = nullptr;  // Real-time clock synchronization
 TaskHandle_t taskGpsHandle              = nullptr;  // Gravity DFR1103 GPS/RTC task
@@ -144,6 +145,7 @@ void setup() {
     // Load saved configuration from SPIFFS, or use defaults if missing
     config_load();
 
+<<<<<<< HEAD
     // Enumerate I2C units (direct, via PAHUB, and bridge candidates)
     const uint16_t i2c_entries = HW.enumerateI2CUnits();
     M5_LOGI("[I2C] startup enumeration discovered %u entries", i2c_entries);
@@ -155,6 +157,8 @@ void setup() {
 
     xTaskCreatePinnedToCore(taskWiFi,            "WIFI",      2048, nullptr, 3,  &taskWiFiHandle,            1);
 
+=======
+>>>>>>> 636de1a (16MAR26)
     // --- WiFi Dual-Mode Setup ---
     // Initialize both AP (access point) and STA (station) modes
     // Allows device to work as standalone hotspot and connect to external network
@@ -205,7 +209,7 @@ void setup() {
     // Stack sizes: 2048-8192 bytes (larger for BLE/mesh operations)
     // Priority levels: 1 (low) to 3 (high); higher = more CPU scheduling time
     
-    xTaskCreatePinnedToCore(taskHmi,              "HMI",      8192, nullptr, 3,  &taskHmiHandle,            1);
+    xTaskCreatePinnedToCore(taskHmi,              "HMI",      8192, nullptr, 3,  &taskHmiHandle,             1);
 
     // Start MQTT processing as early as possible after HMI so publishers
     // can use the MQTT client path sooner during startup.
@@ -215,39 +219,25 @@ void setup() {
 
     xTaskCreatePinnedToCore(taskHwMonitor,        "HW_MON",   4096, nullptr, 1,  nullptr,                    0);
 
-    if (i2c_report.distance_on_wire
-        || i2c_report.distance_on_wire_pahub
-        || i2c_report.distance_on_ex
-        || i2c_report.distance_on_ex_pahub) {
-        xTaskCreatePinnedToCore(taskDistance, "DISTANCE", 4096, nullptr, 2, &taskDistanceHandle, 1);
-    } else {
-        M5_LOGW("[TASK] Skipping DISTANCE task: no compatible distance path found");
-    }
+    xTaskCreatePinnedToCore(taskDistance,         "DISTANCE", 4096, nullptr, 2, &taskDistanceHandle,         1);
 
-    if (i2c_report.weight_on_wire || i2c_report.weight_on_wire_pahub) {
-        xTaskCreatePinnedToCore(taskWeight, "WEIGHT", 4096, nullptr, 2, &taskWeightHandle, 1);
-    } else {
-        M5_LOGW("[TASK] Skipping WEIGHT task: no Wire-compatible weight path found");
-    }
+    xTaskCreatePinnedToCore(taskGaz,              "GAZ",      4096, nullptr, 2, &taskGazHandle,              1);
 
-    xTaskCreatePinnedToCore(taskTilt,             "TILT",     4096, nullptr, 2,  &taskTiltHandle,            1);
+    xTaskCreatePinnedToCore(taskTilt,             "TILT",     4096, nullptr, 2, &taskTiltHandle,             1);
     
-    xTaskCreatePinnedToCore(taskRtc,              "RTC",      4096, nullptr, 2,  &taskRtcHandle,             1);
+    xTaskCreatePinnedToCore(taskRtc,              "RTC",      4096, nullptr, 2, &taskRtcHandle,              1);
 
-    xTaskCreatePinnedToCore(taskGps,              "GPS",      6144, nullptr, 2,  &taskGpsHandle,            1);
+    xTaskCreatePinnedToCore(taskGps,              "GPS",      6144, nullptr, 2, &taskGpsHandle,              1);
 
-    xTaskCreatePinnedToCore(taskBmsBle,           "BMS_BLE",  8192, nullptr, 2,  &taskBmsBleHandle,          0);
+    xTaskCreatePinnedToCore(taskBmsBle,           "BMS_BLE",  8192, nullptr, 2, &taskBmsBleHandle,           0);
     
-    const bool has_negative_meshtastic_probe = gravity_path_detected
-        && i2c_report.gravity_probe_ran
-        && !i2c_report.c6l_activity_detected;
-    if (CONFIG.meshtastic_bridge_enabled && !has_negative_meshtastic_probe) {
-        xTaskCreatePinnedToCore(taskMeshtasticBridge, "MESH_BR", 8192, nullptr, 2, &taskMeshtasticBridgeHandle, 0);
-    } else {
-        M5_LOGW("[TASK] Skipping MESH_BR task: enumeration/probe does not confirm C6L path");
-    }
+    xTaskCreatePinnedToCore(taskMeshtasticBridge, "MESH_BR",  8192, nullptr, 2, &taskMeshtasticBridgeHandle, 0);
 
+<<<<<<< HEAD
     // NB-IoT2 task creation fully removed
+=======
+    xTaskCreatePinnedToCore(taskNbiot,            "NB_IOT",   8192, nullptr, 2, &taskNbiotHandle,            0);
+>>>>>>> 636de1a (16MAR26)
 
     M5_LOGI("SmartFranklin setup complete.");
 }

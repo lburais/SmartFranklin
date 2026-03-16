@@ -54,6 +54,7 @@ struct SmartConfig {
     int meshtastic_pin_tx = 32;
 
     // Task timing configuration (milliseconds)
+    int task_gaz_loop_ms = 60000;
     int task_gps_loop_ms = 60000;
     int task_mqtt_loop_ms = 250;
     int task_hmi_loop_ms = 1000;

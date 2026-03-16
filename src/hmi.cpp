@@ -475,6 +475,6 @@ void HMI::drawCalibrationScreen(const DisplaySnapshot& snapshot) const
 
     lcd.println("Calibrating...");
     lcd.printf("Known: %.2f kg\n", calib_known_weight_);
-    lcd.printf("Raw:   %.3f kg\n", snapshot.weight_g);
+    lcd.printf("Raw:   %.3f kg\n", snapshot.weight_g / 1000.0f);
     lcd.println("BtnB: finish");
 }

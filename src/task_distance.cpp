@@ -133,7 +133,6 @@
 
 #include "tasks.h"
 #include "data_model.h"
-#include "m5_hw.h"
 #include "pahub_channels.h"
 #include "mqtt.h"
 
@@ -149,6 +148,112 @@
  * are contained within this namespace scope.
  */
 namespace {
+    constexpr uint8_t DISTANCE_I2C_ADDRESS = 0x57;
+    constexpr uint32_t I2C_SCAN_SPEED = 400000U;
+    constexpr uint8_t PAHUB_CHANNEL_COUNT = 8;
+
+    enum class DistanceRouteMode : uint8_t {
+        Unset = 0,
+        Internal,
+        InternalPaHub,
+        Wire,
+        WirePaHub,
+    };
+
+    bool wireDeviceExists(const uint8_t address)
+    {
+        Wire.beginTransmission(address);
+        return Wire.endTransmission() == 0;
+    }
+
+    bool exDeviceExists(const uint8_t address)
+    {
+        return M5.Ex_I2C.scanID(address, I2C_SCAN_SPEED);
+    }
+
+    bool wireSelectPaHubChannel(const uint8_t channel)
+    {
+        Wire.beginTransmission(PAHUB_ADDRESS);
+        Wire.write(static_cast<uint8_t>(1U << channel));
+        return Wire.endTransmission() == 0;
+    }
+
+    void wireDisablePaHubChannels()
+    {
+        Wire.beginTransmission(PAHUB_ADDRESS);
+        Wire.write(static_cast<uint8_t>(0x00));
+        Wire.endTransmission();
+    }
+
+    bool exSelectPaHubChannel(const uint8_t channel)
+    {
+        if (!M5.Ex_I2C.start(PAHUB_ADDRESS, false, I2C_SCAN_SPEED)) {
+            return false;
+        }
+
+        const bool writeOk = M5.Ex_I2C.write(static_cast<uint8_t>(1U << channel));
+        const bool stopOk = M5.Ex_I2C.stop();
+        return writeOk && stopOk;
+    }
+
+    void exDisablePaHubChannels()
+    {
+        if (!M5.Ex_I2C.start(PAHUB_ADDRESS, false, I2C_SCAN_SPEED)) {
+            return;
+        }
+
+        M5.Ex_I2C.write(static_cast<uint8_t>(0x00));
+        M5.Ex_I2C.stop();
+    }
+
+    bool detectDistanceRoute(DistanceRouteMode& mode, int8_t& paHubChannel)
+    {
+        mode = DistanceRouteMode::Unset;
+        paHubChannel = -1;
+
+        if (exDeviceExists(DISTANCE_I2C_ADDRESS)) {
+            mode = DistanceRouteMode::Internal;
+            return true;
+        }
+
+        if (wireDeviceExists(DISTANCE_I2C_ADDRESS)) {
+            mode = DistanceRouteMode::Wire;
+            return true;
+        }
+
+        if (wireDeviceExists(PAHUB_ADDRESS)) {
+            for (uint8_t channel = 0; channel < PAHUB_CHANNEL_COUNT; ++channel) {
+                if (!wireSelectPaHubChannel(channel)) {
+                    continue;
+                }
+                if (wireDeviceExists(DISTANCE_I2C_ADDRESS)) {
+                    wireDisablePaHubChannels();
+                    mode = DistanceRouteMode::WirePaHub;
+                    paHubChannel = static_cast<int8_t>(channel);
+                    return true;
+                }
+            }
+            wireDisablePaHubChannels();
+        }
+
+        if (exDeviceExists(PAHUB_ADDRESS)) {
+            for (uint8_t channel = 0; channel < PAHUB_CHANNEL_COUNT; ++channel) {
+                if (!exSelectPaHubChannel(channel)) {
+                    continue;
+                }
+                if (exDeviceExists(DISTANCE_I2C_ADDRESS)) {
+                    exDisablePaHubChannels();
+                    mode = DistanceRouteMode::InternalPaHub;
+                    paHubChannel = static_cast<int8_t>(channel);
+                    return true;
+                }
+            }
+            exDisablePaHubChannels();
+        }
+
+        return false;
+    }
+
     /**
      * @brief Unified unit interface for M5Stack sensor management.
      * 
@@ -258,22 +363,32 @@ static void distance_setup()
     Wire.begin(pin_num_sda, pin_num_scl, 400000U);
     M5.Ex_I2C.begin();
 
-    const I2CEnumerationReport& report = HW.getLastI2CEnumerationReport();
     bool initialized = false;
+    DistanceRouteMode routeMode = DistanceRouteMode::Unset;
+    int8_t paHubChannel = -1;
 
-    if (report.distance_on_wire_pahub && report.distance_pahub_channel >= 0) {
-        const uint8_t channel = static_cast<uint8_t>(report.distance_pahub_channel);
-        M5_LOGI("[DISTANCE] using enumerated PAHub channel %u", channel);
+    if (!detectDistanceRoute(routeMode, paHubChannel)) {
+        M5_LOGE("[DISTANCE] not found on internal/direct/PAHub paths.");
+        M5_LOGW("%s", Units.debugInfo().c_str());
+
+        while (true) {
+            m5::utility::delay(10000);
+        }
+    }
+
+    if (routeMode == DistanceRouteMode::WirePaHub) {
+        const uint8_t channel = static_cast<uint8_t>(paHubChannel);
+        M5_LOGI("[DISTANCE] using local Wire/PAHub channel %u", channel);
         initialized = pahub.add(unit, channel) && Units.add(pahub, Wire) && Units.begin();
-    } else if (report.distance_on_wire) {
-        M5_LOGI("[DISTANCE] using enumerated direct Wire path");
+    } else if (routeMode == DistanceRouteMode::Wire) {
+        M5_LOGI("[DISTANCE] using local direct Wire path");
         initialized = Units.add(unit, Wire) && Units.begin();
-    } else if (report.distance_on_ex_pahub && report.distance_ex_pahub_channel >= 0) {
-        const uint8_t channel = static_cast<uint8_t>(report.distance_ex_pahub_channel);
-        M5_LOGI("[DISTANCE] using enumerated EX/PAHub channel %u", channel);
+    } else if (routeMode == DistanceRouteMode::InternalPaHub) {
+        const uint8_t channel = static_cast<uint8_t>(paHubChannel);
+        M5_LOGI("[DISTANCE] using local EX/PAHub channel %u", channel);
         initialized = pahub.add(unit, channel) && Units.add(pahub, M5.Ex_I2C) && Units.begin();
-    } else if (report.distance_on_ex) {
-        M5_LOGI("[DISTANCE] using enumerated direct EX path");
+    } else if (routeMode == DistanceRouteMode::Internal) {
+        M5_LOGI("[DISTANCE] using local direct EX path");
         initialized = Units.add(unit, M5.Ex_I2C) && Units.begin();
     }
 

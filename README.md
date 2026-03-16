@@ -36,7 +36,7 @@ flowchart TD
         T_MQTT[taskMqtt]
         T_WIFI[taskWiFi]
         T_DIST[taskDistance]
-        T_WEIGHT[taskWeight]
+        T_GAZ[taskGaz]
         T_TILT[taskTilt]
         T_RTC[taskRtc]
         T_GPS[taskGps]
@@ -52,7 +52,7 @@ flowchart TD
     SETUP --> T_MQTT
     SETUP --> T_WIFI
     SETUP --> T_DIST
-    SETUP --> T_WEIGHT
+    SETUP --> T_GAZ
     SETUP --> T_TILT
     SETUP --> T_RTC
     SETUP --> T_GPS
@@ -73,7 +73,7 @@ flowchart TD
 | `taskMqtt` | Unified MQTT runtime (embedded local broker + external client path) |
 | `taskWiFi` | AP/STA connectivity lifecycle and reconnection |
 | `taskDistance` | Distance acquisition and publication |
-| `taskWeight` | Weight acquisition, calibration application, and publication |
+| `taskGaz` | Gaz bottle weight acquisition, calibration application, and publication |
 | `taskTilt` | Pitch/roll acquisition and publication |
 | `taskRtc` | RTC timekeeping and publication |
 | `taskGps` | GNSS/RTC acquisition and publication |
@@ -93,8 +93,7 @@ Boot-time task creation is capability-gated: selected tasks are created only whe
 - `src/mqtt.cpp`, `include/mqtt.h`: MQTT API implementation
 - `src/task_mqtt.cpp`: unified MQTT execution task
 - `src/gps.cpp`, `include/gps.h`: DFR1103 integration
-- `src/i2c_bus.cpp`, `include/i2c_bus.h`: I2C topology and bus-path detection
-- `src/task_distance.cpp`, `src/task_weight.cpp`, `src/task_tilt.cpp`, `src/task_rtc.cpp`, `src/task_gps.cpp`: sensor/runtime tasks
+- `src/task_distance.cpp`, `src/task_gaz.cpp`, `src/task_tilt.cpp`, `src/task_rtc.cpp`, `src/task_gps.cpp`: sensor/runtime tasks
 - `src/task_wifi.cpp`, `src/task_meshtastic_bridge.cpp`, `src/task_nbiot.cpp`: connectivity/transport tasks
 - `src/task_bms_ble.cpp`, `src/task_hw_monitor.cpp`, `src/task_watchdog.cpp`: supervision and telemetry tasks
 - `include/`: shared interfaces

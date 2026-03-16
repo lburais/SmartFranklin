@@ -94,6 +94,7 @@ extern TaskHandle_t taskWiFiHandle;             // WiFi connectivity management
 extern TaskHandle_t taskMqttHandle;             // MQTT client+broker communication
 extern TaskHandle_t taskDistanceHandle;         // Distance sensor acquisition
 extern TaskHandle_t taskWeightHandle;           // Weight sensor acquisition
+extern TaskHandle_t taskGazHandle;              // Gaz/weight sensor acquisition
 extern TaskHandle_t taskTiltHandle;             // Tilt sensor acquisition
 extern TaskHandle_t taskRtcHandle;              // Real-time clock synchronization
 extern TaskHandle_t taskGpsHandle;              // Gravity DFR1103 GPS/RTC acquisition
@@ -146,6 +147,17 @@ void taskDistance(void *pvParameters);
  * @return void (infinite loop, never returns)
  */
 void taskWeight(void *pvParameters);
+
+/**
+ * @brief Gaz bottle weight acquisition task.
+ *
+ * Uses the M5Stack Weight I2C unit to read gas bottle weight, applies the
+ * persisted calibration gap, updates shared DATA, and publishes MQTT topics.
+ *
+ * @param pvParameters FreeRTOS task parameter (unused)
+ * @return void (infinite loop, never returns)
+ */
+void taskGaz(void *pvParameters);
 
 /**
  * @brief Tilt/Angle sensor data acquisition task.
