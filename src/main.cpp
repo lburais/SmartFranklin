@@ -176,11 +176,19 @@ void setup() {
     // M5 Hardware Initialization
     // =========================================================================
 
-    // Configure M5Stack with power delivery, IMU, and RTC enabled
+    // Configure M5Stack with board-appropriate internal peripherals
     auto cfg = M5.config();
+
+#if defined(ARDUINO_M5STACK_DIAL)
+    cfg.output_power = false;
+    cfg.internal_imu = false;
+    cfg.internal_rtc = false;
+#else
     cfg.output_power = true;   // Enable 5V output power for peripheral devices
     cfg.internal_imu = true;   // Enable internal 6-axis IMU (accelerometer + gyroscope)
     cfg.internal_rtc = true;   // Enable internal real-time clock for timekeeping
+#endif
+
     M5.begin(cfg);
 
     // Initialize serial communication at 115200 baud
