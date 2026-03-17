@@ -17,7 +17,8 @@
  *   - MQTT broker integration for remote command handling
  *   - Multi-sensor support (distance, weight, tilt, RTC)
  *   - BLE communication for battery management systems
-*   - Meshtastic bridge for mesh networking
+ *   - Meshtastic bridge for mesh networking
+ *   - NB-IoT connectivity
  *   - Web dashboard for device management
  *   - Configuration persistence via SPIFFS
  * 
@@ -57,7 +58,6 @@
 #include <WiFi.h>
 
 #include "tasks.h"
-#include "wifi_setup.h"
 #include "mqtt.h"
 #include "command_handler.h"
 #include "web_dashboard.h"
@@ -81,6 +81,7 @@ TaskHandle_t taskGpsHandle              = nullptr;  // Gravity DFR1103 GPS/RTC t
 TaskHandle_t taskBmsBleHandle           = nullptr;  // BLE battery management system
 TaskHandle_t taskHmiHandle              = nullptr;  // HMI/display task
 TaskHandle_t taskMeshtasticBridgeHandle = nullptr;  // Meshtastic mesh bridge
+TaskHandle_t taskNbiotHandle            = nullptr;  // NB-IoT cellular communication
 
 static constexpr uint8_t DISPLAY_UI_ROTATION = 3;
 static constexpr uint8_t DISPLAY_UI_BRIGHTNESS = 255;
@@ -145,33 +146,24 @@ void setup() {
     // Load saved configuration from SPIFFS, or use defaults if missing
     config_load();
 
-<<<<<<< HEAD
-    // Enumerate I2C units (direct, via PAHUB, and bridge candidates)
-    const uint16_t i2c_entries = HW.enumerateI2CUnits();
-    M5_LOGI("[I2C] startup enumeration discovered %u entries", i2c_entries);
-    const I2CEnumerationReport& i2c_report = HW.getLastI2CEnumerationReport();
-    const bool gravity_path_detected = i2c_report.gravity_on_wire
-        || i2c_report.gravity_on_wire_pahub
-        || i2c_report.gravity_on_ex
-        || i2c_report.gravity_on_ex_pahub;
-
-    xTaskCreatePinnedToCore(taskWiFi,            "WIFI",      2048, nullptr, 3,  &taskWiFiHandle,            1);
-
-=======
->>>>>>> 636de1a (16MAR26)
     // --- WiFi Dual-Mode Setup ---
     // Initialize both AP (access point) and STA (station) modes
     // Allows device to work as standalone hotspot and connect to external network
-    // ...existing code...
+        #ifndef DISABLE_WIFI
+        xTaskCreatePinnedToCore(taskWiFi, "WIFI", 4096, nullptr, 3,  &taskWiFiHandle, 1);
+        #endif
 
     // If station connection fails, start captive portal for WiFi setup
     if (WiFi.status() != WL_CONNECTED) {
         captive_portal_start();
     }
 
-    // --- Command Handler Initialization ---
-    // Initialize the command processing system for handling remote commands
-    command_handler_init();
+    // Start MQTT processing as early as possible after HMI so publishers
+    // can use the MQTT client path sooner during startup.
+    #ifndef DISABLE_MQTT
+    xTaskCreatePinnedToCore(taskMqtt, "MQTT", 4096, nullptr, 3,  &taskMqttHandle, 1);
+    #endif
+
 
     // --- MQTT Layer Setup ---
     // Configure and initialize ESP-MQTT client for external broker communication
@@ -198,6 +190,10 @@ void setup() {
         M5_LOGI("[MQTT] External MQTT disabled in config; skipping init");
     }
 
+    // --- Command Handler Initialization ---
+    // Initialize the command processing system for handling remote commands
+    command_handler_init();
+
     // --- Web Dashboard Initialization ---
     // Start web-based management interface
     web_dashboard_init();
@@ -209,35 +205,49 @@ void setup() {
     // Stack sizes: 2048-8192 bytes (larger for BLE/mesh operations)
     // Priority levels: 1 (low) to 3 (high); higher = more CPU scheduling time
     
-    xTaskCreatePinnedToCore(taskHmi,              "HMI",      8192, nullptr, 3,  &taskHmiHandle,             1);
+    #ifndef DISABLE_HMI
+    xTaskCreatePinnedToCore(taskHmi,              "HMI",      8192, nullptr, 3,  &taskHmiHandle,            1);
+    #endif
 
-    // Start MQTT processing as early as possible after HMI so publishers
-    // can use the MQTT client path sooner during startup.
-    xTaskCreatePinnedToCore(taskMqtt,             "MQTT",     4096, nullptr, 3,  &taskMqttHandle,            1);
+    #ifndef DISABLE_DISTANCE
+    xTaskCreatePinnedToCore(taskDistance,         "DISTANCE", 4096, nullptr, 2, &taskDistanceHandle, 1);
+    #endif
 
-    xTaskCreatePinnedToCore(taskWatchdog,         "WATCHDOG", 2048, nullptr, 3,  nullptr,                    0);
+    #ifndef DISABLE_GAZ
+    xTaskCreatePinnedToCore(taskGaz,              "GAZ", 4096, nullptr, 2, &taskGazHandle, 1);
+    #endif
 
+    #ifndef DISABLE_TILT
+    xTaskCreatePinnedToCore(taskTilt,             "TILT",     4096, nullptr, 2,  &taskTiltHandle,            1);
+    #endif
+
+    #ifndef DISABLE_RTC
+    xTaskCreatePinnedToCore(taskRtc,              "RTC",      4096, nullptr, 2,  &taskRtcHandle,             1);
+    #endif
+
+    #ifndef DISABLE_GPS
+    xTaskCreatePinnedToCore(taskGps,              "GPS",      6144, nullptr, 2,  &taskGpsHandle,            1);
+    #endif
+
+    #ifndef DISABLE_BMS_BLE
+    xTaskCreatePinnedToCore(taskBmsBle,           "BMS_BLE",  8192, nullptr, 2,  &taskBmsBleHandle,          0);
+    #endif
+
+    #ifndef DISABLE_MESHTASTIC
+    xTaskCreatePinnedToCore(taskMeshtasticBridge, "MESH_BR", 8192, nullptr, 2, &taskMeshtasticBridgeHandle, 0);
+    #endif
+
+    #ifndef DISABLE_NBIOT
+    xTaskCreatePinnedToCore(taskNbiot,            "NB_IOT", 8192, nullptr, 2, &taskNbiotHandle, 0);
+    #endif
+
+    #ifndef DISABLE_HW_MONITOR
     xTaskCreatePinnedToCore(taskHwMonitor,        "HW_MON",   4096, nullptr, 1,  nullptr,                    0);
+    #endif
 
-    xTaskCreatePinnedToCore(taskDistance,         "DISTANCE", 4096, nullptr, 2, &taskDistanceHandle,         1);
-
-    xTaskCreatePinnedToCore(taskGaz,              "GAZ",      4096, nullptr, 2, &taskGazHandle,              1);
-
-    xTaskCreatePinnedToCore(taskTilt,             "TILT",     4096, nullptr, 2, &taskTiltHandle,             1);
-    
-    xTaskCreatePinnedToCore(taskRtc,              "RTC",      4096, nullptr, 2, &taskRtcHandle,              1);
-
-    xTaskCreatePinnedToCore(taskGps,              "GPS",      6144, nullptr, 2, &taskGpsHandle,              1);
-
-    xTaskCreatePinnedToCore(taskBmsBle,           "BMS_BLE",  8192, nullptr, 2, &taskBmsBleHandle,           0);
-    
-    xTaskCreatePinnedToCore(taskMeshtasticBridge, "MESH_BR",  8192, nullptr, 2, &taskMeshtasticBridgeHandle, 0);
-
-<<<<<<< HEAD
-    // NB-IoT2 task creation fully removed
-=======
-    xTaskCreatePinnedToCore(taskNbiot,            "NB_IOT",   8192, nullptr, 2, &taskNbiotHandle,            0);
->>>>>>> 636de1a (16MAR26)
+    #ifndef DISABLE_WATCHDOG
+    xTaskCreatePinnedToCore(taskWatchdog,         "WATCHDOG", 2048, nullptr, 3,  nullptr,                    0);
+    #endif
 
     M5_LOGI("SmartFranklin setup complete.");
 }

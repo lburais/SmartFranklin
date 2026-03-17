@@ -18,86 +18,14 @@
 #include <mutex>
 
 #include "data_model.h"
+#include "i2c.h"
 #include "mqtt.h"
-#include "pahub_channels.h"
 
 namespace {
 
 constexpr uint8_t GPS_I2C_ADDRESS = 0x66;
 constexpr uint32_t GPS_I2C_CLOCK_HZ = 400000U;
-constexpr uint8_t PAHUB_CHANNEL_COUNT = 8;
 constexpr const char* GPS_DEVICE_FULL_NAME = "DFRobot Gravity GNSS positioning and timing module (DFR1103)";
-
-enum class GpsRouteMode : uint8_t {
-    Unset = 0,
-    Internal,
-    InternalPaHub,
-    Wire,
-    WirePaHub,
-};
-
-const char* routeModeToString(const GpsRouteMode mode)
-{
-    switch (mode) {
-    case GpsRouteMode::Internal:
-        return "internal";
-    case GpsRouteMode::InternalPaHub:
-        return "internal_pahub";
-    case GpsRouteMode::Wire:
-        return "wire";
-    case GpsRouteMode::WirePaHub:
-        return "wire_pahub";
-    case GpsRouteMode::Unset:
-    default:
-        return "unset";
-    }
-}
-
-bool wireDeviceExists(const uint8_t address)
-{
-    Wire.beginTransmission(address);
-    return Wire.endTransmission() == 0;
-}
-
-bool exDeviceExists(const uint8_t address)
-{
-    return M5.Ex_I2C.scanID(address, GPS_I2C_CLOCK_HZ);
-}
-
-bool wireSelectPaHubChannel(const uint8_t channel)
-{
-    Wire.beginTransmission(PAHUB_ADDRESS);
-    Wire.write(static_cast<uint8_t>(1U << channel));
-    return Wire.endTransmission() == 0;
-}
-
-void wireDisablePaHubChannels()
-{
-    Wire.beginTransmission(PAHUB_ADDRESS);
-    Wire.write(static_cast<uint8_t>(0x00));
-    Wire.endTransmission();
-}
-
-bool exSelectPaHubChannel(const uint8_t channel)
-{
-    if (!M5.Ex_I2C.start(PAHUB_ADDRESS, false, GPS_I2C_CLOCK_HZ)) {
-        return false;
-    }
-
-    const bool writeOk = M5.Ex_I2C.write(static_cast<uint8_t>(1U << channel));
-    const bool stopOk = M5.Ex_I2C.stop();
-    return writeOk && stopOk;
-}
-
-void exDisablePaHubChannels()
-{
-    if (!M5.Ex_I2C.start(PAHUB_ADDRESS, false, GPS_I2C_CLOCK_HZ)) {
-        return;
-    }
-
-    M5.Ex_I2C.write(static_cast<uint8_t>(0x00));
-    M5.Ex_I2C.stop();
-}
 
 class GnssRtcExI2C final : public DFRobot_GNSSAndRTC {
 public:
@@ -173,18 +101,16 @@ public:
     void process();
 
 private:
-    bool selectPaHubChannel(uint8_t channel);
-    void disablePaHubChannels();
     bool detectRoute();
     DFRobot_GNSSAndRTC* activeUnit();
     void publishI2cConfiguration() const;
 
-    mutable std::mutex m_mutex; 
+    mutable std::mutex m_mutex;
+    sf_i2c::I2C m_i2c{GPS_I2C_CLOCK_HZ};
     DFRobot_GNSSAndRTC_I2C m_wireUnit{&Wire, GPS_I2C_ADDRESS};
     GnssRtcExI2C m_exUnit{GPS_I2C_ADDRESS};
     bool m_initialized = false;
-    GpsRouteMode m_routeMode = GpsRouteMode::Unset;
-    int8_t m_paHubChannel = -1;
+    sf_i2c::Route m_route;
     int8_t m_wireSda = -1;
     int8_t m_wireScl = -1;
 };
@@ -195,28 +121,9 @@ GpsRuntime GPS_RUNTIME;
 
 GPS GPS_MODULE;
 
-bool GpsRuntime::selectPaHubChannel(const uint8_t channel)
-{
-    if (m_routeMode == GpsRouteMode::InternalPaHub) {
-        return exSelectPaHubChannel(channel);
-    }
-
-    return wireSelectPaHubChannel(channel);
-}
-
-void GpsRuntime::disablePaHubChannels()
-{
-    if (m_routeMode == GpsRouteMode::InternalPaHub) {
-        exDisablePaHubChannels();
-        return;
-    }
-
-    wireDisablePaHubChannels();
-}
-
 DFRobot_GNSSAndRTC* GpsRuntime::activeUnit()
 {
-    if (m_routeMode == GpsRouteMode::Internal || m_routeMode == GpsRouteMode::InternalPaHub) {
+    if (sf_i2c::isInternalRoute(m_route.mode)) {
         return &m_exUnit;
     }
     return &m_wireUnit;
@@ -224,52 +131,8 @@ DFRobot_GNSSAndRTC* GpsRuntime::activeUnit()
 
 bool GpsRuntime::detectRoute()
 {
-    m_routeMode = GpsRouteMode::Unset;
-    m_paHubChannel = -1;
-
-    if (exDeviceExists(GPS_I2C_ADDRESS)) {
-        m_routeMode = GpsRouteMode::Internal;
-        return true;
-    }
-
-    if (wireDeviceExists(GPS_I2C_ADDRESS)) {
-        m_routeMode = GpsRouteMode::Wire;
-        return true;
-    }
-
-    if (wireDeviceExists(PAHUB_ADDRESS)) {
-        for (uint8_t channel = 0; channel < PAHUB_CHANNEL_COUNT; ++channel) {
-            if (!wireSelectPaHubChannel(channel)) {
-                continue;
-            }
-
-            if (wireDeviceExists(GPS_I2C_ADDRESS)) {
-                wireDisablePaHubChannels();
-                m_routeMode = GpsRouteMode::WirePaHub;
-                m_paHubChannel = static_cast<int8_t>(channel);
-                return true;
-            }
-        }
-        wireDisablePaHubChannels();
-    }
-
-    if (exDeviceExists(PAHUB_ADDRESS)) {
-        for (uint8_t channel = 0; channel < PAHUB_CHANNEL_COUNT; ++channel) {
-            if (!exSelectPaHubChannel(channel)) {
-                continue;
-            }
-
-            if (exDeviceExists(GPS_I2C_ADDRESS)) {
-                exDisablePaHubChannels();
-                m_routeMode = GpsRouteMode::InternalPaHub;
-                m_paHubChannel = static_cast<int8_t>(channel);
-                return true;
-            }
-        }
-        exDisablePaHubChannels();
-    }
-
-    return false;
+    m_route = sf_i2c::Route{};
+    return m_i2c.detectRoute(GPS_I2C_ADDRESS, m_route);
 }
 
 void GpsRuntime::publishI2cConfiguration() const
@@ -279,12 +142,12 @@ void GpsRuntime::publishI2cConfiguration() const
     char sclBuf[12] = {0};
     char addressBuf[8] = {0};
 
-    snprintf(pahubChannelBuf, sizeof(pahubChannelBuf), "%d", m_paHubChannel);
+    snprintf(pahubChannelBuf, sizeof(pahubChannelBuf), "%d", m_route.paHubChannel);
     snprintf(sdaBuf, sizeof(sdaBuf), "%d", m_wireSda);
     snprintf(sclBuf, sizeof(sclBuf), "%d", m_wireScl);
     snprintf(addressBuf, sizeof(addressBuf), "0x%02X", GPS_I2C_ADDRESS);
 
-    sf_mqtt::publish("smartfranklin/system/gps/i2c/mode", routeModeToString(m_routeMode));
+    sf_mqtt::publish("smartfranklin/system/gps/i2c/mode", sf_i2c::routeModeToString(m_route.mode));
     sf_mqtt::publish("smartfranklin/system/gps/i2c/pahub_channel", pahubChannelBuf);
     sf_mqtt::publish("smartfranklin/system/gps/i2c/sda", sdaBuf);
     sf_mqtt::publish("smartfranklin/system/gps/i2c/scl", sclBuf);
@@ -296,13 +159,8 @@ bool GpsRuntime::init()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    m_wireSda = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_a_sda));
-    m_wireScl = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_a_scl));
+    m_i2c.beginPortA(m_wireSda, m_wireScl);
     M5_LOGI("[GPS] using Wire SDA:%d SCL:%d", m_wireSda, m_wireScl);
-
-    Wire.end();
-    Wire.begin(m_wireSda, m_wireScl, GPS_I2C_CLOCK_HZ);
-    Wire.setPins(m_wireSda, m_wireScl);
 
     if (!detectRoute()) {
         m_initialized = false;
@@ -311,9 +169,9 @@ bool GpsRuntime::init()
         return false;
     }
 
-    if (m_routeMode == GpsRouteMode::WirePaHub || m_routeMode == GpsRouteMode::InternalPaHub) {
-        if (!selectPaHubChannel(static_cast<uint8_t>(m_paHubChannel))) {
-            M5_LOGE("[GPS] failed to select PAHub channel %d", m_paHubChannel);
+    if (sf_i2c::isPaHubRoute(m_route.mode)) {
+        if (!m_i2c.selectPaHubChannel(m_route.mode, static_cast<uint8_t>(m_route.paHubChannel))) {
+            M5_LOGE("[GPS] failed to select PAHub channel %d", m_route.paHubChannel);
             m_initialized = false;
             publishI2cConfiguration();
             return false;
@@ -323,8 +181,8 @@ bool GpsRuntime::init()
     DFRobot_GNSSAndRTC* unit = activeUnit();
     const bool initialized = unit->begin();
     Wire.begin(m_wireSda, m_wireScl, GPS_I2C_CLOCK_HZ);
-    if (m_routeMode == GpsRouteMode::WirePaHub || m_routeMode == GpsRouteMode::InternalPaHub) {
-        disablePaHubChannels();
+    if (sf_i2c::isPaHubRoute(m_route.mode)) {
+        m_i2c.disablePaHubChannels(m_route.mode);
     }
 
     if (!initialized) {
@@ -358,9 +216,9 @@ void GpsRuntime::process()
             return;
         }
 
-        if (m_routeMode == GpsRouteMode::WirePaHub || m_routeMode == GpsRouteMode::InternalPaHub) {
-            if (!selectPaHubChannel(static_cast<uint8_t>(m_paHubChannel))) {
-                M5_LOGW("[GPS] failed to select PAHub channel %d", m_paHubChannel);
+        if (sf_i2c::isPaHubRoute(m_route.mode)) {
+            if (!m_i2c.selectPaHubChannel(m_route.mode, static_cast<uint8_t>(m_route.paHubChannel))) {
+                M5_LOGW("[GPS] failed to select PAHub channel %d", m_route.paHubChannel);
                 return;
             }
         }
@@ -374,8 +232,8 @@ void GpsRuntime::process()
         satellites = unit->getNumSatUsed();
         const auto rtc = unit->getRTCTime();
 
-        if (m_routeMode == GpsRouteMode::WirePaHub || m_routeMode == GpsRouteMode::InternalPaHub) {
-            disablePaHubChannels();
+        if (sf_i2c::isPaHubRoute(m_route.mode)) {
+            m_i2c.disablePaHubChannels(m_route.mode);
         }
 
         latitude = applyDirection(latData.latitudeDegree, latData.latDirection);

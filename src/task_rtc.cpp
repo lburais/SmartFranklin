@@ -367,7 +367,7 @@ static void rtc_loop()
     sf_mqtt::publish("smartfranklin/rtc/time", std::string(String(buf).c_str()));
 
     // Log current value
-    M5.Log.printf("[RTC] time:%s\r\n", buf);
+    M5_LOGI("[RTC] time: %s", buf);
 
 }
 

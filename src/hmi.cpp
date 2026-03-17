@@ -341,6 +341,7 @@ void HMI::draw()
     // Emit current screen when it changes so MQTT reflects UI navigation.
     if (last_published_screen_ != screen_) {
         sf_mqtt::publish("smartfranklin/hmi/screen", currentScreenName());
+        M5_LOGI("[HMI] %s", currentScreenName());
         last_published_screen_ = screen_;
     }
 }
@@ -382,7 +383,8 @@ void HMI::updateSnapshot(DisplaySnapshot& snapshot)
 void HMI::beginContentArea() const
 {
     M5GFX& lcd = M5.Display;
-    lcd.setTextSize((screen_ == 4 || screen_ == 5) ? 1 : CONTENT_TEXT_SIZE);
+    //lcd.setTextSize((screen_ == 4 || screen_ == 5) ? 1 : CONTENT_TEXT_SIZE);
+    lcd.setTextSize(CONTENT_TEXT_SIZE);
     lcd.setTextColor(COLOR_CONTENT_TEXT, COLOR_CONTENT_BG);
     lcd.setCursor(CONTENT_X, CONTENT_Y);
 }
@@ -390,42 +392,39 @@ void HMI::beginContentArea() const
 /** @brief Draw helper for Tank distance page. */
 void HMI::drawTankScreen(const DisplaySnapshot& snapshot) const
 {
-    M5_LOGI("[HMI] drawTankScreen");
     M5GFX& lcd = M5.Display;
     drawTitleBox("Tank");
     beginContentArea();
-    lcd.printf("Distance: %.1f cm\n", snapshot.distance_cm);
+    lcd.printf("Distance: %.1f cm", snapshot.distance_cm);
 }
 
 /** @brief Draw helper for Gaz weight page. */
 void HMI::drawGazScreen(const DisplaySnapshot& snapshot) const
 {
-    M5_LOGI("[HMI] drawGazScreen");
     M5GFX& lcd = M5.Display;
     drawTitleBox("Gaz");
     beginContentArea();
-    lcd.printf("Weight: %.3f g\n", snapshot.weight_g);
+    lcd.printf("Weight: %.3f g", snapshot.weight_g);
 }
 
 /** @brief Draw helper for Level tilt telemetry page. */
 void HMI::drawLevelScreen(const DisplaySnapshot& snapshot) const
 {
-    M5_LOGI("[HMI] drawLevelScreen");
     M5GFX& lcd = M5.Display;
     drawTitleBox("Level");
     beginContentArea();
-    lcd.printf("Pitch: %.2f\n", snapshot.pitch);
-    lcd.printf("Roll:  %.2f\n", snapshot.roll);
+    lcd.printf("Pitch: %.1f°\nRoll:  %.1f°", 
+               snapshot.pitch, 
+               snapshot.roll);
 }
 
 /** @brief Draw helper for battery/BMS telemetry page. */
 void HMI::drawBatteryScreen(const DisplaySnapshot& snapshot) const
 {
-    M5_LOGI("[HMI] drawBatteryScreen");
     M5GFX& lcd = M5.Display;
     drawTitleBox("Battery");
     beginContentArea();
-    lcd.printf("BMS V: %.2f\nI: %.2f\nSOC: %.1f\n",
+    lcd.printf("BMS V: %.2f\nBMS I: %.2f\nSOC: %.1f",
                snapshot.bms_voltage,
                snapshot.bms_current,
                snapshot.bms_soc);
@@ -434,7 +433,6 @@ void HMI::drawBatteryScreen(const DisplaySnapshot& snapshot) const
 /** @brief Draw helper for GPS telemetry page. */
 void HMI::drawGpsScreen(const DisplaySnapshot& snapshot) const
 {
-    M5_LOGI("[HMI] drawGpsScreen");
     M5GFX& lcd = M5.Display;
     drawTitleBox("GPS");
     beginContentArea();
@@ -449,7 +447,6 @@ void HMI::drawGpsScreen(const DisplaySnapshot& snapshot) const
 /** @brief Draw helper for RTC telemetry page. */
 void HMI::drawRtcScreen(const DisplaySnapshot& snapshot) const
 {
-    M5_LOGI("[HMI] drawRtcScreen");
     M5GFX& lcd = M5.Display;
     drawTitleBox("RTC");
     beginContentArea();
@@ -462,7 +459,6 @@ void HMI::drawRtcScreen(const DisplaySnapshot& snapshot) const
 /** @brief Draw helper for interactive scale calibration page. */
 void HMI::drawCalibrationScreen(const DisplaySnapshot& snapshot) const
 {
-    M5_LOGI("[HMI] drawCalibrationScreen");
     M5GFX& lcd = M5.Display;
     drawTitleBox("Scale Calibration");
     beginContentArea();

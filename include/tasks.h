@@ -101,6 +101,7 @@ extern TaskHandle_t taskGpsHandle;              // Gravity DFR1103 GPS/RTC acqui
 extern TaskHandle_t taskBmsBleHandle;           // BLE battery management system
 extern TaskHandle_t taskHmiHandle;              // HMI/display updates
 extern TaskHandle_t taskMeshtasticBridgeHandle; // Meshtastic mesh networking bridge
+extern TaskHandle_t taskNbiotHandle;            // NB-IoT cellular communication
 
 // ============================================================================
 // Task Function Declarations
@@ -108,6 +109,12 @@ extern TaskHandle_t taskMeshtasticBridgeHandle; // Meshtastic mesh networking br
 
 /**
  * @brief WiFi connectivity management task.
+ * 
+ * Handles WiFi initialization, connection monitoring, and state management
+ * for both Access Point (AP) and Station (STA) modes. Manages reconnection
+ * attempts and fallback behavior when external network is unavailable.
+ * 
+ * @param pvParameters FreeRTOS task parameter (unused)
  * @return void (infinite loop, never returns)
  */
 void taskWiFi(void *pvParameters);

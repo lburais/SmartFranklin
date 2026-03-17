@@ -167,8 +167,6 @@ static const char *CFG_PATH = "/config.json";
  */
 bool config_load()
 {
-    SmartConfig DEFAULT_CONFIG;
-
     // Initialize SPIFFS filesystem with auto-formatting on error
     if (!SPIFFS.begin(true)) return false;
 
@@ -177,9 +175,6 @@ bool config_load()
     // =========================================================================
     // Applied when /config.json is missing (e.g., fresh device or factory reset)
     if (!SPIFFS.exists(CFG_PATH)) {
-<<<<<<< HEAD
-        CONFIG = DEFAULT_CONFIG;
-=======
 
         // --- WiFi & Hardware Calibration ---
         CONFIG.ap_ssid  = "SmartFranklin-AP"; 
@@ -220,7 +215,6 @@ bool config_load()
         CONFIG.task_mqtt_loop_ms         = 200;
         CONFIG.task_hmi_loop_ms          = 1000;
 
->>>>>>> 636de1a (16MAR26)
         return true;
     }
 
@@ -246,28 +240,6 @@ bool config_load()
     // =========================================================================
     // Load WiFi connection parameters and web dashboard authentication
     
-<<<<<<< HEAD
-    CONFIG.ap_ssid = doc["ap_ssid"] | DEFAULT_CONFIG.ap_ssid;
-    CONFIG.ap_pass = doc["ap_pass"] | DEFAULT_CONFIG.ap_pass;
-    CONFIG.sta_ssid = doc["sta_ssid"] | DEFAULT_CONFIG.sta_ssid;
-    CONFIG.sta_pass = doc["sta_pass"] | DEFAULT_CONFIG.sta_pass;
-    CONFIG.scale_cal_factor = doc["scale_cal_factor"] | DEFAULT_CONFIG.scale_cal_factor;
-    CONFIG.admin_user = doc["admin_user"] | DEFAULT_CONFIG.admin_user;
-    CONFIG.admin_pass = doc["admin_pass"] | DEFAULT_CONFIG.admin_pass;
-    CONFIG.ext_mqtt_host = doc["ext_mqtt_host"] | DEFAULT_CONFIG.ext_mqtt_host;
-    CONFIG.ext_mqtt_port = doc["ext_mqtt_port"] | DEFAULT_CONFIG.ext_mqtt_port;
-    CONFIG.ext_mqtt_user = doc["ext_mqtt_user"] | DEFAULT_CONFIG.ext_mqtt_user;
-    CONFIG.ext_mqtt_pass = doc["ext_mqtt_pass"] | DEFAULT_CONFIG.ext_mqtt_pass;
-    CONFIG.ext_mqtt_enabled = doc["ext_mqtt_enabled"] | DEFAULT_CONFIG.ext_mqtt_enabled;
-    CONFIG.meshtastic_bridge_enabled = doc["meshtastic_bridge_enabled"] | DEFAULT_CONFIG.meshtastic_bridge_enabled;
-    // ...removed meshtastic_mqtt_prefix reference...
-    CONFIG.meshtastic_baud = doc["meshtastic_baud"] | DEFAULT_CONFIG.meshtastic_baud;
-    CONFIG.meshtastic_pin_rx = doc["meshtastic_pin_rx"] | DEFAULT_CONFIG.meshtastic_pin_rx;
-    CONFIG.meshtastic_pin_tx = doc["meshtastic_pin_tx"] | DEFAULT_CONFIG.meshtastic_pin_tx;
-    CONFIG.task_gps_loop_ms = doc["task_gps_loop_ms"] | DEFAULT_CONFIG.task_gps_loop_ms;
-    CONFIG.task_mqtt_loop_ms = doc["task_mqtt_loop_ms"] | DEFAULT_CONFIG.task_mqtt_loop_ms;
-    CONFIG.task_hmi_loop_ms = doc["task_hmi_loop_ms"] | DEFAULT_CONFIG.task_hmi_loop_ms;
-=======
     CONFIG.ap_ssid = doc["ap_ssid"] | "SmartFranklin-AP";
     CONFIG.ap_pass = doc["ap_pass"] | "smartfranklin";
     CONFIG.sta_ssid = doc["sta_ssid"] | "jrdl";
@@ -320,7 +292,6 @@ bool config_load()
     CONFIG.task_gps_loop_ms = doc["task_gps_loop_ms"] | 60000;
     CONFIG.task_mqtt_loop_ms = doc["task_mqtt_loop_ms"] | 20;
     CONFIG.task_hmi_loop_ms = doc["task_hmi_loop_ms"] | 20;
->>>>>>> 636de1a (16MAR26)
 
     return true;
 }
@@ -378,25 +349,43 @@ bool config_save()
     // =========================================================================
     // Serialize WiFi connection parameters and authentication
     
-    doc["ap_ssid"] = CONFIG.ap_ssid;
-    doc["ap_pass"] = CONFIG.ap_pass;
-    doc["sta_ssid"] = CONFIG.sta_ssid;
-    doc["sta_pass"] = CONFIG.sta_pass;
-    doc["scale_cal_factor"] = CONFIG.scale_cal_factor;
-    doc["admin_user"] = CONFIG.admin_user;
-    doc["admin_pass"] = CONFIG.admin_pass;
-    doc["ext_mqtt_host"] = CONFIG.ext_mqtt_host;
-    doc["ext_mqtt_port"] = CONFIG.ext_mqtt_port;
-    doc["ext_mqtt_user"] = CONFIG.ext_mqtt_user;
-    doc["ext_mqtt_pass"] = CONFIG.ext_mqtt_pass;
-    doc["ext_mqtt_enabled"] = CONFIG.ext_mqtt_enabled;
+    doc["ap_ssid"] = CONFIG.ap_ssid;                        // Local AP SSID
+    doc["ap_pass"] = CONFIG.ap_pass;                        // Local AP password
+    doc["sta_ssid"] = CONFIG.sta_ssid;                      // External network SSID
+    doc["sta_pass"] = CONFIG.sta_pass;                      // External network password
+    doc["scale_cal_factor"] = CONFIG.scale_cal_factor;      // Weight sensor calibration
+
+    doc["admin_user"] = CONFIG.admin_user;                  // Web dashboard username
+    doc["admin_pass"] = CONFIG.admin_pass;                  // Web dashboard password
+
+    // =========================================================================
+    // External MQTT Broker Configuration
+    // =========================================================================
+    // Serialize cloud MQTT broker connection details
+    
+    doc["ext_mqtt_host"] = CONFIG.ext_mqtt_host;            // Broker hostname/IP
+    doc["ext_mqtt_port"] = CONFIG.ext_mqtt_port;            // Broker port number
+    doc["ext_mqtt_user"] = CONFIG.ext_mqtt_user;            // Broker username
+    doc["ext_mqtt_pass"] = CONFIG.ext_mqtt_pass;            // Broker password
+    doc["ext_mqtt_enabled"] = CONFIG.ext_mqtt_enabled;      // Enable/disable flag
+
+    // =========================================================================
+    // NB-IoT Cellular Configuration
+    // =========================================================================
+    // Serialize 4G LTE-M/NB-IoT backup connectivity settings
+    
+    doc["nbiot_enabled"]   = CONFIG.nbiot_enabled;          // Cellular enable flag
+    doc["nbiot_apn"]       = CONFIG.nbiot_apn;              // Carrier APN
+    doc["nbiot_mqtt_host"] = CONFIG.nbiot_mqtt_host;        // Cellular MQTT broker
+    doc["nbiot_mqtt_port"] = CONFIG.nbiot_mqtt_port;        // Cellular MQTT port
+    doc["nbiot_mqtt_user"] = CONFIG.nbiot_mqtt_user;        // Cellular MQTT username
+    doc["nbiot_mqtt_pass"] = CONFIG.nbiot_mqtt_pass;        // Cellular MQTT password
+
+    // =========================================================================
+    // Meshtastic Bridge Configuration
+    // =========================================================================
+
     doc["meshtastic_bridge_enabled"] = CONFIG.meshtastic_bridge_enabled;
-<<<<<<< HEAD
-    // ...removed meshtastic_mqtt_prefix reference...
-    doc["meshtastic_baud"] = CONFIG.meshtastic_baud;
-    doc["meshtastic_pin_rx"] = CONFIG.meshtastic_pin_rx;
-    doc["meshtastic_pin_tx"] = CONFIG.meshtastic_pin_tx;
-=======
     doc["meshtastic_mqtt_prefix"]    = CONFIG.meshtastic_mqtt_prefix;
     doc["meshtastic_baud"]           = CONFIG.meshtastic_baud;
     doc["meshtastic_pin_rx"]         = CONFIG.meshtastic_pin_rx;
@@ -407,7 +396,6 @@ bool config_save()
     // =========================================================================
 
     doc["task_gaz_loop_ms"] = CONFIG.task_gaz_loop_ms;
->>>>>>> 636de1a (16MAR26)
     doc["task_gps_loop_ms"] = CONFIG.task_gps_loop_ms;
     doc["task_mqtt_loop_ms"] = CONFIG.task_mqtt_loop_ms;
     doc["task_hmi_loop_ms"] = CONFIG.task_hmi_loop_ms;

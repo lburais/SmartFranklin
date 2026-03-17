@@ -266,7 +266,7 @@ static void tilt_loop()
                 std::string(String(roll, 1).c_str()));
 
     // Print values
-    M5.Log.printf("[TILT] pitch:%f  roll:%f\r\n", pitch, roll);
+    M5_LOGI("[TILT] pitch: %.1f°  roll: %.1f°", pitch, roll);
 
 }
 
