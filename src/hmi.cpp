@@ -184,7 +184,7 @@ bool HMI::init()
 
     lcd.fillScreen(COLOR_CONTENT_BG);
 
-    screen_ = 2;
+    screen_ = 1;
     calib_in_progress_ = false;
     btnA_prev_ = false;
     btnB_prev_ = false;
@@ -340,7 +340,7 @@ void HMI::draw()
 
     // Emit current screen when it changes so MQTT reflects UI navigation.
     if (last_published_screen_ != screen_) {
-        sf_mqtt::publish("smartfranklin/hmi/screen", currentScreenName());
+        sf_mqtt::publish("smartfranklin/hmi/screen", currentScreenName(), 1, true);
         M5_LOGI("[HMI] %s", currentScreenName());
         last_published_screen_ = screen_;
     }
@@ -358,7 +358,8 @@ void HMI::updateSnapshot(DisplaySnapshot& snapshot)
         std::lock_guard<std::mutex> lock(DATA_MUTEX);
 
         snapshot.distance_cm = DATA.distance_cm;
-        snapshot.weight_g = DATA.weight_g;
+        snapshot.weight_gaz = DATA.weight_gaz;
+        snapshot.fill_gaz = DATA.fill_gaz;
         snapshot.pitch = DATA.pitch;
         snapshot.roll = DATA.roll;
         snapshot.bms_voltage = DATA.bms_voltage;
@@ -404,7 +405,7 @@ void HMI::drawGazScreen(const DisplaySnapshot& snapshot) const
     M5GFX& lcd = M5.Display;
     drawTitleBox("Gaz");
     beginContentArea();
-    lcd.printf("Weight: %.3f g", snapshot.weight_g);
+    lcd.printf("Weight: %d g\nFill: %d%%", snapshot.weight_gaz, snapshot.fill_gaz);
 }
 
 /** @brief Draw helper for Level tilt telemetry page. */
@@ -471,6 +472,6 @@ void HMI::drawCalibrationScreen(const DisplaySnapshot& snapshot) const
 
     lcd.println("Calibrating...");
     lcd.printf("Known: %.2f kg\n", calib_known_weight_);
-    lcd.printf("Raw:   %.3f kg\n", snapshot.weight_g / 1000.0f);
+    lcd.printf("Raw:   %.3f kg\n", snapshot.weight_gaz * 1000.0f);
     lcd.println("BtnB: finish");
 }

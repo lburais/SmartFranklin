@@ -153,17 +153,17 @@ static void publishWiFiStatus()
                   "UNKNOWN";                                        // Error state
 
     // Publish WiFi operational mode
-    sf_mqtt::publish("smartfranklin/wifi/mode", mode.c_str());
+    sf_mqtt::publish("smartfranklin/system/wifi/mode", mode.c_str());
     
     // Publish Access Point IP (always available if AP enabled)
-    sf_mqtt::publish("smartfranklin/wifi/ap_ip", WiFi.softAPIP().toString().c_str());
+    sf_mqtt::publish("smartfranklin/system/wifi/ap_ip", WiFi.softAPIP().toString().c_str());
     
     // Publish Station IP (only available if STA connected)
-    sf_mqtt::publish("smartfranklin/wifi/sta_ip", WiFi.localIP().toString().c_str());
+    sf_mqtt::publish("smartfranklin/system/wifi/sta_ip", WiFi.localIP().toString().c_str());
     
     // Publish WiFi signal strength (RSSI = Received Signal Strength Indicator)
     // Typical range: -30 (excellent) to -100+ (lost signal)
-    sf_mqtt::publish("smartfranklin/wifi/rssi", String(WiFi.RSSI()).c_str());
+    sf_mqtt::publish("smartfranklin/system/wifi/rssi", String(WiFi.RSSI()).c_str());
 }
 
 // ============================================================================
@@ -332,10 +332,10 @@ void taskWiFi(void *pv)
             lastCaptiveCheck = millis();
 
             // Publish captive portal status: 1 = portal detected, 0 = free internet
-            sf_mqtt::publish("smartfranklin/wifi/captive", lastCaptive ? "1" : "0");
+            sf_mqtt::publish("smartfranklin/system/wifi/captive", lastCaptive ? "1" : "0");
         } else if (captiveKnown && staStatus == WL_CONNECTED) {
             // Re-publish last known state between probe intervals
-            sf_mqtt::publish("smartfranklin/wifi/captive", lastCaptive ? "1" : "0");
+            sf_mqtt::publish("smartfranklin/system/wifi/captive", lastCaptive ? "1" : "0");
         }
 
         // --- Periodic MQTT Status Publication ---

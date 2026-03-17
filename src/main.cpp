@@ -116,6 +116,50 @@ std::string buildMqttUri(const String& hostOrUri, int port)
     return std::string("mqtt://") + uri;
 }
 
+bool waitForWiFiApReady(uint32_t timeoutMs)
+{
+    const uint32_t startMs = millis();
+    while ((millis() - startMs) < timeoutMs) {
+        const wifi_mode_t mode = WiFi.getMode();
+        const bool apModeActive = (mode == WIFI_AP || mode == WIFI_AP_STA);
+        const IPAddress apIp = WiFi.softAPIP();
+        const bool hasValidApIp = (apIp != INADDR_NONE) && (apIp != IPAddress(0, 0, 0, 0));
+
+        if (apModeActive && hasValidApIp) {
+            M5_LOGI("[WiFi] AP health check PASS ssid:%s ip:%s", CONFIG.ap_ssid.c_str(), apIp.toString().c_str());
+            return true;
+        }
+
+        delay(100);
+    }
+
+    const IPAddress apIp = WiFi.softAPIP();
+    M5_LOGW("[WiFi] AP health check FAIL ssid:%s mode:%d ip:%s", CONFIG.ap_ssid.c_str(), static_cast<int>(WiFi.getMode()), apIp.toString().c_str());
+    return false;
+}
+
+bool waitForLocalMqttBrokerReady(uint32_t timeoutMs)
+{
+    const uint32_t startMs = millis();
+    while ((millis() - startMs) < timeoutMs) {
+        if (sf_mqtt::is_local_broker_ready()) {
+            const bool probeOk = sf_mqtt::publish_local("smartfranklin/system/mqtt_broker/health", "boot_probe", 0, false);
+            if (probeOk) {
+                M5_LOGI("[MQTT] Local broker health check PASS");
+                return true;
+            }
+
+            M5_LOGW("[MQTT] Local broker ready but health publish probe failed");
+            return false;
+        }
+
+        delay(100);
+    }
+
+    M5_LOGW("[MQTT] Local broker health check FAIL (startup timeout)");
+    return false;
+}
+
 } // namespace
 
 // ============================================================================
@@ -128,7 +172,10 @@ std::string buildMqttUri(const String& hostOrUri, int port)
  */
 void setup() {
 
-    // --- M5 Hardware Initialization ---
+    // =========================================================================
+    // M5 Hardware Initialization
+    // =========================================================================
+
     // Configure M5Stack with power delivery, IMU, and RTC enabled
     auto cfg = M5.config();
     cfg.output_power = true;   // Enable 5V output power for peripheral devices
@@ -146,24 +193,28 @@ void setup() {
     // Load saved configuration from SPIFFS, or use defaults if missing
     config_load();
 
-    // --- WiFi Dual-Mode Setup ---
-    // Initialize both AP (access point) and STA (station) modes
-    // Allows device to work as standalone hotspot and connect to external network
-        #ifndef DISABLE_WIFI
-        xTaskCreatePinnedToCore(taskWiFi, "WIFI", 4096, nullptr, 3,  &taskWiFiHandle, 1);
-        #endif
+    // =========================================================================
+    // WiFi AP+STA FreeRTOS Task creation
+    // =========================================================================
+
+    xTaskCreatePinnedToCore(taskWiFi, "WIFI", 4096, nullptr, 3,  &taskWiFiHandle, 1);
+
+    // Validate that AP mode and AP IP are available after WiFi task startup.
+    (void)waitForWiFiApReady(5000);
 
     // If station connection fails, start captive portal for WiFi setup
     if (WiFi.status() != WL_CONNECTED) {
         captive_portal_start();
     }
 
-    // Start MQTT processing as early as possible after HMI so publishers
-    // can use the MQTT client path sooner during startup.
-    #ifndef DISABLE_MQTT
-    xTaskCreatePinnedToCore(taskMqtt, "MQTT", 4096, nullptr, 3,  &taskMqttHandle, 1);
-    #endif
+    // =========================================================================
+    // MQTT broker FreeRTOS Task creation
+    // =========================================================================
 
+    xTaskCreatePinnedToCore(taskMqtt, "MQTT", 4096, nullptr, 3,  &taskMqttHandle, 1);
+
+    // Validate local MQTT broker startup and local publish path.
+    (void)waitForLocalMqttBrokerReady(5000);
 
     // --- MQTT Layer Setup ---
     // Configure and initialize ESP-MQTT client for external broker communication
@@ -190,11 +241,17 @@ void setup() {
         M5_LOGI("[MQTT] External MQTT disabled in config; skipping init");
     }
 
-    // --- Command Handler Initialization ---
+    // =========================================================================
+    // Command Handler Initialization
+    // =========================================================================
+
     // Initialize the command processing system for handling remote commands
     command_handler_init();
 
-    // --- Web Dashboard Initialization ---
+    // =========================================================================
+    // Web Dashboard Initialization
+    // =========================================================================
+
     // Start web-based management interface
     web_dashboard_init();
 

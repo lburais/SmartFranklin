@@ -20,6 +20,10 @@ constexpr uint8_t WEIGHT_I2C_ADDRESS = 0x26;
 constexpr uint32_t WEIGHT_I2C_CLOCK_HZ = 400000U;
 constexpr const char* GAZ_DEVICE_FULL_NAME = "M5Stack Weight I2C Unit";
 
+// Constants for fill level calculation
+constexpr int32_t GAZ_BOTTLE_FULL_G = 6450;
+constexpr int32_t GAZ_BOTTLE_EMPTY_G = 3700;
+
 float sanitizedGap(const float gap)
 {
     if (!std::isfinite(gap) || gap == 0.0f) {
@@ -41,8 +45,8 @@ private:
     bool detectRoute();
     void publishI2cConfiguration() const;
     void publishCalibrationGap(float gap) const;
-    void publishWeight(float weightKg, int32_t weightG) const;
-    bool refreshMeasurementLocked(float& weightKg, int32_t& weightG);
+    void publishWeight(int32_t weightG, const int32_t fillPct) const;
+    bool refreshMeasurementLocked(int32_t& weightG, int32_t& fillPct);
 
     mutable std::mutex m_mutex;
     sf_i2c::I2C m_i2c{WEIGHT_I2C_CLOCK_HZ};
@@ -53,8 +57,8 @@ private:
     int8_t m_wireSda = -1;
     int8_t m_wireScl = -1;
     float m_lastCalibrationGap = 1.0f;
-    float m_lastWeightKg = 0.0f;
     int32_t m_lastWeightG = 0;
+    int32_t m_lastFillPct = 0;
 };
 
 GazRuntime GAZ_RUNTIME;
@@ -139,22 +143,22 @@ void GazRuntime::publishI2cConfiguration() const
     snprintf(sclBuf, sizeof(sclBuf), "%d", m_wireScl);
     snprintf(addressBuf, sizeof(addressBuf), "0x%02X", WEIGHT_I2C_ADDRESS);
 
-    sf_mqtt::publish("smartfranklin/system/gaz/i2c/mode", sf_i2c::routeModeToString(m_route.mode));
-    sf_mqtt::publish("smartfranklin/system/gaz/i2c/pahub_channel", pahubChannelBuf);
-    sf_mqtt::publish("smartfranklin/system/gaz/i2c/sda", sdaBuf);
-    sf_mqtt::publish("smartfranklin/system/gaz/i2c/scl", sclBuf);
-    sf_mqtt::publish("smartfranklin/system/gaz/i2c/address", addressBuf);
-    sf_mqtt::publish("smartfranklin/system/gaz/i2c/device_name", GAZ_DEVICE_FULL_NAME);
+    sf_mqtt::publish("smartfranklin/system/i2c/gaz/mode", sf_i2c::routeModeToString(m_route.mode), 1, true);
+    sf_mqtt::publish("smartfranklin/system/i2c/gaz/pahub_channel", pahubChannelBuf, 1, true);
+    sf_mqtt::publish("smartfranklin/system/i2c/gaz/sda", sdaBuf, 1, true);
+    sf_mqtt::publish("smartfranklin/system/i2c/gaz/scl", sclBuf, 1, true);
+    sf_mqtt::publish("smartfranklin/system/i2c/gaz/address", addressBuf, 1, true);
+    sf_mqtt::publish("smartfranklin/system/i2c/gaz/device_name", GAZ_DEVICE_FULL_NAME, 1, true);
 }
 
 void GazRuntime::publishCalibrationGap(const float gap) const
 {
     char gapBuf[24] = {0};
     snprintf(gapBuf, sizeof(gapBuf), "%.6f", gap);
-    sf_mqtt::publish("smartfranklin/system/gaz/calibration/gap", gapBuf);
+    sf_mqtt::publish("smartfranklin/gaz/calibration/gap", gapBuf, 1, true);
 }
 
-bool GazRuntime::refreshMeasurementLocked(float& weightKg, int32_t& weightG)
+bool GazRuntime::refreshMeasurementLocked(int32_t& weightG, int32_t& fillPct)
 {
     if (sf_i2c::isPaHubRoute(m_route.mode)) {
         if (!m_i2c.selectPaHubChannel(m_route.mode, static_cast<uint8_t>(m_route.paHubChannel))) {
@@ -173,33 +177,45 @@ bool GazRuntime::refreshMeasurementLocked(float& weightKg, int32_t& weightG)
         return false;
     }
 
-    weightKg = m_unit.weight();
-    if (!std::isfinite(weightKg)) {
+    weightG = m_unit.weight();
+    if (!std::isfinite(weightG)) {
         M5_LOGW("[GAZ] non-finite weight sample ignored");
         return false;
     }
 
-    weightG = static_cast<int32_t>(lroundf(weightKg * 1000.0f));
-    m_lastWeightKg = weightKg;
     m_lastWeightG = weightG;
+
+    fillPct = 0;
+    if (weightG <= GAZ_BOTTLE_EMPTY_G) {
+        fillPct = 0;
+    } else if (weightG >= GAZ_BOTTLE_FULL_G) {
+        fillPct = 100;
+    } else {
+        fillPct = 100 * (static_cast<float>(weightG - GAZ_BOTTLE_EMPTY_G) / (GAZ_BOTTLE_FULL_G - GAZ_BOTTLE_EMPTY_G));
+    }
+
+    m_lastFillPct = fillPct;
+
     return true;
 }
 
-void GazRuntime::publishWeight(const float weightKg, const int32_t weightG) const
+void GazRuntime::publishWeight(const int32_t weightG, const int32_t fillPct) const
 {
-    char kgBuf[24] = {0};
     char gBuf[24] = {0};
-    snprintf(kgBuf, sizeof(kgBuf), "%.3f", weightKg);
-    snprintf(gBuf, sizeof(gBuf), "%ld", static_cast<long>(weightG));
+    snprintf(gBuf, sizeof(gBuf), "%d", weightG);
+    sf_mqtt::publish("smartfranklin/gaz/g", gBuf);
 
-    sf_mqtt::publish("smartfranklin/gaz/kg", kgBuf);
-    sf_mqtt::publish("smartfranklin/weight/g", gBuf);
+    char pctBuf[16] = {0};
+    snprintf(pctBuf, sizeof(pctBuf), "%d", fillPct);
+    sf_mqtt::publish("smartfranklin/gaz/fill", pctBuf, 1, true);
+
+    M5_LOGI("[GAZ] Weight: %d g     Fill level: %d%%", weightG, fillPct);
 }
 
 void GazRuntime::process()
 {
-    float weightKg = 0.0f;
     int32_t weightG = 0;
+    int32_t fillPct = 0;
     float desiredGap = 1.0f;
     bool hasMeasurement = false;
 
@@ -219,20 +235,24 @@ void GazRuntime::process()
             }
         }
 
-        hasMeasurement = refreshMeasurementLocked(weightKg, weightG);
+        hasMeasurement = refreshMeasurementLocked(weightG, fillPct);
     }
 
     if (!hasMeasurement) {
+        M5_LOGW("[GAZ] No measurement");
         return;
     }
 
     {
-        std::lock_guard<std::mutex> lock(DATA_MUTEX);
-        DATA.weight_g = weightG;
     }
 
-    publishWeight(weightKg, weightG);
-    M5_LOGI("[GAZ] Weight: %.3f kg (%ld g)", weightKg, static_cast<long>(weightG));
+    {
+        std::lock_guard<std::mutex> lock(DATA_MUTEX);
+        DATA.weight_gaz = weightG;
+        DATA.fill_gaz = fillPct;
+    }
+
+    publishWeight(weightG, fillPct);
 }
 
 bool GazRuntime::tare()
@@ -243,7 +263,6 @@ bool GazRuntime::tare()
     }
     const bool ok = m_unit.resetOffset();
     if (ok) {
-        m_lastWeightKg = 0.0f;
         m_lastWeightG = 0;
     }
     return ok;
@@ -272,13 +291,13 @@ float GazRuntime::readCalibrationSample()
         return 0.0f;
     }
 
-    float weightKg = 0.0f;
     int32_t weightG = 0;
-    if (refreshMeasurementLocked(weightKg, weightG)) {
-        return weightKg;
+    int32_t fillPct = 0;
+    if (refreshMeasurementLocked(weightG, fillPct)) {
+        return weightG;
     }
 
-    return m_lastWeightKg;
+    return m_lastWeightG;
 }
 
 bool GazRuntime::isInitialized() const

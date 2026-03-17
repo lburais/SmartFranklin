@@ -204,6 +204,11 @@ bool publish_local(const std::string &topic,
     return true;
 }
 
+bool is_local_broker_ready()
+{
+    return s_localBrokerStarted;
+}
+
 } // namespace sf_mqtt
 
 // ============================================================================

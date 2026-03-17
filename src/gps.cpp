@@ -147,12 +147,12 @@ void GpsRuntime::publishI2cConfiguration() const
     snprintf(sclBuf, sizeof(sclBuf), "%d", m_wireScl);
     snprintf(addressBuf, sizeof(addressBuf), "0x%02X", GPS_I2C_ADDRESS);
 
-    sf_mqtt::publish("smartfranklin/system/gps/i2c/mode", sf_i2c::routeModeToString(m_route.mode));
-    sf_mqtt::publish("smartfranklin/system/gps/i2c/pahub_channel", pahubChannelBuf);
-    sf_mqtt::publish("smartfranklin/system/gps/i2c/sda", sdaBuf);
-    sf_mqtt::publish("smartfranklin/system/gps/i2c/scl", sclBuf);
-    sf_mqtt::publish("smartfranklin/system/gps/i2c/address", addressBuf);
-    sf_mqtt::publish("smartfranklin/system/gps/i2c/device_name", GPS_DEVICE_FULL_NAME);
+    sf_mqtt::publish("smartfranklin/system/i2c/gps/mode", sf_i2c::routeModeToString(m_route.mode), 1, true);
+    sf_mqtt::publish("smartfranklin/system/i2c/gps/pahub_channel", pahubChannelBuf, 1, true);
+    sf_mqtt::publish("smartfranklin/system/i2c/gps/sda", sdaBuf, 1, true);
+    sf_mqtt::publish("smartfranklin/system/i2c/gps/scl", sclBuf, 1, true);
+    sf_mqtt::publish("smartfranklin/system/i2c/gps/address", addressBuf, 1, true);
+    sf_mqtt::publish("smartfranklin/system/i2c/gps/device_name", GPS_DEVICE_FULL_NAME, 1, true);
 }
 
 bool GpsRuntime::init()

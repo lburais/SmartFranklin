@@ -113,7 +113,8 @@ private:
      */
     struct DisplaySnapshot {
         float distance_cm = 0.0f;
-        float weight_g = 0.0f;
+        int32_t weight_gaz = 0;
+        int32_t fill_gaz = 0;
         float pitch = 0.0f;
         float roll = 0.0f;
         float bms_voltage = 0.0f;

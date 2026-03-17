@@ -167,6 +167,8 @@ static const char *CFG_PATH = "/config.json";
  */
 bool config_load()
 {
+    SmartConfig defaultCONFIG;
+
     // Initialize SPIFFS filesystem with auto-formatting on error
     if (!SPIFFS.begin(true)) return false;
 
@@ -175,46 +177,8 @@ bool config_load()
     // =========================================================================
     // Applied when /config.json is missing (e.g., fresh device or factory reset)
     if (!SPIFFS.exists(CFG_PATH)) {
-
-        // --- WiFi & Hardware Calibration ---
-        CONFIG.ap_ssid  = "SmartFranklin-AP"; 
-        CONFIG.ap_pass  = "smartfranklin";
-        CONFIG.sta_ssid = "jrdl"; 
-        CONFIG.sta_pass = "05121996190119942106196801071964";
-        CONFIG.scale_cal_factor = 1.0f;    // Uncalibrated weight sensor
-
-        // --- Web Dashboard Authentication ---
-        CONFIG.admin_user = "admin";       // ⚠️  Default credentials - CHANGE!
-        CONFIG.admin_pass = "admin";       // ⚠️  Default credentials - CHANGE!
-
-        // --- External MQTT Broker (Cloud Connectivity) ---
-        CONFIG.ext_mqtt_host = "localhost";
-        CONFIG.ext_mqtt_port = 1883;
-        CONFIG.ext_mqtt_user = "Servers";
-        CONFIG.ext_mqtt_pass = "FRA13941";
-        CONFIG.ext_mqtt_enabled = true;  // Cloud disabled until configured
-
-        // --- NB-IoT Cellular Connectivity ---
-        CONFIG.nbiot_enabled   = true;                  // Cellular enabled by default
-        CONFIG.nbiot_apn       = "iot.1nce.net";        // 1NCE carrier APN
-        CONFIG.nbiot_mqtt_host = "";                    // No cellular MQTT configured
-        CONFIG.nbiot_mqtt_port = 1883;                  // Standard MQTT port
-        CONFIG.nbiot_mqtt_user = "";                    // No authentication
-        CONFIG.nbiot_mqtt_pass = "";                    // No authentication
-
-        // --- Meshtastic Bridge Configuration ---
-        CONFIG.meshtastic_bridge_enabled = false;                // Disabled by default
-        CONFIG.meshtastic_mqtt_prefix    = "smartfranklin/mesh/in/";
-        CONFIG.meshtastic_baud           = 115200;               // Default UART baud
-        CONFIG.meshtastic_pin_rx         = 33;                   // Default RX pin
-        CONFIG.meshtastic_pin_tx         = 32;                   // Default TX pin
-
-        // --- Task Timing Configuration ---
-        CONFIG.task_gaz_loop_ms          = 60000;
-        CONFIG.task_gps_loop_ms          = 60000;
-        CONFIG.task_mqtt_loop_ms         = 200;
-        CONFIG.task_hmi_loop_ms          = 1000;
-
+        
+        CONFIG = defaultCONFIG;
         return true;
     }
 
@@ -240,58 +204,38 @@ bool config_load()
     // =========================================================================
     // Load WiFi connection parameters and web dashboard authentication
     
-    CONFIG.ap_ssid = doc["ap_ssid"] | "SmartFranklin-AP";
-    CONFIG.ap_pass = doc["ap_pass"] | "smartfranklin";
-    CONFIG.sta_ssid = doc["sta_ssid"] | "jrdl";
-    CONFIG.sta_pass = doc["sta_pass"] | "05121996190119942106196801071964";
-    CONFIG.scale_cal_factor = doc["scale_cal_factor"] | 1.0f;  // Weight sensor calibration
+    CONFIG.ap_ssid = doc["ap_ssid"] | defaultCONFIG.ap_ssid;
+    CONFIG.ap_pass = doc["ap_pass"] | defaultCONFIG.ap_pass;
+    CONFIG.sta_ssid = doc["sta_ssid"] | defaultCONFIG.sta_ssid;
+    CONFIG.sta_pass = doc["sta_pass"] | defaultCONFIG.sta_pass;
+    CONFIG.scale_cal_factor = doc["scale_cal_factor"] | defaultCONFIG.scale_cal_factor;
 
-    CONFIG.admin_user = doc["admin_user"] | "admin";    // Web dashboard username
-    CONFIG.admin_pass = doc["admin_pass"] | "admin";    // Web dashboard password
+    CONFIG.admin_user = doc["admin_user"] | defaultCONFIG.admin_user;
+    CONFIG.admin_pass = doc["admin_pass"] | defaultCONFIG.admin_pass;
 
-    // =========================================================================
-    // External MQTT Broker Configuration
-    // =========================================================================
-    // Cloud connectivity settings for remote MQTT broker
-    
-    // Keep defaults consistent with the no-file bootstrap branch so older
-    // config files automatically inherit MQTT settings when keys are absent.
-    CONFIG.ext_mqtt_host = doc["ext_mqtt_host"] | "localhost";
-    CONFIG.ext_mqtt_port = doc["ext_mqtt_port"] | 1883;           // Broker port (default 1883)
-    CONFIG.ext_mqtt_user = doc["ext_mqtt_user"] | "Servers";      // Broker username
-    CONFIG.ext_mqtt_pass = doc["ext_mqtt_pass"] | "FRA13941";     // Broker password
-    CONFIG.ext_mqtt_enabled = doc["ext_mqtt_enabled"] | true;      // Enable/disable flag
+    CONFIG.ext_mqtt_host = doc["ext_mqtt_host"] | defaultCONFIG.ext_mqtt_host;
+    CONFIG.ext_mqtt_port = doc["ext_mqtt_port"] | defaultCONFIG.ext_mqtt_port;
+    CONFIG.ext_mqtt_user = doc["ext_mqtt_user"] | defaultCONFIG.ext_mqtt_user;
+    CONFIG.ext_mqtt_pass = doc["ext_mqtt_pass"] | defaultCONFIG.ext_mqtt_pass;
+    CONFIG.ext_mqtt_enabled = doc["ext_mqtt_enabled"] | defaultCONFIG.ext_mqtt_enabled;
 
-    // =========================================================================
-    // NB-IoT Cellular Configuration
-    // =========================================================================
-    // Settings for 4G LTE-M/NB-IoT cellular backup connectivity
-    
-    CONFIG.nbiot_enabled   = doc["nbiot_enabled"]   | true;             // Cellular enable flag
-    CONFIG.nbiot_apn       = doc["nbiot_apn"]       | "iot.1nce.net";   // Carrier APN (1NCE default)
-    CONFIG.nbiot_mqtt_host = doc["nbiot_mqtt_host"] | "";               // Cellular MQTT broker
-    CONFIG.nbiot_mqtt_port = doc["nbiot_mqtt_port"] | 1883;             // Cellular MQTT port
-    CONFIG.nbiot_mqtt_user = doc["nbiot_mqtt_user"] | "";               // Cellular MQTT username
-    CONFIG.nbiot_mqtt_pass = doc["nbiot_mqtt_pass"] | "";               // Cellular MQTT password
+    CONFIG.nbiot_enabled   = doc["nbiot_enabled"]   | defaultCONFIG.nbiot_enabled;
+    CONFIG.nbiot_apn       = doc["nbiot_apn"]       | defaultCONFIG.nbiot_apn;
+    CONFIG.nbiot_mqtt_host = doc["nbiot_mqtt_host"] | defaultCONFIG.nbiot_mqtt_host;
+    CONFIG.nbiot_mqtt_port = doc["nbiot_mqtt_port"] | defaultCONFIG.nbiot_mqtt_port;
+    CONFIG.nbiot_mqtt_user = doc["nbiot_mqtt_user"] | defaultCONFIG.nbiot_mqtt_user;
+    CONFIG.nbiot_mqtt_pass = doc["nbiot_mqtt_pass"] | defaultCONFIG.nbiot_mqtt_pass;
 
-    // =========================================================================
-    // Meshtastic Bridge Configuration
-    // =========================================================================
+    CONFIG.meshtastic_bridge_enabled = doc["meshtastic_bridge_enabled"] | defaultCONFIG.meshtastic_bridge_enabled;
+    CONFIG.meshtastic_mqtt_prefix    = doc["meshtastic_mqtt_prefix"] | defaultCONFIG.meshtastic_mqtt_prefix;
+    CONFIG.meshtastic_baud           = doc["meshtastic_baud"] | defaultCONFIG.meshtastic_baud;
+    CONFIG.meshtastic_pin_rx         = doc["meshtastic_pin_rx"] | defaultCONFIG.meshtastic_pin_rx;
+    CONFIG.meshtastic_pin_tx         = doc["meshtastic_pin_tx"] | defaultCONFIG.meshtastic_pin_tx;
 
-    CONFIG.meshtastic_bridge_enabled = doc["meshtastic_bridge_enabled"] | false;
-    CONFIG.meshtastic_mqtt_prefix    = doc["meshtastic_mqtt_prefix"] | "smartfranklin/mesh/in/";
-    CONFIG.meshtastic_baud           = doc["meshtastic_baud"] | 115200;
-    CONFIG.meshtastic_pin_rx         = doc["meshtastic_pin_rx"] | 33;
-    CONFIG.meshtastic_pin_tx         = doc["meshtastic_pin_tx"] | 32;
-
-    // =========================================================================
-    // Task Timing Configuration
-    // =========================================================================
-
-    CONFIG.task_gaz_loop_ms = doc["task_gaz_loop_ms"] | 60000;
-    CONFIG.task_gps_loop_ms = doc["task_gps_loop_ms"] | 60000;
-    CONFIG.task_mqtt_loop_ms = doc["task_mqtt_loop_ms"] | 20;
-    CONFIG.task_hmi_loop_ms = doc["task_hmi_loop_ms"] | 20;
+    CONFIG.task_gaz_loop_ms = doc["task_gaz_loop_ms"] | defaultCONFIG.task_gaz_loop_ms;
+    CONFIG.task_gps_loop_ms = doc["task_gps_loop_ms"] | defaultCONFIG.task_gps_loop_ms;
+    CONFIG.task_mqtt_loop_ms = doc["task_mqtt_loop_ms"] | defaultCONFIG.task_mqtt_loop_ms;
+    CONFIG.task_hmi_loop_ms = doc["task_hmi_loop_ms"] | defaultCONFIG.task_hmi_loop_ms;
 
     return true;
 }

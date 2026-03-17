@@ -248,6 +248,8 @@ struct SmartData {
     // Weight Sensor Data
     // ============================================================================
 
+    int32_t fill_gaz = 0;
+
     /**
      * @brief Current weight measurement from load cell.
      * 
@@ -261,7 +263,7 @@ struct SmartData {
      * Update Rate: Configurable (default ~1 second)
      * Default: 0 (no weight measured)
      */
-    int32_t weight_g = 0;
+    int32_t weight_gaz = 0;
 
     /**
      * @brief Weight sensor calibration gap value.

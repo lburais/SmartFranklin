@@ -315,6 +315,14 @@ bool publish_local(const std::string &topic,
                    bool retain = false);
 
 /**
+ * @brief Returns whether the embedded local MQTT broker is started.
+ *
+ * This reflects readiness of the local broker managed by `taskMqtt`.
+ * It can be used during startup health checks before publishing locally.
+ */
+bool is_local_broker_ready();
+
+/**
  * @brief Publishes a message to an MQTT topic.
  * 
  * Sends a message to the specified MQTT topic with given QoS and retain settings.
