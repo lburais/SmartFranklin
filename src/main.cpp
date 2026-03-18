@@ -180,9 +180,9 @@ void setup() {
     auto cfg = M5.config();
 
 #if defined(ARDUINO_M5STACK_DIAL)
-    cfg.output_power = false;
+    cfg.output_power = true;
     cfg.internal_imu = false;
-    cfg.internal_rtc = false;
+    cfg.internal_rtc = true;
 #else
     cfg.output_power = true;   // Enable 5V output power for peripheral devices
     cfg.internal_imu = true;   // Enable internal 6-axis IMU (accelerometer + gyroscope)

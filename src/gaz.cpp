@@ -16,8 +16,8 @@
 
 namespace {
 
-constexpr uint8_t WEIGHT_I2C_ADDRESS = 0x26;
-constexpr uint32_t WEIGHT_I2C_CLOCK_HZ = 400000U;
+constexpr uint8_t GAZ_I2C_ADDRESS = 0x26;
+constexpr uint32_t GAZ_I2C_CLOCK_HZ = 400000U;
 constexpr const char* GAZ_DEVICE_FULL_NAME = "M5Stack Weight I2C Unit";
 
 // Constants for fill level calculation
@@ -42,23 +42,26 @@ public:
     bool isInitialized() const;
 
 private:
-    bool detectRoute();
-    void publishI2cConfiguration() const;
     void publishCalibrationGap(float gap) const;
     void publishWeight(int32_t weightG, const int32_t fillPct) const;
     bool refreshMeasurementLocked(int32_t& weightG, int32_t& fillPct);
 
     mutable std::mutex m_mutex;
-    sf_i2c::I2C m_i2c{WEIGHT_I2C_CLOCK_HZ};
+    sf_i2c::I2C m_i2c{GAZ_I2C_CLOCK_HZ};
     m5::unit::UnitUnified m_units;
     m5::unit::UnitWeightI2C m_unit;
+
     bool m_initialized = false;
-    sf_i2c::Route m_route;
-    int8_t m_wireSda = -1;
-    int8_t m_wireScl = -1;
     float m_lastCalibrationGap = 1.0f;
     int32_t m_lastWeightG = 0;
     int32_t m_lastFillPct = 0;
+
+    sf_i2c::Device m_device = { .route = sf_i2c::Route{}, 
+                                .sda = -1, 
+                                .scl = -1, 
+                                .clock = GAZ_I2C_CLOCK_HZ, 
+                                .address = GAZ_I2C_ADDRESS, 
+                                .deviceName = GAZ_DEVICE_FULL_NAME };
 };
 
 GazRuntime GAZ_RUNTIME;
@@ -67,57 +70,51 @@ GazRuntime GAZ_RUNTIME;
 
 Gaz GAZ_MODULE;
 
-bool GazRuntime::detectRoute()
-{
-    m_route = sf_i2c::Route{};
-    return m_i2c.detectRoute(WEIGHT_I2C_ADDRESS, m_route);
-}
-
 bool GazRuntime::init()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    m_i2c.beginPortA(m_wireSda, m_wireScl);
-    M5_LOGI("[GAZ] using Wire SDA:%d SCL:%d", m_wireSda, m_wireScl);
+    m_i2c.beginPortA(m_device.sda, m_device.scl);
+    M5_LOGI("[GAZ] using Wire SDA:%d SCL:%d", m_device.sda, m_device.scl);
 
     bool initialized = false;
 
-    if (!detectRoute()) {
+    if (!m_i2c.detectRoute(GAZ_I2C_ADDRESS, m_device.route)) {
         m_initialized = false;
         M5_LOGW("[GAZ] Weight I2C unit was not detected on internal/direct/PAHub paths");
-        publishI2cConfiguration();
+        m_i2c.publishConfiguration(m_device);
         return false;
     }
 
     m_units = m5::unit::UnitUnified{};
 
-    if (sf_i2c::isPaHubRoute(m_route.mode)) {
-        if (!m_i2c.selectPaHubChannel(m_route.mode, static_cast<uint8_t>(m_route.paHubChannel))) {
-            M5_LOGE("[GAZ] failed to select PAHub channel %d", m_route.paHubChannel);
+    if (sf_i2c::isPaHubRoute(m_device.route.mode)) {
+        if (!m_i2c.selectPaHubChannel(m_device.route.mode, static_cast<uint8_t>(m_device.route.paHubChannel))) {
+            M5_LOGE("[GAZ] failed to select PAHub channel %d", m_device.route.paHubChannel);
             m_initialized = false;
-            publishI2cConfiguration();
+            m_i2c.publishConfiguration(m_device);
             return false;
         }
     }
 
-    if (sf_i2c::isInternalRoute(m_route.mode)) {
+    if (sf_i2c::isInternalRoute(m_device.route.mode)) {
         initialized = m_units.add(m_unit, M5.Ex_I2C) && m_units.begin();
     } else {
         initialized = m_units.add(m_unit, Wire) && m_units.begin();
     }
-    if (sf_i2c::isPaHubRoute(m_route.mode)) {
-        m_i2c.disablePaHubChannels(m_route.mode);
+    if (sf_i2c::isPaHubRoute(m_device.route.mode)) {
+        m_i2c.disablePaHubChannels(m_device.route.mode);
     }
 
     if (!initialized) {
         m_initialized = false;
         M5_LOGW("[GAZ] Weight I2C unit was not detected on supported Wire paths");
-        publishI2cConfiguration();
+        m_i2c.publishConfiguration(m_device);
         return false;
     }
 
     m_initialized = true;
-    publishI2cConfiguration();
+    m_i2c.publishConfiguration(m_device);
 
     const float effectiveGap = sanitizedGap(CONFIG.scale_cal_factor);
     if (!m_unit.writeGap(effectiveGap)) {
@@ -131,26 +128,6 @@ bool GazRuntime::init()
     return true;
 }
 
-void GazRuntime::publishI2cConfiguration() const
-{
-    char pahubChannelBuf[12] = {0};
-    char sdaBuf[12] = {0};
-    char sclBuf[12] = {0};
-    char addressBuf[8] = {0};
-
-    snprintf(pahubChannelBuf, sizeof(pahubChannelBuf), "%d", m_route.paHubChannel);
-    snprintf(sdaBuf, sizeof(sdaBuf), "%d", m_wireSda);
-    snprintf(sclBuf, sizeof(sclBuf), "%d", m_wireScl);
-    snprintf(addressBuf, sizeof(addressBuf), "0x%02X", WEIGHT_I2C_ADDRESS);
-
-    sf_mqtt::publish("smartfranklin/system/i2c/gaz/mode", sf_i2c::routeModeToString(m_route.mode), 1, true);
-    sf_mqtt::publish("smartfranklin/system/i2c/gaz/pahub_channel", pahubChannelBuf, 1, true);
-    sf_mqtt::publish("smartfranklin/system/i2c/gaz/sda", sdaBuf, 1, true);
-    sf_mqtt::publish("smartfranklin/system/i2c/gaz/scl", sclBuf, 1, true);
-    sf_mqtt::publish("smartfranklin/system/i2c/gaz/address", addressBuf, 1, true);
-    sf_mqtt::publish("smartfranklin/system/i2c/gaz/device_name", GAZ_DEVICE_FULL_NAME, 1, true);
-}
-
 void GazRuntime::publishCalibrationGap(const float gap) const
 {
     char gapBuf[24] = {0};
@@ -160,17 +137,17 @@ void GazRuntime::publishCalibrationGap(const float gap) const
 
 bool GazRuntime::refreshMeasurementLocked(int32_t& weightG, int32_t& fillPct)
 {
-    if (sf_i2c::isPaHubRoute(m_route.mode)) {
-        if (!m_i2c.selectPaHubChannel(m_route.mode, static_cast<uint8_t>(m_route.paHubChannel))) {
-            M5_LOGW("[GAZ] failed to select PAHub channel %d", m_route.paHubChannel);
+    if (sf_i2c::isPaHubRoute(m_device.route.mode)) {
+        if (!m_i2c.selectPaHubChannel(m_device.route.mode, static_cast<uint8_t>(m_device.route.paHubChannel))) {
+            M5_LOGW("[GAZ] failed to select PAHub channel %d", m_device.route.paHubChannel);
             return false;
         }
     }
 
     m_units.update();
 
-    if (sf_i2c::isPaHubRoute(m_route.mode)) {
-        m_i2c.disablePaHubChannels(m_route.mode);
+    if (sf_i2c::isPaHubRoute(m_device.route.mode)) {
+        m_i2c.disablePaHubChannels(m_device.route.mode);
     }
 
     if (!m_unit.updated()) {

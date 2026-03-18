@@ -18,8 +18,18 @@ struct Route {
     int8_t paHubChannel = -1;
 };
 
+struct Device {
+    Route route;
+    int8_t sda;
+    int8_t scl; 
+    int32_t clock; 
+    uint8_t address; 
+    const char* deviceName;   
+};
+
 class I2C {
-public:
+
+    public:
     explicit I2C(uint32_t clockHz = 400000U);
 
     void beginPortA(int8_t& sda, int8_t& scl) const;
@@ -27,6 +37,8 @@ public:
 
     bool selectPaHubChannel(RouteMode mode, uint8_t channel) const;
     void disablePaHubChannels(RouteMode mode) const;
+
+    void publishConfiguration(const Device& device) const;
 
 private:
     bool wireDeviceExists(uint8_t address) const;

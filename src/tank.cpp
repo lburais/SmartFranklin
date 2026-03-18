@@ -71,7 +71,6 @@ public:
     bool isInitialized() const;
 
 private:
-    void publishI2cConfiguration() const;
     void publishDistance(int32_t distanceMm, int32_t fillPct) const;
     bool refreshMeasurementLocked(int32_t& distanceMm);
     bool readDistanceWireLocked(uint32_t& rawDistance) const;
@@ -79,11 +78,16 @@ private:
 
     mutable std::mutex m_mutex;
     sf_i2c::I2C m_i2c{TANK_I2C_CLOCK_HZ};
+
     bool m_initialized = false;
-    sf_i2c::Route m_route;
-    int8_t m_wireSda = -1;
-    int8_t m_wireScl = -1;
     int32_t m_lastDistanceMm = 0;
+
+    sf_i2c::Device m_device = { .route = sf_i2c::Route{}, 
+                                .sda = -1, 
+                                .scl = -1, 
+                                .clock = TANK_I2C_CLOCK_HZ, 
+                                .address = TANK_I2C_ADDRESS, 
+                                .deviceName = TANK_DEVICE_FULL_NAME };
 };
 
 TankRuntime TANK_RUNTIME;
@@ -92,25 +96,6 @@ TankRuntime TANK_RUNTIME;
 
 Tank TANK_MODULE;
 
-void TankRuntime::publishI2cConfiguration() const
-{
-    char pahubChannelBuf[12] = {0};
-    char sdaBuf[12] = {0};
-    char sclBuf[12] = {0};
-    char addressBuf[8] = {0};
-
-    snprintf(pahubChannelBuf, sizeof(pahubChannelBuf), "%d", m_route.paHubChannel);
-    snprintf(sdaBuf, sizeof(sdaBuf), "%d", m_wireSda);
-    snprintf(sclBuf, sizeof(sclBuf), "%d", m_wireScl);
-    snprintf(addressBuf, sizeof(addressBuf), "0x%02X", TANK_I2C_ADDRESS);
-
-    sf_mqtt::publish("smartfranklin/system/i2c/tank/mode", sf_i2c::routeModeToString(m_route.mode), 1, true);
-    sf_mqtt::publish("smartfranklin/system/i2c/tank/pahub_channel", pahubChannelBuf, 1, true);
-    sf_mqtt::publish("smartfranklin/system/i2c/tank/sda", sdaBuf, 1, true);
-    sf_mqtt::publish("smartfranklin/system/i2c/tank/scl", sclBuf, 1, true);
-    sf_mqtt::publish("smartfranklin/system/i2c/tank/address", addressBuf, 1, true);
-    sf_mqtt::publish("smartfranklin/system/i2c/tank/device_name", TANK_DEVICE_FULL_NAME, 1, true);
-}
 
 bool TankRuntime::readDistanceWireLocked(uint32_t& rawDistance) const
 {
@@ -170,20 +155,20 @@ bool TankRuntime::readDistanceExLocked(uint32_t& rawDistance) const
 
 bool TankRuntime::refreshMeasurementLocked(int32_t& distanceMm)
 {
-    if (sf_i2c::isPaHubRoute(m_route.mode)) {
-        if (!m_i2c.selectPaHubChannel(m_route.mode, static_cast<uint8_t>(m_route.paHubChannel))) {
-            M5_LOGW("[TANK] failed to select PAHub channel %d", m_route.paHubChannel);
+    if (sf_i2c::isPaHubRoute(m_device.route.mode)) {
+        if (!m_i2c.selectPaHubChannel(m_device.route.mode, static_cast<uint8_t>(m_device.route.paHubChannel))) {
+            M5_LOGW("[TANK] failed to select PAHub channel %d", m_device.route.paHubChannel);
             return false;
         }
     }
 
     uint32_t rawDistance = 0;
-    const bool readOk = sf_i2c::isInternalRoute(m_route.mode)
+    const bool readOk = sf_i2c::isInternalRoute(m_device.route.mode)
         ? readDistanceExLocked(rawDistance)
         : readDistanceWireLocked(rawDistance);
 
-    if (sf_i2c::isPaHubRoute(m_route.mode)) {
-        m_i2c.disablePaHubChannels(m_route.mode);
+    if (sf_i2c::isPaHubRoute(m_device.route.mode)) {
+        m_i2c.disablePaHubChannels(m_device.route.mode);
     }
 
     if (!readOk) {
@@ -205,19 +190,18 @@ bool TankRuntime::init()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    m_i2c.beginPortA(m_wireSda, m_wireScl);
-    M5_LOGI("[TANK] using Wire SDA:%d SCL:%d", m_wireSda, m_wireScl);
+    m_i2c.beginPortA(m_device.sda, m_device.scl);
+    M5_LOGI("[TANK] using Wire SDA:%d SCL:%d", m_device.sda, m_device.scl);
 
-    m_route = sf_i2c::Route{};
-    if (!m_i2c.detectRoute(TANK_I2C_ADDRESS, m_route)) {
+    if (!m_i2c.detectRoute(TANK_I2C_ADDRESS, m_device.route)) {
         m_initialized = false;
         M5_LOGW("[TANK] ultrasonic unit was not detected on internal/direct/PAHub paths");
-        publishI2cConfiguration();
+        m_i2c.publishConfiguration(m_device);
         return false;
     }
 
     m_initialized = true;
-    publishI2cConfiguration();
+    m_i2c.publishConfiguration(m_device);
 
     M5_LOGI("[TANK] Ultrasonic I2C initialization complete");
     return true;
