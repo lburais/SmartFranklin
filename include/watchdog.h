@@ -41,7 +41,7 @@
  * 
  * Critical Tasks:
  *   - Main Loop: Core system loop task
- *   - Sensor Tasks: Data acquisition tasks (weight, distance, etc.)
+ *   - Sensor Tasks: Data acquisition tasks (weight, tilt, etc.)
  *   - Network Tasks: MQTT, WiFi, cellular connectivity
  *   - Display Tasks: UI update and user interface
  *   - Storage Tasks: Configuration and data persistence

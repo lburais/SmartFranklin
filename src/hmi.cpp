@@ -357,9 +357,10 @@ void HMI::updateSnapshot(DisplaySnapshot& snapshot)
     {
         std::lock_guard<std::mutex> lock(DATA_MUTEX);
 
-        snapshot.distance_cm = DATA.distance_cm;
         snapshot.weight_gaz = DATA.weight_gaz;
         snapshot.fill_gaz = DATA.fill_gaz;
+        snapshot.distance_tank_mm = DATA.distance_tank_mm;
+        snapshot.fill_tank = DATA.fill_tank;
         snapshot.pitch = DATA.pitch;
         snapshot.roll = DATA.roll;
         snapshot.bms_voltage = DATA.bms_voltage;
@@ -374,8 +375,15 @@ void HMI::updateSnapshot(DisplaySnapshot& snapshot)
         snapshot.gps_utc_time = DATA.gps_utc_time;
         snapshot.gps_rtc_time = DATA.gps_rtc_time;
     }
-
     last_snapshot_ = snapshot;
+}
+
+/** @brief Draw helper for Tank ultrasonic page. */
+void HMI::drawTankScreen(const DisplaySnapshot& snapshot) const {
+    M5GFX& lcd = M5.Display;
+    drawTitleBox("Tank");
+    beginContentArea();
+    lcd.printf("Distance: %d mm\nFill: %d%%", snapshot.distance_tank_mm, snapshot.fill_tank);
 }
 
 /**
@@ -388,15 +396,6 @@ void HMI::beginContentArea() const
     lcd.setTextSize(CONTENT_TEXT_SIZE);
     lcd.setTextColor(COLOR_CONTENT_TEXT, COLOR_CONTENT_BG);
     lcd.setCursor(CONTENT_X, CONTENT_Y);
-}
-
-/** @brief Draw helper for Tank distance page. */
-void HMI::drawTankScreen(const DisplaySnapshot& snapshot) const
-{
-    M5GFX& lcd = M5.Display;
-    drawTitleBox("Tank");
-    beginContentArea();
-    lcd.printf("Distance: %.1f cm", snapshot.distance_cm);
 }
 
 /** @brief Draw helper for Gaz weight page. */

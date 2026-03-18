@@ -21,7 +21,7 @@
  *   a mutex to prevent race conditions in the FreeRTOS multi-tasking environment.
  * 
  * Data Categories:
- *   - Sensors: Distance, orientation, weight, time measurements
+ *   - Sensors: Orientation, weight, and time measurements
  *   - Power: Battery voltage, current, state of charge
  *   - Actuators: LED and buzzer control states
  *   - Settings: Target charge level and other configurable parameters
@@ -41,7 +41,7 @@
  *   - Persistence: Critical data saved to configuration store
  * 
  * Update Frequency:
- *   - Sensors: Vary by sensor type (distance: 100ms, weight: 1s)
+ *   - Sensors: Vary by sensor type (tilt: 1s, weight: 60s)
  *   - Actuators: Immediate on command receipt
  *   - Settings: On configuration changes
  *   - Time: Continuous RTC updates
@@ -119,25 +119,6 @@
  * MQTT, and control functions. Thread-safe access provided through DATA_MUTEX.
  */
 struct SmartData {
-    // ============================================================================
-    // Distance Sensor Data
-    // ============================================================================
-
-    /**
-     * @brief Distance measurement from ultrasonic or laser sensor.
-     * 
-     * Current distance reading from proximity sensor in centimeters.
-     * Updated by distance measurement task at regular intervals.
-     * Used for obstacle detection and proximity monitoring.
-     * 
-     * Units: Centimeters (cm)
-     * Range: 0.0 to sensor maximum (typically 400-500 cm)
-     * Precision: 1 decimal place
-     * Update Rate: Configurable (default ~100ms)
-     * Default: 0.0 (no measurement)
-     */
-    float distance_cm = 0;
-
     // ============================================================================
     // Orientation Sensor Data
     // ============================================================================
@@ -251,6 +232,14 @@ struct SmartData {
     int32_t fill_gaz = 0;
 
     /**
+     * @brief Tank fill percentage derived from ultrasonic distance.
+     *
+     * Units: Percentage (%)
+     * Range: 0 to 100
+     */
+    int32_t fill_tank = 0;
+
+    /**
      * @brief Current weight measurement from load cell.
      * 
      * Weight reading from M5Stack weight sensor in grams.
@@ -264,6 +253,14 @@ struct SmartData {
      * Default: 0 (no weight measured)
      */
     int32_t weight_gaz = 0;
+
+    /**
+     * @brief Ultrasonic distance from sensor to tank surface.
+     *
+     * Units: Millimeters (mm)
+     * Range: 20 to 4500 (sensor-limited)
+     */
+    int32_t distance_tank_mm = 0;
 
     /**
      * @brief Weight sensor calibration gap value.
@@ -398,7 +395,7 @@ struct SmartData {
  *   - Consistency: Update related fields atomically
  * 
  * Usage Examples:
- *   - Sensors: DATA.distance_cm = measurement;
+ *   - Sensors: DATA.pitch = measurement;
  *   - Actuators: if (DATA.led_state) turn_on_led();
  *   - Display: show_value(DATA.bms_soc);
  *   - MQTT: publish("voltage", String(DATA.bms_voltage));
@@ -418,7 +415,7 @@ extern SmartData DATA;
  * Usage Pattern:
  *   std::lock_guard<std::mutex> lock(DATA_MUTEX);
  *   // Access DATA fields here
- *   DATA.distance_cm = new_value;
+ *   DATA.pitch = new_value;
  *   // Lock automatically released
  * 
  * Performance Considerations:

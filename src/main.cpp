@@ -15,7 +15,7 @@
  *   - M5Stack hardware initialization (IMU, RTC, power management)
  *   - Dual WiFi mode (AP + STA) with captive portal fallback
  *   - MQTT broker integration for remote command handling
- *   - Multi-sensor support (distance, weight, tilt, RTC)
+ *   - Multi-sensor support (weight, tilt, RTC)
  *   - BLE communication for battery management systems
  *   - Meshtastic bridge for mesh networking
  *   - NB-IoT connectivity
@@ -72,9 +72,9 @@
 
 TaskHandle_t taskWiFiHandle             = nullptr;  // WiFi connectivity management
 TaskHandle_t taskMqttHandle             = nullptr;  // MQTT client+broker communication
-TaskHandle_t taskDistanceHandle         = nullptr;  // Distance sensor reading
 TaskHandle_t taskWeightHandle           = nullptr;  // Weight sensor reading
 TaskHandle_t taskGazHandle              = nullptr;  // Gaz/weight sensor reading
+TaskHandle_t taskTankHandle             = nullptr;  // Tank ultrasonic reading
 TaskHandle_t taskTiltHandle             = nullptr;  // Tilt sensor reading
 TaskHandle_t taskRtcHandle              = nullptr;  // Real-time clock synchronization
 TaskHandle_t taskGpsHandle              = nullptr;  // Gravity DFR1103 GPS/RTC task
@@ -274,12 +274,12 @@ void setup() {
     xTaskCreatePinnedToCore(taskHmi,              "HMI",      8192, nullptr, 3,  &taskHmiHandle,            1);
     #endif
 
-    #ifndef DISABLE_DISTANCE
-    xTaskCreatePinnedToCore(taskDistance,         "DISTANCE", 4096, nullptr, 2, &taskDistanceHandle, 1);
-    #endif
-
     #ifndef DISABLE_GAZ
     xTaskCreatePinnedToCore(taskGaz,              "GAZ", 4096, nullptr, 2, &taskGazHandle, 1);
+    #endif
+
+    #ifndef DISABLE_TANK
+    xTaskCreatePinnedToCore(taskTank,             "TANK", 4096, nullptr, 2, &taskTankHandle, 1);
     #endif
 
     #ifndef DISABLE_TILT

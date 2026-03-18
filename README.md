@@ -13,7 +13,7 @@ SmartFranklin is an ESP32 IoT controller for **M5StickC Plus2** built around con
 ## What It Does
 
 - Runs a local HMI (screen navigation, button handling, scale calibration workflow)
-- Collects telemetry from distance, weight, tilt, RTC, GPS, BLE BMS, and board sensors
+- Collects telemetry from weight, tilt, RTC, GPS, BLE BMS, and board sensors
 - Manages Wi-Fi AP/STA connectivity and a unified MQTT runtime (`taskMqtt`)
 - Bridges optional transports (Meshtastic and NB-IoT2)
 - Applies capability-gated startup based on detected hardware and configuration
@@ -35,7 +35,6 @@ flowchart TD
         T_HW[taskHwMonitor]
         T_MQTT[taskMqtt]
         T_WIFI[taskWiFi]
-        T_DIST[taskDistance]
         T_GAZ[taskGaz]
         T_TILT[taskTilt]
         T_RTC[taskRtc]
@@ -51,7 +50,6 @@ flowchart TD
     SETUP --> T_HW
     SETUP --> T_MQTT
     SETUP --> T_WIFI
-    SETUP --> T_DIST
     SETUP --> T_GAZ
     SETUP --> T_TILT
     SETUP --> T_RTC
@@ -72,7 +70,6 @@ flowchart TD
 | `taskHwMonitor` | M5 board telemetry publication |
 | `taskMqtt` | Unified MQTT runtime (embedded local broker + external client path) |
 | `taskWiFi` | AP/STA connectivity lifecycle and reconnection |
-| `taskDistance` | Distance acquisition and publication |
 | `taskGaz` | Gaz bottle weight acquisition, calibration application, and publication |
 | `taskTilt` | Pitch/roll acquisition and publication |
 | `taskRtc` | RTC timekeeping and publication |
@@ -93,7 +90,7 @@ Boot-time task creation is capability-gated: selected tasks are created only whe
 - `src/mqtt.cpp`, `include/mqtt.h`: MQTT API implementation
 - `src/task_mqtt.cpp`: unified MQTT execution task
 - `src/gps.cpp`, `include/gps.h`: DFR1103 integration
-- `src/task_distance.cpp`, `src/task_gaz.cpp`, `src/task_tilt.cpp`, `src/task_rtc.cpp`, `src/task_gps.cpp`: sensor/runtime tasks
+- `src/task_gaz.cpp`, `src/task_tilt.cpp`, `src/task_rtc.cpp`, `src/task_gps.cpp`: sensor/runtime tasks
 - `src/task_wifi.cpp`, `src/task_meshtastic_bridge.cpp`, `src/task_nbiot.cpp`: connectivity/transport tasks
 - `src/task_bms_ble.cpp`, `src/task_hw_monitor.cpp`, `src/task_watchdog.cpp`: supervision and telemetry tasks
 - `include/`: shared interfaces

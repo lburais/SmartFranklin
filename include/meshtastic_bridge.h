@@ -18,7 +18,7 @@
  *   The Meshtastic bridge module integrates SmartFranklin with the Meshtastic
  *   ecosystem, providing mesh networking capabilities for IoT applications.
  *   Meshtastic uses LoRa radio technology to create decentralized mesh networks
- *   that can operate over long distances without cellular or WiFi infrastructure.
+ *   that can operate over long-range links without cellular or WiFi infrastructure.
  *   This bridge enables SmartFranklin to send and receive text messages through
  *   the mesh network for remote monitoring, control, and data sharing.
  * 

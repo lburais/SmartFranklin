@@ -24,13 +24,12 @@
  *   - screen-name publication for MQTT UI observability.
  *
  * Screen Map:
- *   - 0: Tank (distance)
- *   - 1: Gaz (weight)
- *   - 2: Level (pitch/roll)
- *   - 3: Battery (BMS)
- *   - 4: GPS
- *   - 5: RTC
- *   - 6: Scale Calibration
+ *   - 0: Gaz (weight)
+ *   - 1: Level (pitch/roll)
+ *   - 2: Battery (BMS)
+ *   - 3: GPS
+ *   - 4: RTC
+ *   - 5: Scale Calibration
  *
  * ============================================================================
  * MIT License
@@ -103,7 +102,7 @@ public:
 
 private:
     /** @brief Number of available UI screens. */
-    static constexpr int kScreenCount = 7;
+    static constexpr int kScreenCount = 6;
 
     /**
      * @brief Immutable copy of shared DATA used by one render pass.
@@ -112,9 +111,10 @@ private:
      * captured under lock and then consumed lock-free by drawing helpers.
      */
     struct DisplaySnapshot {
-        float distance_cm = 0.0f;
         int32_t weight_gaz = 0;
         int32_t fill_gaz = 0;
+        int32_t distance_tank_mm = 0;
+        int32_t fill_tank = 0;
         float pitch = 0.0f;
         float roll = 0.0f;
         float bms_voltage = 0.0f;
@@ -154,9 +154,8 @@ private:
     /** @brief Applies common text/color/cursor settings for page content area. */
     void beginContentArea() const;
 
-    /** @brief Draws distance screen (Tank). */
+    /** @brief Draws tank screen (Ultrasonic). */
     void drawTankScreen(const DisplaySnapshot& snapshot) const;
-
     /** @brief Draws weight screen (Gaz). */
     void drawGazScreen(const DisplaySnapshot& snapshot) const;
 

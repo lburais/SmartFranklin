@@ -396,9 +396,10 @@ void web_dashboard_init()
         JsonDocument doc;
         {
             std::lock_guard<std::mutex> lock(DATA_MUTEX);
-            doc["distance_cm"] = DATA.distance_cm;
             doc["weight_gaz"] = DATA.weight_gaz;
             doc["fill_gaz"] = DATA.fill_gaz;
+            doc["tank_distance_mm"] = DATA.distance_tank_mm;
+            doc["tank_fill"] = DATA.fill_tank;
             doc["pitch"] = DATA.pitch;
             doc["roll"] = DATA.roll;
             doc["rtc_time"] = DATA.rtc_time;

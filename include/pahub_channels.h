@@ -7,8 +7,8 @@
  * Project:     SmartFranklin IoT Device Controller
  * Description: Header file defining PA Hub (Port Address Hub) channel
  *              assignments and timing constants for I2C device multiplexing.
- *              Configures channel allocation for distance sensor, weight sensor,
- *              and other peripherals connected through the PA Hub multiplexer.
+ *              Configures channel allocation for weight sensor and other
+ *              peripherals connected through the PA Hub multiplexer.
  * 
  * Author:      Laurent Burais
  * Date:        5 March 2026
@@ -33,13 +33,12 @@
  * 
  * Channel Discovery Strategy:
  *   - Channels are discovered dynamically during startup enumeration
- *   - Distance/weight units are bound to detected channels at runtime
+ *   - Supported units are bound to detected channels at runtime
  *   - Channels 0-7 are scanned when PA Hub is present
  *   - Internal devices (IMU/RTC) use dedicated buses
  *   - Dynamic binding avoids hardcoded channel assumptions
  * 
  * Device Integration:
- *   - Distance Sensor: Discovered on direct I2C or PA Hub channel
  *   - Weight Sensor: Discovered on direct I2C or PA Hub channel
  *   - IMU Sensor: Internal MPU6886, no PA Hub required
  *   - RTC Module: Internal BM8563, no PA Hub required
@@ -49,7 +48,6 @@
  *   - Weight Sensor: 1000ms (1Hz) - stable readings for load cells
  *   - Tilt Sensor: 1000ms (1Hz) - sufficient for orientation changes
  *   - RTC Update: 1000ms (1Hz) - time synchronization frequency
- *   - Distance Sensor: 1000ms (1Hz) - balance responsiveness vs. power
  *   - Rationale: Conservative periods to minimize power consumption
  *   - Adjustability: Periods can be modified based on application needs
  * 

@@ -80,11 +80,6 @@
  */
 #define PERIOD_RTC          60000
 
-/**
- * @brief Sampling period for distance task updates.
- */
-#define PERIOD_DISTANCE     60000
-
 // ============================================================================
 // External Task Handle Declarations
 // ============================================================================
@@ -92,9 +87,9 @@
 
 extern TaskHandle_t taskWiFiHandle;             // WiFi connectivity management
 extern TaskHandle_t taskMqttHandle;             // MQTT client+broker communication
-extern TaskHandle_t taskDistanceHandle;         // Distance sensor acquisition
 extern TaskHandle_t taskWeightHandle;           // Weight sensor acquisition
 extern TaskHandle_t taskGazHandle;              // Gaz/weight sensor acquisition
+extern TaskHandle_t taskTankHandle;             // Tank ultrasonic acquisition
 extern TaskHandle_t taskTiltHandle;             // Tilt sensor acquisition
 extern TaskHandle_t taskRtcHandle;              // Real-time clock synchronization
 extern TaskHandle_t taskGpsHandle;              // Gravity DFR1103 GPS/RTC acquisition
@@ -132,18 +127,6 @@ void taskWiFi(void *pvParameters);
 void taskMqtt(void *pvParameters);
 
 /**
- * @brief Distance sensor data acquisition task.
- * 
- * Periodically reads distance sensor (ultrasonic/LIDAR), processes raw values,
- * applies calibration, and publishes measurements to MQTT topics.
- * Used for tank level, proximity detection, or distance monitoring.
- * 
- * @param pvParameters FreeRTOS task parameter (unused)
- * @return void (infinite loop, never returns)
- */
-void taskDistance(void *pvParameters);
-
-/**
  * @brief Weight sensor data acquisition task.
  * 
  * Reads load cells or weight transducers at regular intervals, applies
@@ -165,6 +148,18 @@ void taskWeight(void *pvParameters);
  * @return void (infinite loop, never returns)
  */
 void taskGaz(void *pvParameters);
+
+/**
+ * @brief Tank ultrasonic level acquisition task.
+ *
+ * Uses the M5Stack ultrasonic I2C unit to read distance-to-surface values,
+ * derives fill percentage from configured tank mapping constants, updates
+ * shared DATA, and publishes MQTT topics.
+ *
+ * @param pvParameters FreeRTOS task parameter (unused)
+ * @return void (infinite loop, never returns)
+ */
+void taskTank(void *pvParameters);
 
 /**
  * @brief Tilt/Angle sensor data acquisition task.

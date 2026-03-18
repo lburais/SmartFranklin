@@ -29,11 +29,6 @@
     </div>
 
     <div class="card">
-        <div class="label">Distance (Sonic)</div>
-        <div id="distance" class="value">-- cm</div>
-    </div>
-
-    <div class="card">
         <div class="label">Temperature (if available)</div>
         <div id="temp" class="value">-- °C</div>
     </div>
@@ -47,15 +42,10 @@
         <div class="label">Weight (g)</div>
         <canvas id="chart_weight"></canvas>
     </div>
-
-    <div class="card">
-        <div class="label">Distance (cm)</div>
-        <canvas id="chart_distance"></canvas>
-    </div>
 </div>
 
 <script>
-let weightChart, distanceChart;
+let weightChart;
 
 function initCharts() {
     weightChart = new Chart(document.getElementById('chart_weight'), {
@@ -64,11 +54,6 @@ function initCharts() {
         options: { animation:false }
     });
 
-    distanceChart = new Chart(document.getElementById('chart_distance'), {
-        type: 'line',
-        data: { labels: [], datasets: [{ label:"Distance", data:[], borderColor:"#ffeb3b", borderWidth:2 }] },
-        options: { animation:false }
-    });
 }
 
 function update() {
@@ -76,7 +61,6 @@ function update() {
         .then(r => r.json())
         .then(d => {
             document.getElementById("weight").textContent = d.weight + " g";
-            document.getElementById("distance").textContent = d.distance + " cm";
             document.getElementById("temp").textContent = d.temperature + " °C";
 
             let t = new Date().toLocaleTimeString();
@@ -88,14 +72,6 @@ function update() {
                 weightChart.data.datasets[0].data.shift();
             }
             weightChart.update();
-
-            distanceChart.data.labels.push(t);
-            distanceChart.data.datasets[0].data.push(d.distance);
-            if (distanceChart.data.labels.length > 20) {
-                distanceChart.data.labels.shift();
-                distanceChart.data.datasets[0].data.shift();
-            }
-            distanceChart.update();
         });
 }
 
