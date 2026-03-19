@@ -2,6 +2,8 @@
 
 #include <Arduino.h>
 
+#include "i2c.h"
+
 /**
  * @brief Gas bottle weight runtime built on M5Stack Weight I2C.
  *
@@ -13,10 +15,11 @@
 class Gaz {
 public:
     /**
-     * @brief Detects and initializes the M5 Weight I2C unit.
+     * @brief Initializes the M5 Weight I2C unit using a pre-detected route.
+     * @param device Resolved I2C device route and bus configuration.
      * @return true when the sensor is reachable and configured.
      */
-    bool init();
+    bool init(bool iSInternalRoute);
 
     /**
      * @brief Executes one sensor update cycle.

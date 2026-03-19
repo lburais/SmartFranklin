@@ -227,8 +227,6 @@ bool config_load()
     CONFIG.meshtastic_pin_rx         = doc["meshtastic_pin_rx"] | defaultCONFIG.meshtastic_pin_rx;
     CONFIG.meshtastic_pin_tx         = doc["meshtastic_pin_tx"] | defaultCONFIG.meshtastic_pin_tx;
 
-    CONFIG.task_gaz_loop_ms = doc["task_gaz_loop_ms"] | defaultCONFIG.task_gaz_loop_ms;
-    CONFIG.task_tank_loop_ms = doc["task_tank_loop_ms"] | defaultCONFIG.task_tank_loop_ms;
     CONFIG.task_gps_loop_ms = doc["task_gps_loop_ms"] | defaultCONFIG.task_gps_loop_ms;
     CONFIG.task_mqtt_loop_ms = doc["task_mqtt_loop_ms"] | defaultCONFIG.task_mqtt_loop_ms;
     CONFIG.task_hmi_loop_ms = doc["task_hmi_loop_ms"] | defaultCONFIG.task_hmi_loop_ms;
@@ -339,8 +337,6 @@ bool config_save()
     // Task Timing Configuration
     // =========================================================================
 
-    doc["task_gaz_loop_ms"] = CONFIG.task_gaz_loop_ms;
-    doc["task_tank_loop_ms"] = CONFIG.task_tank_loop_ms;
     doc["task_gps_loop_ms"] = CONFIG.task_gps_loop_ms;
     doc["task_mqtt_loop_ms"] = CONFIG.task_mqtt_loop_ms;
     doc["task_hmi_loop_ms"] = CONFIG.task_hmi_loop_ms;

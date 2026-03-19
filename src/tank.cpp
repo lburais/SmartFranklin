@@ -66,7 +66,7 @@ int32_t distanceToFillPct(const int32_t distanceMm)
 
 class TankRuntime {
 public:
-    bool init();
+    bool init(const sf_i2c::Device& device);
     void process();
     bool isInitialized() const;
 
@@ -77,7 +77,6 @@ private:
     bool readDistanceExLocked(uint32_t& rawDistance) const;
 
     mutable std::mutex m_mutex;
-    sf_i2c::I2C m_i2c{TANK_I2C_CLOCK_HZ};
 
     bool m_initialized = false;
     int32_t m_lastDistanceMm = 0;
@@ -155,21 +154,10 @@ bool TankRuntime::readDistanceExLocked(uint32_t& rawDistance) const
 
 bool TankRuntime::refreshMeasurementLocked(int32_t& distanceMm)
 {
-    if (sf_i2c::isPaHubRoute(m_device.route.mode)) {
-        if (!m_i2c.selectPaHubChannel(m_device.route.mode, static_cast<uint8_t>(m_device.route.paHubChannel))) {
-            M5_LOGW("[TANK] failed to select PAHub channel %d", m_device.route.paHubChannel);
-            return false;
-        }
-    }
-
     uint32_t rawDistance = 0;
     const bool readOk = sf_i2c::isInternalRoute(m_device.route.mode)
         ? readDistanceExLocked(rawDistance)
         : readDistanceWireLocked(rawDistance);
-
-    if (sf_i2c::isPaHubRoute(m_device.route.mode)) {
-        m_i2c.disablePaHubChannels(m_device.route.mode);
-    }
 
     if (!readOk) {
         return false;
@@ -186,22 +174,23 @@ bool TankRuntime::refreshMeasurementLocked(int32_t& distanceMm)
     return true;
 }
 
-bool TankRuntime::init()
+bool TankRuntime::init(const sf_i2c::Device& device)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    m_i2c.beginPortA(m_device.sda, m_device.scl);
-    M5_LOGI("[TANK] using Wire SDA:%d SCL:%d", m_device.sda, m_device.scl);
-
-    if (!m_i2c.detectRoute(TANK_I2C_ADDRESS, m_device.route)) {
+    m_device = device;
+    if (m_device.route.mode == sf_i2c::RouteMode::Unset) {
         m_initialized = false;
-        M5_LOGW("[TANK] ultrasonic unit was not detected on internal/direct/PAHub paths");
-        m_i2c.publishConfiguration(m_device);
+        M5_LOGW("[TANK] invalid I2C route (unset)");
         return false;
     }
 
     m_initialized = true;
-    m_i2c.publishConfiguration(m_device);
+    M5_LOGI("[TANK] using route=%s channel=%d SDA=%d SCL=%d",
+            sf_i2c::routeModeToString(m_device.route.mode),
+            m_device.route.paHubChannel,
+            m_device.sda,
+            m_device.scl);
 
     M5_LOGI("[TANK] Ultrasonic I2C initialization complete");
     return true;
@@ -256,9 +245,9 @@ bool TankRuntime::isInitialized() const
     return m_initialized;
 }
 
-bool Tank::init()
+bool Tank::init(const sf_i2c::Device& device)
 {
-    return TANK_RUNTIME.init();
+    return TANK_RUNTIME.init(device);
 }
 
 void Tank::process()

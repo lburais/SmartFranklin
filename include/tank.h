@@ -2,6 +2,8 @@
 
 #include <Arduino.h>
 
+#include "i2c.h"
+
 /**
  * @brief Tank ultrasonic runtime built on M5Stack Unit Ultrasonic I2C.
  *
@@ -12,10 +14,11 @@
 class Tank {
 public:
     /**
-     * @brief Detects and initializes the M5Stack ultrasonic I2C unit.
+     * @brief Initializes the M5Stack ultrasonic I2C unit using a pre-detected route.
+     * @param device Resolved I2C device route and bus configuration.
      * @return true when the sensor is reachable.
      */
-    bool init();
+    bool init(const sf_i2c::Device& device);
 
     /**
      * @brief Executes one sensor update cycle.

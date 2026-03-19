@@ -72,7 +72,7 @@
 TaskHandle_t taskWiFiHandle             = nullptr;  // WiFi connectivity management
 TaskHandle_t taskMqttHandle             = nullptr;  // MQTT client+broker communication
 TaskHandle_t taskWeightHandle           = nullptr;  // Weight sensor reading
-TaskHandle_t taskGazHandle              = nullptr;  // Gaz/weight sensor reading
+//TaskHandle_t taskGazHandle              = nullptr;  // Gaz/weight sensor reading
 TaskHandle_t taskTankHandle             = nullptr;  // Tank ultrasonic reading
 TaskHandle_t taskI2cSensorsHandle       = nullptr;  // Unified I2C sensors (GAZ + TANK)
 TaskHandle_t taskTiltHandle             = nullptr;  // Tilt sensor reading
@@ -224,9 +224,9 @@ void setup() {
     #endif
 
     #if defined(USE_LEGACY_SPLIT_I2C_SENSOR_TASKS)
-        #ifndef DISABLE_GAZ
-        xTaskCreatePinnedToCore(taskGaz,              "GAZ",  4096, nullptr, 2, &taskGazHandle,        1);
-        #endif
+        // #ifndef DISABLE_GAZ
+        // xTaskCreatePinnedToCore(taskGaz,              "GAZ",  4096, nullptr, 2, &taskGazHandle,        1);
+        // #endif
 
         #ifndef DISABLE_TANK
         xTaskCreatePinnedToCore(taskTank,             "TANK", 4096, nullptr, 2, &taskTankHandle,       1);
