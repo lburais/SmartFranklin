@@ -39,12 +39,8 @@ struct SmartConfig {
     String admin_user = "admin";
     String admin_pass = "admin";
 
-    // External MQTT
-    String ext_mqtt_host;
-    int ext_mqtt_port = 1883;
-    String ext_mqtt_user;
-    String ext_mqtt_pass;
-    bool ext_mqtt_enabled = false;
+    // Local MQTT broker
+    int mqtt_port = 1883;
 
     // NB-IoT
     bool nbiot_enabled = false;

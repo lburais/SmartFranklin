@@ -35,9 +35,8 @@
  *   2. Authentication
  *      - Admin Username/Password: Web dashboard access control
  * 
- *   3. External MQTT Broker
- *      - Host, Port, Credentials: Cloud connectivity
- *      - Enable/Disable: Toggle cloud integration
+ *   3. Local MQTT Broker
+ *      - Port: Local broker listen port
  * 
  *   4. NB-IoT Cellular
  *      - APN: Carrier network access point name
@@ -49,7 +48,7 @@
  * Default Configuration:
  *   If no config.json exists, sensible defaults are applied:
  *   - WiFi: Empty credentials (user must configure)
- *   - MQTT: Disabled until configured
+ *   - MQTT: Local broker enabled on default port
  *   - NB-IoT: Enabled with 1NCE carrier APN
  *   - Admin: Default credentials (admin/admin - change on first boot!)
  * 
@@ -87,6 +86,7 @@
 #include "pahub_channels.h"
 #include <ArduinoJson.h>
 #include <FS.h>
+#include <M5Unified.h>
 #include <SPIFFS.h>
 
 // ============================================================================
@@ -137,12 +137,8 @@ static const char *CFG_PATH = "/config.json";
  *   - admin_pass: "admin" (⚠️  CHANGE ON FIRST BOOT!)
  *   - scale_cal_factor: 1.0 (uncalibrated)
  * 
- *   External MQTT:
- *   - ext_mqtt_host: "" (disabled)
- *   - ext_mqtt_port: 1883 (standard MQTT port)
- *   - ext_mqtt_user: "" (no authentication)
- *   - ext_mqtt_pass: "" (no authentication)
- *   - ext_mqtt_enabled: false (disabled by default)
+ *   Local MQTT:
+ *   - mqtt_port: 1883 (standard MQTT port)
  * 
  *   NB-IoT Cellular:
  *   - nbiot_enabled: true (enabled by default)
@@ -213,11 +209,10 @@ bool config_load()
     CONFIG.admin_user = doc["admin_user"] | defaultCONFIG.admin_user;
     CONFIG.admin_pass = doc["admin_pass"] | defaultCONFIG.admin_pass;
 
-    CONFIG.ext_mqtt_host = doc["ext_mqtt_host"] | defaultCONFIG.ext_mqtt_host;
-    CONFIG.ext_mqtt_port = doc["ext_mqtt_port"] | defaultCONFIG.ext_mqtt_port;
-    CONFIG.ext_mqtt_user = doc["ext_mqtt_user"] | defaultCONFIG.ext_mqtt_user;
-    CONFIG.ext_mqtt_pass = doc["ext_mqtt_pass"] | defaultCONFIG.ext_mqtt_pass;
-    CONFIG.ext_mqtt_enabled = doc["ext_mqtt_enabled"] | defaultCONFIG.ext_mqtt_enabled;
+    const bool hasMqttPort = !doc["mqtt_port"].isNull();
+    const bool hasLegacyExtMqttPort = !doc["ext_mqtt_port"].isNull();
+
+    CONFIG.mqtt_port = doc["mqtt_port"] | defaultCONFIG.mqtt_port;
 
     CONFIG.nbiot_enabled   = doc["nbiot_enabled"]   | defaultCONFIG.nbiot_enabled;
     CONFIG.nbiot_apn       = doc["nbiot_apn"]       | defaultCONFIG.nbiot_apn;
@@ -237,6 +232,15 @@ bool config_load()
     CONFIG.task_gps_loop_ms = doc["task_gps_loop_ms"] | defaultCONFIG.task_gps_loop_ms;
     CONFIG.task_mqtt_loop_ms = doc["task_mqtt_loop_ms"] | defaultCONFIG.task_mqtt_loop_ms;
     CONFIG.task_hmi_loop_ms = doc["task_hmi_loop_ms"] | defaultCONFIG.task_hmi_loop_ms;
+
+    if (!hasMqttPort && hasLegacyExtMqttPort) {
+        M5_LOGW("[CONFIG] Deprecated key 'ext_mqtt_port' detected and ignored; using mqtt_port=%d", CONFIG.mqtt_port);
+        if (config_save()) {
+            M5_LOGI("[CONFIG] config.json migrated to mqtt_port-only format");
+        } else {
+            M5_LOGW("[CONFIG] failed to persist mqtt_port-only migration");
+        }
+    }
 
     return true;
 }
@@ -264,7 +268,7 @@ bool config_load()
  *   - WiFi credentials (sta_ssid, sta_pass)
  *   - Authentication (admin_user, admin_pass)
  *   - Hardware calibration (scale_cal_factor)
- *   - MQTT broker settings (external and NB-IoT)
+ *   - MQTT broker settings (local and NB-IoT)
  * 
  * Return Value:
  *   - true: File written successfully
@@ -304,15 +308,10 @@ bool config_save()
     doc["admin_pass"] = CONFIG.admin_pass;                  // Web dashboard password
 
     // =========================================================================
-    // External MQTT Broker Configuration
+    // Local MQTT Broker Configuration
     // =========================================================================
-    // Serialize cloud MQTT broker connection details
-    
-    doc["ext_mqtt_host"] = CONFIG.ext_mqtt_host;            // Broker hostname/IP
-    doc["ext_mqtt_port"] = CONFIG.ext_mqtt_port;            // Broker port number
-    doc["ext_mqtt_user"] = CONFIG.ext_mqtt_user;            // Broker username
-    doc["ext_mqtt_pass"] = CONFIG.ext_mqtt_pass;            // Broker password
-    doc["ext_mqtt_enabled"] = CONFIG.ext_mqtt_enabled;      // Enable/disable flag
+
+    doc["mqtt_port"] = CONFIG.mqtt_port;                    // Broker port number
 
     // =========================================================================
     // NB-IoT Cellular Configuration

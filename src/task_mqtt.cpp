@@ -148,7 +148,7 @@ uint32_t mqttLoopMs()
 
 unsigned short localBrokerPort()
 {
-    const int cfgPort = CONFIG.ext_mqtt_port;
+    const int cfgPort = CONFIG.mqtt_port;
     if (cfgPort <= 0 || cfgPort > 65535) {
         return 1883;
     }
@@ -173,8 +173,8 @@ void ensureLocalBrokerStarted()
         s_localBrokerStarted = true;
         M5_LOGI("[MQTT] Local broker started on port %u", port);
 
-        // Publier la configuration du broker sur le topic système
-        sf_mqtt::publish("smartfranklin/system/mqtt_broker/config/host", CONFIG.ext_mqtt_host.c_str());
+        // Publish local broker configuration for diagnostics.
+        sf_mqtt::publish("smartfranklin/system/mqtt_broker/config/host", "local");
         sf_mqtt::publish("smartfranklin/system/mqtt_broker/config/port", std::to_string(port));
         return;
     }

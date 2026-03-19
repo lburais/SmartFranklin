@@ -63,7 +63,6 @@
 #include "web_dashboard.h"
 #include "config_store.h"
 #include "captive_portal.h"
-#include "meshtastic_bridge.h"
 
 // ============================================================================
 // Task Handle Declarations
@@ -75,6 +74,7 @@ TaskHandle_t taskMqttHandle             = nullptr;  // MQTT client+broker commun
 TaskHandle_t taskWeightHandle           = nullptr;  // Weight sensor reading
 TaskHandle_t taskGazHandle              = nullptr;  // Gaz/weight sensor reading
 TaskHandle_t taskTankHandle             = nullptr;  // Tank ultrasonic reading
+TaskHandle_t taskI2cSensorsHandle       = nullptr;  // Unified I2C sensors (GAZ + TANK)
 TaskHandle_t taskTiltHandle             = nullptr;  // Tilt sensor reading
 TaskHandle_t taskRtcHandle              = nullptr;  // Real-time clock synchronization
 TaskHandle_t taskGpsHandle              = nullptr;  // Gravity DFR1103 GPS/RTC task
@@ -87,34 +87,6 @@ static constexpr uint8_t DISPLAY_UI_ROTATION = 3;
 static constexpr uint8_t DISPLAY_UI_BRIGHTNESS = 255;
 
 namespace {
-
-/**
- * @brief Builds a valid MQTT URI from host/URI and configured port.
- *
- * Rules:
- * - If host already includes scheme (e.g. mqtt://...), keep as-is.
- * - If no scheme and no explicit port, append `ext_mqtt_port`.
- * - If no scheme and port already present in host, preserve host:port.
- */
-std::string buildMqttUri(const String& hostOrUri, int port)
-{
-    std::string uri = std::string(hostOrUri.c_str());
-    if (uri.empty()) {
-        return uri;
-    }
-
-    if (uri.find("://") != std::string::npos) {
-        return uri;
-    }
-
-    const bool hasExplicitPort = uri.find(':') != std::string::npos;
-    if (!hasExplicitPort) {
-        const int effectivePort = (port > 0) ? port : 1883;
-        uri += ":" + std::to_string(effectivePort);
-    }
-
-    return std::string("mqtt://") + uri;
-}
 
 bool waitForWiFiApReady(uint32_t timeoutMs)
 {
@@ -224,30 +196,7 @@ void setup() {
     // Validate local MQTT broker startup and local publish path.
     (void)waitForLocalMqttBrokerReady(5000);
 
-    // --- MQTT Layer Setup ---
-    // Configure and initialize ESP-MQTT client for external broker communication
-    if (CONFIG.ext_mqtt_enabled && !CONFIG.ext_mqtt_host.isEmpty()) {
-        std::string uri = buildMqttUri(CONFIG.ext_mqtt_host, CONFIG.ext_mqtt_port);
-
-        sf_mqtt::Config mcfg;
-        mcfg.uri       = uri;                                    // MQTT broker URI
-        mcfg.username  = std::string(CONFIG.ext_mqtt_user.c_str());
-        mcfg.password  = std::string(CONFIG.ext_mqtt_pass.c_str());
-        mcfg.client_id = std::string("SmartFranklin");
-
-        const bool mqtt_ok = sf_mqtt::init(mcfg, [](const std::string &topic, const std::string &payload){
-            meshtastic_bridge_handle_mqtt(String(topic.c_str()), String(payload.c_str()));
-            command_handle(String(topic.c_str()), String(payload.c_str()));
-        });
-
-        if (!mqtt_ok) {
-            M5_LOGW("[MQTT] External MQTT init failed for URI: %s", uri.c_str());
-        }
-    } else if (CONFIG.ext_mqtt_enabled && CONFIG.ext_mqtt_host.isEmpty()) {
-        M5_LOGW("[MQTT] External MQTT enabled but host is empty; skipping init");
-    } else {
-        M5_LOGI("[MQTT] External MQTT disabled in config; skipping init");
-    }
+    M5_LOGI("[MQTT] External MQTT removed; local broker only");
 
     // =========================================================================
     // Command Handler Initialization
@@ -274,12 +223,18 @@ void setup() {
     xTaskCreatePinnedToCore(taskHmi,              "HMI",      8192, nullptr, 3,  &taskHmiHandle,            1);
     #endif
 
-    #ifndef DISABLE_GAZ
-    xTaskCreatePinnedToCore(taskGaz,              "GAZ", 4096, nullptr, 2, &taskGazHandle, 1);
-    #endif
+    #if defined(USE_LEGACY_SPLIT_I2C_SENSOR_TASKS)
+        #ifndef DISABLE_GAZ
+        xTaskCreatePinnedToCore(taskGaz,              "GAZ",  4096, nullptr, 2, &taskGazHandle,        1);
+        #endif
 
-    #ifndef DISABLE_TANK
-    xTaskCreatePinnedToCore(taskTank,             "TANK", 4096, nullptr, 2, &taskTankHandle, 1);
+        #ifndef DISABLE_TANK
+        xTaskCreatePinnedToCore(taskTank,             "TANK", 4096, nullptr, 2, &taskTankHandle,       1);
+        #endif
+    #else
+        #ifndef DISABLE_I2C_SENSORS
+        xTaskCreatePinnedToCore(taskI2cSensors,       "I2C_SENS", 4096, nullptr, 2, &taskI2cSensorsHandle, 1);
+        #endif
     #endif
 
     #ifndef DISABLE_TILT
