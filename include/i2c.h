@@ -20,19 +20,17 @@ struct Route {
 
 struct Device {
     Route route;
-    int8_t sda;
-    int8_t scl; 
-    int32_t clock; 
-    uint8_t address; 
-    const char* deviceName;   
+    uint8_t address;
+    const char* tag;
+    const char* deviceName;
 };
 
 class I2C {
 
     public:
-    explicit I2C(uint32_t clockHz = 400000U);
+    explicit I2C(uint32_t clockHz = 100000U);
 
-    void beginPortA(int8_t& sda, int8_t& scl) const;
+    void beginPortA() const;
     bool detectRoute(uint8_t deviceAddress, Route& route) const;
 
     bool selectPaHubChannel(RouteMode mode, uint8_t channel) const;

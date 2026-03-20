@@ -111,8 +111,8 @@ private:
     GnssRtcExI2C m_exUnit{GPS_I2C_ADDRESS};
     bool m_initialized = false;
     sf_i2c::Route m_route;
-    int8_t m_wireSda = -1;
-    int8_t m_wireScl = -1;
+    // int8_t m_wireSda = -1;
+    // int8_t m_wireScl = -1;
 };
 
 GpsRuntime GPS_RUNTIME;
@@ -138,19 +138,13 @@ bool GpsRuntime::detectRoute()
 void GpsRuntime::publishI2cConfiguration() const
 {
     char pahubChannelBuf[12] = {0};
-    char sdaBuf[12] = {0};
-    char sclBuf[12] = {0};
     char addressBuf[8] = {0};
 
     snprintf(pahubChannelBuf, sizeof(pahubChannelBuf), "%d", m_route.paHubChannel);
-    snprintf(sdaBuf, sizeof(sdaBuf), "%d", m_wireSda);
-    snprintf(sclBuf, sizeof(sclBuf), "%d", m_wireScl);
     snprintf(addressBuf, sizeof(addressBuf), "0x%02X", GPS_I2C_ADDRESS);
 
     sf_mqtt::publish("smartfranklin/system/i2c/gps/mode", sf_i2c::routeModeToString(m_route.mode), 1, true);
     sf_mqtt::publish("smartfranklin/system/i2c/gps/pahub_channel", pahubChannelBuf, 1, true);
-    sf_mqtt::publish("smartfranklin/system/i2c/gps/sda", sdaBuf, 1, true);
-    sf_mqtt::publish("smartfranklin/system/i2c/gps/scl", sclBuf, 1, true);
     sf_mqtt::publish("smartfranklin/system/i2c/gps/address", addressBuf, 1, true);
     sf_mqtt::publish("smartfranklin/system/i2c/gps/device_name", GPS_DEVICE_FULL_NAME, 1, true);
 }
@@ -159,8 +153,8 @@ bool GpsRuntime::init()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    m_i2c.beginPortA(m_wireSda, m_wireScl);
-    M5_LOGI("[GPS] using Wire SDA:%d SCL:%d", m_wireSda, m_wireScl);
+    m_i2c.beginPortA();
+    M5_LOGI("[GPS] initialized Wire port A");
 
     if (!detectRoute()) {
         m_initialized = false;
@@ -180,7 +174,6 @@ bool GpsRuntime::init()
 
     DFRobot_GNSSAndRTC* unit = activeUnit();
     const bool initialized = unit->begin();
-    Wire.begin(m_wireSda, m_wireScl, GPS_I2C_CLOCK_HZ);
     if (sf_i2c::isPaHubRoute(m_route.mode)) {
         m_i2c.disablePaHubChannels(m_route.mode);
     }

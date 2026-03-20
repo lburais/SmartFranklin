@@ -10,13 +10,13 @@ namespace {
 
 static constexpr uint32_t I2C_SENSORS_INIT_RETRY_MS = 10000UL;
 static constexpr uint32_t I2C_SENSORS_LOOP_MS = 1000UL;
-static constexpr uint32_t I2C_SENSORS_CLOCK_HZ = 400000U;
+static constexpr uint32_t I2C_SENSORS_CLOCK_HZ = 100000U;
 
-static constexpr uint8_t GAZ_I2C_ADDRESS = 0x26;
-static constexpr const char* GAZ_DEVICE_FULL_NAME = "M5Stack Weight I2C Unit";
+//static constexpr uint8_t GAZ_I2C_ADDRESS = 0x26;
+//static constexpr const char* GAZ_DEVICE_FULL_NAME = "M5Stack Weight I2C Unit";
 
-static constexpr uint8_t TANK_I2C_ADDRESS = 0x57;
-static constexpr const char* TANK_DEVICE_FULL_NAME = "M5Stack Unit Ultrasonic I2C (RCWL-9600)";
+//static constexpr uint8_t TANK_I2C_ADDRESS = 0x57;
+//static constexpr const char* TANK_DEVICE_FULL_NAME = "M5Stack Unit Ultrasonic I2C (RCWL-9600)";
 
 bool selectPaHubIfNeeded(const sf_i2c::I2C& i2c, const sf_i2c::Device& device, const char* label)
 {
@@ -56,49 +56,18 @@ void taskI2cSensors(void *pv)
     sf_i2c::I2C i2c{};
 
     sf_i2c::Device gazDevice = { .route = sf_i2c::Route{},
-                                 .sda = -1,
-                                 .scl = -1,
-                                 .clock = I2C_SENSORS_CLOCK_HZ,
-                                 .address = GAZ_I2C_ADDRESS,
-                                 .deviceName = GAZ_DEVICE_FULL_NAME };
+                                 .address = 0x26,
+                                 .tag = "gaz",
+                                 .deviceName = "M5Stack Weight I2C Unit" };
 
     sf_i2c::Device tankDevice = { .route = sf_i2c::Route{},
-                                  .sda = -1,
-                                  .scl = -1,
-                                  .clock = I2C_SENSORS_CLOCK_HZ,
-                                  .address = TANK_I2C_ADDRESS,
-                                  .deviceName = TANK_DEVICE_FULL_NAME };
+                                  .address = 0x57,
+                                  .tag = "tank",
+                                  .deviceName = "M5Stack Unit Ultrasonic I2C (RCWL-9600)" };
 
-    i2c.beginPortA(gazDevice.sda, gazDevice.scl);
-    tankDevice.sda = gazDevice.sda;
-    tankDevice.scl = gazDevice.scl;
-    M5_LOGI("[I2C_SENSORS] using Wire SDA:%d SCL:%d", gazDevice.sda, gazDevice.scl);
+    i2c.beginPortA();
 
     for (;;) {
-#ifndef DISABLE_GAZ
-        if (!gazInitialized) {
-            if (!i2c.detectRoute(gazDevice.address, gazDevice.route)) {
-                M5_LOGW("[I2C_SENSORS] GAZ route detection failed");
-                i2c.publishConfiguration(gazDevice);
-                gazInitialized = false;
-            } else {
-                i2c.publishConfiguration(gazDevice);
-                bool channelSelected = selectPaHubIfNeeded(i2c, gazDevice, "I2C_SENSORS");
-                if (channelSelected) {
-                    gazInitialized = GAZ_MODULE.init(sf_i2c::isInternalRoute(gazDevice.route.mode));
-                    disablePaHubIfNeeded(i2c, gazDevice);
-                } else {
-                    gazInitialized = false;
-                }
-            }
-
-            if (!gazInitialized) {
-                M5_LOGW("[I2C_SENSORS] GAZ init failed");
-            }
-        }
-#else
-        gazInitialized = true;
-#endif
 
 #ifndef DISABLE_TANK
         if (!tankInitialized) {
@@ -110,7 +79,7 @@ void taskI2cSensors(void *pv)
                 i2c.publishConfiguration(tankDevice);
                 bool channelSelected = selectPaHubIfNeeded(i2c, tankDevice, "I2C_SENSORS");
                 if (channelSelected) {
-                    tankInitialized = TANK_MODULE.init(tankDevice);
+                    tankInitialized = TANK_MODULE.init(sf_i2c::isInternalRoute(tankDevice.route.mode), tankDevice.address);
                     disablePaHubIfNeeded(i2c, tankDevice);
                 } else {
                     tankInitialized = false;
@@ -123,6 +92,31 @@ void taskI2cSensors(void *pv)
         }
 #else
         tankInitialized = true;
+#endif
+
+#ifndef DISABLE_GAZ
+        if (!gazInitialized) {
+            if (!i2c.detectRoute(gazDevice.address, gazDevice.route)) {
+                M5_LOGW("[I2C_SENSORS] GAZ route detection failed");
+                i2c.publishConfiguration(gazDevice);
+                gazInitialized = false;
+            } else {
+                i2c.publishConfiguration(gazDevice);
+                bool channelSelected = selectPaHubIfNeeded(i2c, gazDevice, "I2C_SENSORS");
+                if (channelSelected) {
+                    gazInitialized = GAZ_MODULE.init(sf_i2c::isInternalRoute(gazDevice.route.mode), gazDevice.address);
+                    disablePaHubIfNeeded(i2c, gazDevice);
+                } else {
+                    gazInitialized = false;
+                }
+            }
+
+            if (!gazInitialized) {
+                M5_LOGW("[I2C_SENSORS] GAZ init failed");
+            }
+        }
+#else
+        gazInitialized = true;
 #endif
 
         if (gazInitialized && tankInitialized) {

@@ -8,16 +8,12 @@
 #include <mutex>
 
 #include "data_model.h"
-#include "i2c.h"
 #include "mqtt.h"
 
 namespace {
 
-constexpr uint8_t TANK_I2C_ADDRESS = 0x57;
 constexpr uint8_t TANK_DISTANCE_REGISTER = 0x01;
-constexpr uint32_t TANK_I2C_CLOCK_HZ = 400000U;
 constexpr uint32_t TANK_CONVERSION_DELAY_MS = 120U;
-constexpr const char* TANK_DEVICE_FULL_NAME = "M5Stack Unit Ultrasonic I2C (RCWL-9600)";
 
 constexpr int32_t TANK_DISTANCE_MIN_MM = 20;
 constexpr int32_t TANK_DISTANCE_MAX_MM = 4500;
@@ -66,27 +62,21 @@ int32_t distanceToFillPct(const int32_t distanceMm)
 
 class TankRuntime {
 public:
-    bool init(const sf_i2c::Device& device);
+    bool init(bool isInternalRoute, uint8_t i2cAddress);
     void process();
     bool isInitialized() const;
 
 private:
     void publishDistance(int32_t distanceMm, int32_t fillPct) const;
     bool refreshMeasurementLocked(int32_t& distanceMm);
-    bool readDistanceWireLocked(uint32_t& rawDistance) const;
-    bool readDistanceExLocked(uint32_t& rawDistance) const;
 
     mutable std::mutex m_mutex;
 
     bool m_initialized = false;
+    bool m_isInternalRoute = false;
+    uint8_t m_i2cAddress = 0x57;
     int32_t m_lastDistanceMm = 0;
 
-    sf_i2c::Device m_device = { .route = sf_i2c::Route{}, 
-                                .sda = -1, 
-                                .scl = -1, 
-                                .clock = TANK_I2C_CLOCK_HZ, 
-                                .address = TANK_I2C_ADDRESS, 
-                                .deviceName = TANK_DEVICE_FULL_NAME };
 };
 
 TankRuntime TANK_RUNTIME;
@@ -95,69 +85,63 @@ TankRuntime TANK_RUNTIME;
 
 Tank TANK_MODULE;
 
-
-bool TankRuntime::readDistanceWireLocked(uint32_t& rawDistance) const
-{
-    Wire.beginTransmission(TANK_I2C_ADDRESS);
-    Wire.write(TANK_DISTANCE_REGISTER);
-    if (Wire.endTransmission() != 0) {
-        return false;
-    }
-
-    delay(TANK_CONVERSION_DELAY_MS);
-
-    const uint8_t readCount = Wire.requestFrom(TANK_I2C_ADDRESS, static_cast<uint8_t>(3));
-    if (readCount < 3) {
-        return false;
-    }
-
-    rawDistance = 0;
-    rawDistance = static_cast<uint32_t>(Wire.read());
-    rawDistance <<= 8;
-    rawDistance |= static_cast<uint32_t>(Wire.read());
-    rawDistance <<= 8;
-    rawDistance |= static_cast<uint32_t>(Wire.read());
-    return true;
-}
-
-bool TankRuntime::readDistanceExLocked(uint32_t& rawDistance) const
-{
-    if (!M5.Ex_I2C.start(TANK_I2C_ADDRESS, false, TANK_I2C_CLOCK_HZ)) {
-        return false;
-    }
-
-    if (!M5.Ex_I2C.write(TANK_DISTANCE_REGISTER) || !M5.Ex_I2C.stop()) {
-        return false;
-    }
-
-    delay(TANK_CONVERSION_DELAY_MS);
-
-    if (!M5.Ex_I2C.start(TANK_I2C_ADDRESS, true, TANK_I2C_CLOCK_HZ)) {
-        return false;
-    }
-
-    rawDistance = 0;
-    for (uint8_t i = 0; i < 3; ++i) {
-        uint8_t byte = 0;
-        const bool lastNack = (i == 2);
-        if (!M5.Ex_I2C.read(&byte, 1U, lastNack)) {
-            M5.Ex_I2C.stop();
-            return false;
-        }
-
-        rawDistance <<= 8;
-        rawDistance |= static_cast<uint32_t>(byte);
-    }
-
-    return M5.Ex_I2C.stop();
-}
-
 bool TankRuntime::refreshMeasurementLocked(int32_t& distanceMm)
 {
     uint32_t rawDistance = 0;
-    const bool readOk = sf_i2c::isInternalRoute(m_device.route.mode)
-        ? readDistanceExLocked(rawDistance)
-        : readDistanceWireLocked(rawDistance);
+    bool readOk = false;
+
+    if (m_isInternalRoute) {
+        if (!M5.Ex_I2C.start(m_i2cAddress, false, Wire.getClock())) {
+            return false;
+        }
+
+        if (!M5.Ex_I2C.write(TANK_DISTANCE_REGISTER) || !M5.Ex_I2C.stop()) {
+            return false;
+        }
+    } else {
+        Wire.beginTransmission(m_i2cAddress);
+        Wire.write(TANK_DISTANCE_REGISTER);
+        if (Wire.endTransmission() != 0) {
+            return false;
+        }
+    }
+
+    delay(TANK_CONVERSION_DELAY_MS);
+
+    if (m_isInternalRoute) {
+
+        if (!M5.Ex_I2C.start(m_i2cAddress, true, Wire.getClock())) {
+            return false;
+        }
+
+        rawDistance = 0;
+        for (uint8_t i = 0; i < 3; ++i) {
+            uint8_t byte = 0;
+            const bool lastNack = (i == 2);
+            if (!M5.Ex_I2C.read(&byte, 1U, lastNack)) {
+                M5.Ex_I2C.stop();
+                return false;
+            }
+
+            rawDistance <<= 8;
+            rawDistance |= static_cast<uint32_t>(byte);
+        }
+
+        readOk = M5.Ex_I2C.stop();
+    } else {
+        const uint8_t readCount = Wire.requestFrom(m_i2cAddress, static_cast<uint8_t>(3));
+        if (readCount < 3) {
+            return false;
+        }
+
+        rawDistance = 0;
+        rawDistance = static_cast<uint32_t>(Wire.read());
+        rawDistance <<= 8;
+        rawDistance |= static_cast<uint32_t>(Wire.read());
+        rawDistance <<= 8;
+        rawDistance |= static_cast<uint32_t>(Wire.read());
+        readOk = true;
+    }
 
     if (!readOk) {
         return false;
@@ -174,23 +158,13 @@ bool TankRuntime::refreshMeasurementLocked(int32_t& distanceMm)
     return true;
 }
 
-bool TankRuntime::init(const sf_i2c::Device& device)
+bool TankRuntime::init(bool iSInternalRoute, uint8_t i2cAddress)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    m_device = device;
-    if (m_device.route.mode == sf_i2c::RouteMode::Unset) {
-        m_initialized = false;
-        M5_LOGW("[TANK] invalid I2C route (unset)");
-        return false;
-    }
-
+    m_isInternalRoute = iSInternalRoute;
+    m_i2cAddress = i2cAddress;
     m_initialized = true;
-    M5_LOGI("[TANK] using route=%s channel=%d SDA=%d SCL=%d",
-            sf_i2c::routeModeToString(m_device.route.mode),
-            m_device.route.paHubChannel,
-            m_device.sda,
-            m_device.scl);
 
     M5_LOGI("[TANK] Ultrasonic I2C initialization complete");
     return true;
@@ -245,9 +219,9 @@ bool TankRuntime::isInitialized() const
     return m_initialized;
 }
 
-bool Tank::init(const sf_i2c::Device& device)
+bool Tank::init(bool isInternalRoute, uint8_t i2cAddress)
 {
-    return TANK_RUNTIME.init(device);
+    return TANK_RUNTIME.init(isInternalRoute, i2cAddress);
 }
 
 void Tank::process()

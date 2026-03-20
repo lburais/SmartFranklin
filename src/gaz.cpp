@@ -28,7 +28,7 @@ float sanitizedGap(const float gap)
 
 class GazRuntime {
 public:
-    bool init(bool iSInternalRoute);
+    bool init(bool iSInternalRoute, uint8_t i2cAddress);
     void process();
     bool tare();
     bool applyCalibration(float gap);
@@ -45,6 +45,7 @@ private:
     m5::unit::UnitWeightI2C m_unit;
 
     bool m_initialized = false;
+    uint8_t m_i2cAddress = 0x26;
     float m_lastCalibrationGap = 1.0f;
     int32_t m_lastWeightG = 0;
     int32_t m_lastFillPct = 0;
@@ -57,9 +58,10 @@ GazRuntime GAZ_RUNTIME;
 
 Gaz GAZ_MODULE;
 
-bool GazRuntime::init(const bool isInternalRoute)
+bool GazRuntime::init(const bool isInternalRoute, const uint8_t i2cAddress)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
+    m_i2cAddress = i2cAddress;
 
     m_units = m5::unit::UnitUnified{};
 
@@ -83,6 +85,7 @@ bool GazRuntime::init(const bool isInternalRoute)
     publishCalibrationGap(effectiveGap);
 
     M5_LOGI("[GAZ] Weight I2C initialization complete");
+    M5_LOGI("[GAZ] address: 0x%02X", m_i2cAddress);
     M5_LOGI("%s", m_units.debugInfo().c_str());
     return true;
 }
@@ -228,9 +231,9 @@ bool GazRuntime::isInitialized() const
     return m_initialized;
 }
 
-bool Gaz::init(bool isInternalRoute)
+bool Gaz::init(bool isInternalRoute, uint8_t i2cAddress)
 {
-    return GAZ_RUNTIME.init(isInternalRoute);
+    return GAZ_RUNTIME.init(isInternalRoute, i2cAddress);
 }
 
 void Gaz::process()

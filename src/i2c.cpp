@@ -19,10 +19,10 @@ I2C::I2C(const uint32_t clockHz)
 {
 }
 
-void I2C::beginPortA(int8_t& sda, int8_t& scl) const
+void I2C::beginPortA() const
 {
-    sda = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_a_sda));
-    scl = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_a_scl));
+    int8_t sda = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_a_sda));
+    int8_t scl = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_a_scl));
 
     Wire.end();
     Wire.begin(sda, scl, m_clockHz);
@@ -146,23 +146,22 @@ void I2C::disablePaHubChannels(const RouteMode mode) const
 }
 
 void I2C::publishConfiguration(const Device& device) const {
-// Route& route, int8_t sda, int8_t scl, uint8_t address, const char* deviceName) const {
     char pahubChannelBuf[12] = {0};
-    char sdaBuf[12] = {0};
-    char sclBuf[12] = {0};
     char addressBuf[8] = {0};
+    const char* tag = device.tag ? device.tag : "unknown";
+    char topicBuf[64] = {0};
 
     snprintf(pahubChannelBuf, sizeof(pahubChannelBuf), "%d", device.route.paHubChannel);
-    snprintf(sdaBuf, sizeof(sdaBuf), "%d", device.sda);
-    snprintf(sclBuf, sizeof(sclBuf), "%d", device.scl);
     snprintf(addressBuf, sizeof(addressBuf), "0x%02X", device.address);
 
-    sf_mqtt::publish("smartfranklin/system/i2c/tank/mode", routeModeToString(device.route.mode), 1, true);
-    sf_mqtt::publish("smartfranklin/system/i2c/tank/pahub_channel", pahubChannelBuf, 1, true);
-    sf_mqtt::publish("smartfranklin/system/i2c/tank/sda", sdaBuf, 1, true);
-    sf_mqtt::publish("smartfranklin/system/i2c/tank/scl", sclBuf, 1, true);
-    sf_mqtt::publish("smartfranklin/system/i2c/tank/address", addressBuf, 1, true);
-    sf_mqtt::publish("smartfranklin/system/i2c/tank/device_name", device.deviceName, 1, true);
+    snprintf(topicBuf, sizeof(topicBuf), "smartfranklin/system/i2c/%s/mode", tag);
+    sf_mqtt::publish(topicBuf, routeModeToString(device.route.mode), 1, true);
+    snprintf(topicBuf, sizeof(topicBuf), "smartfranklin/system/i2c/%s/pahub_channel", tag);
+    sf_mqtt::publish(topicBuf, pahubChannelBuf, 1, true);
+    snprintf(topicBuf, sizeof(topicBuf), "smartfranklin/system/i2c/%s/address", tag);
+    sf_mqtt::publish(topicBuf, addressBuf, 1, true);
+    snprintf(topicBuf, sizeof(topicBuf), "smartfranklin/system/i2c/%s/device_name", tag);
+    sf_mqtt::publish(topicBuf, device.deviceName, 1, true);
 }
 
 bool isInternalRoute(const RouteMode mode)

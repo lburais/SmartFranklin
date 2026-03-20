@@ -15,11 +15,12 @@
 class Gaz {
 public:
     /**
-     * @brief Initializes the M5 Weight I2C unit using a pre-detected route.
-     * @param device Resolved I2C device route and bus configuration.
+     * @brief Initializes the M5 Weight I2C unit.
+     * @param iSInternalRoute True when the sensor is on Ex_I2C, false for Wire.
+     * @param i2cAddress Detected sensor address on the selected I2C bus.
      * @return true when the sensor is reachable and configured.
      */
-    bool init(bool iSInternalRoute);
+    bool init(bool iSInternalRoute, uint8_t i2cAddress);
 
     /**
      * @brief Executes one sensor update cycle.

@@ -223,18 +223,8 @@ void setup() {
     xTaskCreatePinnedToCore(taskHmi,              "HMI",      8192, nullptr, 3,  &taskHmiHandle,            1);
     #endif
 
-    #if defined(USE_LEGACY_SPLIT_I2C_SENSOR_TASKS)
-        // #ifndef DISABLE_GAZ
-        // xTaskCreatePinnedToCore(taskGaz,              "GAZ",  4096, nullptr, 2, &taskGazHandle,        1);
-        // #endif
-
-        #ifndef DISABLE_TANK
-        xTaskCreatePinnedToCore(taskTank,             "TANK", 4096, nullptr, 2, &taskTankHandle,       1);
-        #endif
-    #else
-        #ifndef DISABLE_I2C_SENSORS
-        xTaskCreatePinnedToCore(taskI2cSensors,       "I2C_SENS", 4096, nullptr, 2, &taskI2cSensorsHandle, 1);
-        #endif
+    #ifndef DISABLE_I2C_SENSORS
+    xTaskCreatePinnedToCore(taskI2cSensors,       "I2C_SENS", 4096, nullptr, 2, &taskI2cSensorsHandle, 1);
     #endif
 
     #ifndef DISABLE_TILT
