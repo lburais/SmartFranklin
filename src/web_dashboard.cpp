@@ -268,24 +268,24 @@ input[type='number'] { width: 100%; box-sizing: border-box; padding: 8px; border
         <button class="btn" onclick="loadImuGeometry()">Reload</button>
         <button class="btn warn" onclick="resetImuGeometry()">Reset Defaults</button>
     </div>
-    <div id="imu_geom_status" class="status">--</div>
+    <div id="level_geom_status" class="status">--</div>
 </div>
 <script>
 function updateGeometryInputs(g) {
-    document.getElementById('wheelbase_mm').value = g.imu_wheelbase_mm;
-    document.getElementById('track_width_mm').value = g.imu_track_width_mm;
-    document.getElementById('offset_x_mm').value = g.imu_offset_x_mm;
-    document.getElementById('offset_y_mm').value = g.imu_offset_y_mm;
+    document.getElementById('wheelbase_mm').value = g.level_wheelbase_mm;
+    document.getElementById('track_width_mm').value = g.level_track_width_mm;
+    document.getElementById('offset_x_mm').value = g.level_offset_x_mm;
+    document.getElementById('offset_y_mm').value = g.level_offset_y_mm;
 }
 
 async function loadImuGeometry() {
     try {
-        const r = await fetch('/api/imu_geometry');
+        const r = await fetch('/api/level_geometry');
         const g = await r.json();
         updateGeometryInputs(g);
-        document.getElementById('imu_geom_status').textContent = 'Geometry loaded';
+        document.getElementById('level_geom_status').textContent = 'Geometry loaded';
     } catch (e) {
-        document.getElementById('imu_geom_status').textContent = 'Failed to load geometry';
+        document.getElementById('level_geom_status').textContent = 'Failed to load geometry';
     }
 }
 
@@ -296,34 +296,34 @@ async function saveImuGeometry() {
         const offsetX = encodeURIComponent(document.getElementById('offset_x_mm').value);
         const offsetY = encodeURIComponent(document.getElementById('offset_y_mm').value);
 
-        const url = '/api/set_imu_geometry?wheelbase_mm=' + wheelbase + '&track_width_mm=' + track + '&offset_x_mm=' + offsetX + '&offset_y_mm=' + offsetY;
+        const url = '/api/set_level_geometry?wheelbase_mm=' + wheelbase + '&track_width_mm=' + track + '&offset_x_mm=' + offsetX + '&offset_y_mm=' + offsetY;
         const r = await fetch(url);
         const body = await r.json();
         if (!r.ok) {
-            document.getElementById('imu_geom_status').textContent = 'Save failed: ' + (body.error || 'unknown');
+            document.getElementById('level_geom_status').textContent = 'Save failed: ' + (body.error || 'unknown');
             return;
         }
 
         updateGeometryInputs(body);
-        document.getElementById('imu_geom_status').textContent = body.saved ? 'Saved and applied' : 'Applied but not persisted';
+        document.getElementById('level_geom_status').textContent = body.saved ? 'Saved and applied' : 'Applied but not persisted';
     } catch (e) {
-        document.getElementById('imu_geom_status').textContent = 'Save request failed';
+        document.getElementById('level_geom_status').textContent = 'Save request failed';
     }
 }
 
 async function resetImuGeometry() {
     try {
-        const r = await fetch('/api/reset_imu_geometry');
+        const r = await fetch('/api/reset_level_geometry');
         const body = await r.json();
         if (!r.ok) {
-            document.getElementById('imu_geom_status').textContent = 'Reset failed';
+            document.getElementById('level_geom_status').textContent = 'Reset failed';
             return;
         }
 
         updateGeometryInputs(body);
-        document.getElementById('imu_geom_status').textContent = body.saved ? 'Defaults restored' : 'Defaults applied but not persisted';
+        document.getElementById('level_geom_status').textContent = body.saved ? 'Defaults restored' : 'Defaults applied but not persisted';
     } catch (e) {
-        document.getElementById('imu_geom_status').textContent = 'Reset request failed';
+        document.getElementById('level_geom_status').textContent = 'Reset request failed';
     }
 }
 
@@ -492,12 +492,12 @@ void web_dashboard_init()
             doc["fill_gaz"] = DATA.fill_gaz;
             doc["tank_distance_mm"] = DATA.distance_tank_mm;
             doc["tank_fill"] = DATA.fill_tank;
-            doc["imu_pitch_deg"] = DATA.imu_pitch_deg;
-            doc["imu_roll_deg"] = DATA.imu_roll_deg;
-            doc["imu_wheel_fl_mm"] = DATA.imu_wheel_fl_mm;
-            doc["imu_wheel_fr_mm"] = DATA.imu_wheel_fr_mm;
-            doc["imu_wheel_rl_mm"] = DATA.imu_wheel_rl_mm;
-            doc["imu_wheel_rr_mm"] = DATA.imu_wheel_rr_mm;
+            doc["level_pitch_deg"] = DATA.level_pitch_deg;
+            doc["level_roll_deg"] = DATA.level_roll_deg;
+            doc["level_wheel_fl_mm"] = DATA.level_wheel_fl_mm;
+            doc["level_wheel_fr_mm"] = DATA.level_wheel_fr_mm;
+            doc["level_wheel_rl_mm"] = DATA.level_wheel_rl_mm;
+            doc["level_wheel_rr_mm"] = DATA.level_wheel_rr_mm;
             doc["bms_voltage"] = DATA.bms_voltage;
             doc["bms_current"] = DATA.bms_current;
             doc["bms_soc"] = DATA.bms_soc;
@@ -508,19 +508,19 @@ void web_dashboard_init()
         request->send(200, "application/json", out);
     });
 
-    server.on("/api/imu_geometry", HTTP_GET, [](AsyncWebServerRequest *request){
+    server.on("/api/level_geometry", HTTP_GET, [](AsyncWebServerRequest *request){
         JsonDocument doc;
-        doc["imu_wheelbase_mm"] = CONFIG.imu_wheelbase_mm;
-        doc["imu_track_width_mm"] = CONFIG.imu_track_width_mm;
-        doc["imu_offset_x_mm"] = CONFIG.imu_offset_x_mm;
-        doc["imu_offset_y_mm"] = CONFIG.imu_offset_y_mm;
+        doc["level_wheelbase_mm"] = CONFIG.level_wheelbase_mm;
+        doc["level_track_width_mm"] = CONFIG.level_track_width_mm;
+        doc["level_offset_x_mm"] = CONFIG.level_offset_x_mm;
+        doc["level_offset_y_mm"] = CONFIG.level_offset_y_mm;
 
         String out;
         serializeJson(doc, out);
         request->send(200, "application/json", out);
     });
 
-    server.on("/api/set_imu_geometry", HTTP_GET, [](AsyncWebServerRequest *request){
+    server.on("/api/set_level_geometry", HTTP_GET, [](AsyncWebServerRequest *request){
         auto parseParam = [&](const char* key, float& target) {
             if (!request->hasParam(key)) {
                 return true;
@@ -535,10 +535,10 @@ void web_dashboard_init()
             return true;
         };
 
-        float wheelbase = CONFIG.imu_wheelbase_mm;
-        float track = CONFIG.imu_track_width_mm;
-        float offsetX = CONFIG.imu_offset_x_mm;
-        float offsetY = CONFIG.imu_offset_y_mm;
+        float wheelbase = CONFIG.level_wheelbase_mm;
+        float track = CONFIG.level_track_width_mm;
+        float offsetX = CONFIG.level_offset_x_mm;
+        float offsetY = CONFIG.level_offset_y_mm;
 
         if (!parseParam("wheelbase_mm", wheelbase) ||
             !parseParam("track_width_mm", track) ||
@@ -556,41 +556,41 @@ void web_dashboard_init()
             return;
         }
 
-        CONFIG.imu_wheelbase_mm = wheelbase;
-        CONFIG.imu_track_width_mm = track;
-        CONFIG.imu_offset_x_mm = offsetX;
-        CONFIG.imu_offset_y_mm = offsetY;
+        CONFIG.level_wheelbase_mm = wheelbase;
+        CONFIG.level_track_width_mm = track;
+        CONFIG.level_offset_x_mm = offsetX;
+        CONFIG.level_offset_y_mm = offsetY;
 
         const bool saved = config_save();
 
         JsonDocument doc;
         doc["saved"] = saved;
-        doc["imu_wheelbase_mm"] = CONFIG.imu_wheelbase_mm;
-        doc["imu_track_width_mm"] = CONFIG.imu_track_width_mm;
-        doc["imu_offset_x_mm"] = CONFIG.imu_offset_x_mm;
-        doc["imu_offset_y_mm"] = CONFIG.imu_offset_y_mm;
+        doc["level_wheelbase_mm"] = CONFIG.level_wheelbase_mm;
+        doc["level_track_width_mm"] = CONFIG.level_track_width_mm;
+        doc["level_offset_x_mm"] = CONFIG.level_offset_x_mm;
+        doc["level_offset_y_mm"] = CONFIG.level_offset_y_mm;
 
         String out;
         serializeJson(doc, out);
         request->send(saved ? 200 : 500, "application/json", out);
     });
 
-    server.on("/api/reset_imu_geometry", HTTP_GET, [](AsyncWebServerRequest *request){
+    server.on("/api/reset_level_geometry", HTTP_GET, [](AsyncWebServerRequest *request){
         const SmartConfig defaults;
 
-        CONFIG.imu_wheelbase_mm = defaults.imu_wheelbase_mm;
-        CONFIG.imu_track_width_mm = defaults.imu_track_width_mm;
-        CONFIG.imu_offset_x_mm = defaults.imu_offset_x_mm;
-        CONFIG.imu_offset_y_mm = defaults.imu_offset_y_mm;
+        CONFIG.level_wheelbase_mm = defaults.level_wheelbase_mm;
+        CONFIG.level_track_width_mm = defaults.level_track_width_mm;
+        CONFIG.level_offset_x_mm = defaults.level_offset_x_mm;
+        CONFIG.level_offset_y_mm = defaults.level_offset_y_mm;
 
         const bool saved = config_save();
 
         JsonDocument doc;
         doc["saved"] = saved;
-        doc["imu_wheelbase_mm"] = CONFIG.imu_wheelbase_mm;
-        doc["imu_track_width_mm"] = CONFIG.imu_track_width_mm;
-        doc["imu_offset_x_mm"] = CONFIG.imu_offset_x_mm;
-        doc["imu_offset_y_mm"] = CONFIG.imu_offset_y_mm;
+        doc["level_wheelbase_mm"] = CONFIG.level_wheelbase_mm;
+        doc["level_track_width_mm"] = CONFIG.level_track_width_mm;
+        doc["level_offset_x_mm"] = CONFIG.level_offset_x_mm;
+        doc["level_offset_y_mm"] = CONFIG.level_offset_y_mm;
 
         String out;
         serializeJson(doc, out);

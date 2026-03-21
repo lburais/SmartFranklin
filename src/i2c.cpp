@@ -162,6 +162,8 @@ void I2C::publishConfiguration(const Device& device) const {
     sf_mqtt::publish(topicBuf, addressBuf, 1, true);
     snprintf(topicBuf, sizeof(topicBuf), "smartfranklin/system/i2c/%s/device_name", tag);
     sf_mqtt::publish(topicBuf, device.deviceName, 1, true);
+    snprintf(topicBuf, sizeof(topicBuf), "smartfranklin/system/i2c/%s/level_type", tag);
+    sf_mqtt::publish(topicBuf, levelTypeToString(device.levelType), 1, true);
 }
 
 bool isInternalRoute(const RouteMode mode)
@@ -188,6 +190,21 @@ const char* routeModeToString(const RouteMode mode)
     case RouteMode::Unset:
     default:
         return "unset";
+    }
+}
+
+const char* levelTypeToString(const LevelType type)
+{
+    switch (type) {
+    case LevelType::InternalM5:
+        return "internal_m5";
+    case LevelType::ExternalMpuUnit:
+        return "external_mpu_unit";
+    case LevelType::ExternalAdxl345:
+        return "external_adxl345";
+    case LevelType::None:
+    default:
+        return "none";
     }
 }
 

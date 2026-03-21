@@ -204,19 +204,21 @@ bool config_load()
     CONFIG.ap_pass = doc["ap_pass"] | defaultCONFIG.ap_pass;
     CONFIG.sta_ssid = doc["sta_ssid"] | defaultCONFIG.sta_ssid;
     CONFIG.sta_pass = doc["sta_pass"] | defaultCONFIG.sta_pass;
+
     CONFIG.scale_cal_factor = doc["scale_cal_factor"] | defaultCONFIG.scale_cal_factor;
-    CONFIG.imu_wheelbase_mm = doc["imu_wheelbase_mm"] | defaultCONFIG.imu_wheelbase_mm;
-    CONFIG.imu_track_width_mm = doc["imu_track_width_mm"] | defaultCONFIG.imu_track_width_mm;
-    CONFIG.imu_offset_x_mm = doc["imu_offset_x_mm"] | defaultCONFIG.imu_offset_x_mm;
-    CONFIG.imu_offset_y_mm = doc["imu_offset_y_mm"] | defaultCONFIG.imu_offset_y_mm;
+    
+    CONFIG.level_wheelbase_mm = doc["level_wheelbase_mm"] | defaultCONFIG.level_wheelbase_mm;
+    CONFIG.level_track_width_mm = doc["level_track_width_mm"] | defaultCONFIG.level_track_width_mm;
+    CONFIG.level_offset_x_mm = doc["level_offset_x_mm"] | defaultCONFIG.level_offset_x_mm;
+    CONFIG.level_offset_y_mm = doc["level_offset_y_mm"] | defaultCONFIG.level_offset_y_mm;
 
     CONFIG.admin_user = doc["admin_user"] | defaultCONFIG.admin_user;
     CONFIG.admin_pass = doc["admin_pass"] | defaultCONFIG.admin_pass;
 
-    const bool hasMqttPort = !doc["mqtt_port"].isNull();
-    const bool hasLegacyExtMqttPort = !doc["ext_mqtt_port"].isNull();
+    // const bool hasMqttPort = !doc["mqtt_port"].isNull();
+    // const bool hasLegacyExtMqttPort = !doc["ext_mqtt_port"].isNull();
 
-    CONFIG.mqtt_port = doc["mqtt_port"] | defaultCONFIG.mqtt_port;
+    // CONFIG.mqtt_port = doc["mqtt_port"] | defaultCONFIG.mqtt_port;
 
     CONFIG.nbiot_enabled   = doc["nbiot_enabled"]   | defaultCONFIG.nbiot_enabled;
     CONFIG.nbiot_apn       = doc["nbiot_apn"]       | defaultCONFIG.nbiot_apn;
@@ -235,14 +237,14 @@ bool config_load()
     CONFIG.task_mqtt_loop_ms = doc["task_mqtt_loop_ms"] | defaultCONFIG.task_mqtt_loop_ms;
     CONFIG.task_hmi_loop_ms = doc["task_hmi_loop_ms"] | defaultCONFIG.task_hmi_loop_ms;
 
-    if (!hasMqttPort && hasLegacyExtMqttPort) {
-        M5_LOGW("[CONFIG] Deprecated key 'ext_mqtt_port' detected and ignored; using mqtt_port=%d", CONFIG.mqtt_port);
-        if (config_save()) {
-            M5_LOGI("[CONFIG] config.json migrated to mqtt_port-only format");
-        } else {
-            M5_LOGW("[CONFIG] failed to persist mqtt_port-only migration");
-        }
-    }
+    // if (!hasMqttPort && hasLegacyExtMqttPort) {
+    //     M5_LOGW("[CONFIG] Deprecated key 'ext_mqtt_port' detected and ignored; using mqtt_port=%d", CONFIG.mqtt_port);
+    //     if (config_save()) {
+    //         M5_LOGI("[CONFIG] config.json migrated to mqtt_port-only format");
+    //     } else {
+    //         M5_LOGW("[CONFIG] failed to persist mqtt_port-only migration");
+    //     }
+    // }
 
     return true;
 }
@@ -305,10 +307,10 @@ bool config_save()
     doc["sta_ssid"] = CONFIG.sta_ssid;                      // External network SSID
     doc["sta_pass"] = CONFIG.sta_pass;                      // External network password
     doc["scale_cal_factor"] = CONFIG.scale_cal_factor;      // Weight sensor calibration
-    doc["imu_wheelbase_mm"] = CONFIG.imu_wheelbase_mm;
-    doc["imu_track_width_mm"] = CONFIG.imu_track_width_mm;
-    doc["imu_offset_x_mm"] = CONFIG.imu_offset_x_mm;
-    doc["imu_offset_y_mm"] = CONFIG.imu_offset_y_mm;
+    doc["level_wheelbase_mm"] = CONFIG.level_wheelbase_mm;
+    doc["level_track_width_mm"] = CONFIG.level_track_width_mm;
+    doc["level_offset_x_mm"] = CONFIG.level_offset_x_mm;
+    doc["level_offset_y_mm"] = CONFIG.level_offset_y_mm;
 
     doc["admin_user"] = CONFIG.admin_user;                  // Web dashboard username
     doc["admin_pass"] = CONFIG.admin_pass;                  // Web dashboard password

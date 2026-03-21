@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "imu.h"
+#include "level.h"
 
 #include <M5Unified.h>
 #include <Wire.h>
@@ -41,11 +41,11 @@ struct GeometryConfig {
     float offsetYmm = -120.0f;
 };
 
-struct ImuState {
+struct LevelState {
     mutable std::mutex mutex;
 
     bool initialized = false;
-    Imu::Source source = Imu::Source::None;
+    Level::Source source = Level::Source::None;
 
     bool isInternalRoute = false;
     uint8_t i2cAddress = 0x00;
@@ -58,7 +58,7 @@ struct ImuState {
     float lastWheelRrMm = 0.0f;
 };
 
-ImuState IMU_STATE;
+LevelState LEVEL_STATE;
 
 float sanitizePositive(const float value, const float fallback, const float minValue, const float maxValue)
 {
@@ -80,15 +80,15 @@ GeometryConfig geometryFromConfig()
 {
     GeometryConfig g;
 
-    g.wheelbaseMm = sanitizePositive(CONFIG.imu_wheelbase_mm, 2200.0f, 100.0f, 10000.0f);
-    g.trackWidthMm = sanitizePositive(CONFIG.imu_track_width_mm, 1600.0f, 100.0f, 10000.0f);
-    g.offsetXmm = sanitizeFinite(CONFIG.imu_offset_x_mm, 180.0f, -5000.0f, 5000.0f);
-    g.offsetYmm = sanitizeFinite(CONFIG.imu_offset_y_mm, -120.0f, -5000.0f, 5000.0f);
+    g.wheelbaseMm = sanitizePositive(CONFIG.level_wheelbase_mm, 2200.0f, 100.0f, 10000.0f);
+    g.trackWidthMm = sanitizePositive(CONFIG.level_track_width_mm, 1600.0f, 100.0f, 10000.0f);
+    g.offsetXmm = sanitizeFinite(CONFIG.level_offset_x_mm, 180.0f, -5000.0f, 5000.0f);
+    g.offsetYmm = sanitizeFinite(CONFIG.level_offset_y_mm, -120.0f, -5000.0f, 5000.0f);
 
     return g;
 }
 
-bool writeRegister(const ImuState& state, uint8_t reg, uint8_t value)
+bool writeRegister(const LevelState& state, uint8_t reg, uint8_t value)
 {
     if (state.isInternalRoute) {
         if (!M5.Ex_I2C.start(state.i2cAddress, false, Wire.getClock())) {
@@ -104,7 +104,7 @@ bool writeRegister(const ImuState& state, uint8_t reg, uint8_t value)
     return Wire.endTransmission() == 0;
 }
 
-bool readRegisters(const ImuState& state, uint8_t reg, uint8_t* out, size_t len)
+bool readRegisters(const LevelState& state, uint8_t reg, uint8_t* out, size_t len)
 {
     if (out == nullptr || len == 0) {
         return false;
@@ -152,7 +152,7 @@ bool readRegisters(const ImuState& state, uint8_t reg, uint8_t* out, size_t len)
     return true;
 }
 
-bool initMpu6050(ImuState& state)
+bool initMpu6050(LevelState& state)
 {
     if (!writeRegister(state, MPU6050_REG_PWR_MGMT_1, 0x00)) {
         return false;
@@ -165,7 +165,7 @@ bool initMpu6050(ImuState& state)
     return true;
 }
 
-bool initAdxl345(ImuState& state)
+bool initAdxl345(LevelState& state)
 {
     uint8_t devid = 0;
     if (!readRegisters(state, ADXL345_REG_DEVID, &devid, 1U)) {
@@ -189,14 +189,14 @@ bool initAdxl345(ImuState& state)
     return true;
 }
 
-bool readAccelSampleLocked(const ImuState& state, float& ax, float& ay, float& az)
+bool readAccelSampleLocked(const LevelState& state, float& ax, float& ay, float& az)
 {
     ax = 0.0f;
     ay = 0.0f;
     az = 0.0f;
 
     switch (state.source) {
-    case Imu::Source::InternalM5: {
+    case Level::Source::InternalM5: {
         // update() refreshes internal sensor data before reading current sample.
         M5.Imu.update();
         if (!M5.Imu.getAccel(&ax, &ay, &az)) {
@@ -205,7 +205,7 @@ bool readAccelSampleLocked(const ImuState& state, float& ax, float& ay, float& a
         return true;
     }
 
-    case Imu::Source::ExternalMpuUnit: {
+    case Level::Source::ExternalMpuUnit: {
         uint8_t raw[6] = {0};
         if (!readRegisters(state, MPU6050_REG_ACCEL_XOUT_H, raw, sizeof(raw))) {
             return false;
@@ -221,7 +221,7 @@ bool readAccelSampleLocked(const ImuState& state, float& ax, float& ay, float& a
         return true;
     }
 
-    case Imu::Source::ExternalAdxl345: {
+    case Level::Source::ExternalAdxl345: {
         uint8_t raw[6] = {0};
         if (!readRegisters(state, ADXL345_REG_DATAX0, raw, sizeof(raw))) {
             return false;
@@ -238,7 +238,7 @@ bool readAccelSampleLocked(const ImuState& state, float& ax, float& ay, float& a
         return true;
     }
 
-    case Imu::Source::None:
+    case Level::Source::None:
     default:
         return false;
     }
@@ -282,8 +282,7 @@ void computeWheelHeights(const float pitchDeg,
     rrMm = heightAt(xRr, yRr);
 }
 
-void publishPose(const Imu::Source source,
-                 const float pitchDeg,
+void publishPose(const float pitchDeg,
                  const float rollDeg,
                  const float flMm,
                  const float frMm,
@@ -304,16 +303,14 @@ void publishPose(const Imu::Source source,
     snprintf(rlBuf, sizeof(rlBuf), "%.2f", rlMm);
     snprintf(rrBuf, sizeof(rrBuf), "%.2f", rrMm);
 
-    sf_mqtt::publish("smartfranklin/imu/source", Imu::sourceToString(source), 1, true);
-    sf_mqtt::publish("smartfranklin/imu/pitch_deg", pitchBuf);
-    sf_mqtt::publish("smartfranklin/imu/roll_deg", rollBuf);
-    sf_mqtt::publish("smartfranklin/imu/wheel/fl_mm", flBuf);
-    sf_mqtt::publish("smartfranklin/imu/wheel/fr_mm", frBuf);
-    sf_mqtt::publish("smartfranklin/imu/wheel/rl_mm", rlBuf);
-    sf_mqtt::publish("smartfranklin/imu/wheel/rr_mm", rrBuf);
+    sf_mqtt::publish("smartfranklin/level/pitch_deg", pitchBuf);
+    sf_mqtt::publish("smartfranklin/level/roll_deg", rollBuf);
+    sf_mqtt::publish("smartfranklin/level/wheel/fl_mm", flBuf);
+    sf_mqtt::publish("smartfranklin/level/wheel/fr_mm", frBuf);
+    sf_mqtt::publish("smartfranklin/level/wheel/rl_mm", rlBuf);
+    sf_mqtt::publish("smartfranklin/level/wheel/rr_mm", rrBuf);
 
-    M5_LOGI("[IMU] src:%s pitch:%.3f roll:%.3f wheel_mm FL:%.2f FR:%.2f RL:%.2f RR:%.2f",
-            Imu::sourceToString(source),
+    M5_LOGI("[LEVEL] pitch:%.3f roll:%.3f wheel_mm FL:%.2f FR:%.2f RL:%.2f RR:%.2f",
             pitchDeg,
             rollDeg,
             flMm,
@@ -322,17 +319,17 @@ void publishPose(const Imu::Source source,
             rrMm);
 }
 
-bool initState(ImuState& state, Imu::Source source, bool isInternalRoute, uint8_t i2cAddress)
+bool initState(LevelState& state, Level::Source source, bool isInternalRoute, uint8_t i2cAddress)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
 
-    state.source = Imu::Source::None;
+    state.source = Level::Source::None;
     state.initialized = false;
     state.isInternalRoute = isInternalRoute;
     state.i2cAddress = i2cAddress;
 
     switch (source) {
-    case Imu::Source::InternalM5:
+    case Level::Source::InternalM5:
         // Internal IMU is available only if enabled by M5 config and detected.
         if (!M5.Imu.isEnabled() || M5.Imu.getType() == m5::imu_t::imu_none) {
             return false;
@@ -341,7 +338,7 @@ bool initState(ImuState& state, Imu::Source source, bool isInternalRoute, uint8_
         state.initialized = true;
         break;
 
-    case Imu::Source::ExternalMpuUnit:
+    case Level::Source::ExternalMpuUnit:
         if (!initMpu6050(state)) {
             return false;
         }
@@ -349,7 +346,7 @@ bool initState(ImuState& state, Imu::Source source, bool isInternalRoute, uint8_
         state.initialized = true;
         break;
 
-    case Imu::Source::ExternalAdxl345:
+    case Level::Source::ExternalAdxl345:
         if (!initAdxl345(state)) {
             return false;
         }
@@ -357,23 +354,22 @@ bool initState(ImuState& state, Imu::Source source, bool isInternalRoute, uint8_
         state.initialized = true;
         break;
 
-    case Imu::Source::None:
+    case Level::Source::None:
     default:
         return false;
     }
 
-    M5_LOGI("[IMU] initialized source:%s address:0x%02X route:%s",
-            Imu::sourceToString(state.source),
+    M5_LOGI("[LEVEL] initialized source:%s address:0x%02X route:%s",
+            Level::sourceToString(state.source),
             state.i2cAddress,
             state.isInternalRoute ? "internal" : "wire");
 
-    sf_mqtt::publish("smartfranklin/imu/source", Imu::sourceToString(state.source), 1, true);
     return true;
 }
 
-void processState(ImuState& state)
+void processState(LevelState& state)
 {
-    Imu::Source source = Imu::Source::None;
+    Level::Source source = Level::Source::None;
     const GeometryConfig geometry = geometryFromConfig();
     float ax = 0.0f;
     float ay = 0.0f;
@@ -395,13 +391,13 @@ void processState(ImuState& state)
         source = state.source;
 
         if (!readAccelSampleLocked(state, ax, ay, az)) {
-            M5_LOGW("[IMU] sample read failed");
+            M5_LOGW("[LEVEL] sample read failed");
             return;
         }
 
         const float norm = sqrtf((ax * ax) + (ay * ay) + (az * az));
         if (!std::isfinite(norm) || norm < 0.0001f) {
-            M5_LOGW("[IMU] invalid accel norm");
+            M5_LOGW("[LEVEL] invalid accel norm");
             return;
         }
 
@@ -409,7 +405,7 @@ void processState(ImuState& state)
         rollDeg = atan2f(ay, az) * RAD_TO_DEG_F;
 
         if (!std::isfinite(pitchDeg) || !std::isfinite(rollDeg)) {
-            M5_LOGW("[IMU] non-finite pose");
+            M5_LOGW("[LEVEL] non-finite pose");
             return;
         }
 
@@ -425,24 +421,24 @@ void processState(ImuState& state)
 
     {
         std::lock_guard<std::mutex> lock(DATA_MUTEX);
-        DATA.imu_pitch_deg = pitchDeg;
-        DATA.imu_roll_deg = rollDeg;
-        DATA.imu_wheel_fl_mm = flMm;
-        DATA.imu_wheel_fr_mm = frMm;
-        DATA.imu_wheel_rl_mm = rlMm;
-        DATA.imu_wheel_rr_mm = rrMm;
+        DATA.level_pitch_deg = pitchDeg;
+        DATA.level_roll_deg = rollDeg;
+        DATA.level_wheel_fl_mm = flMm;
+        DATA.level_wheel_fr_mm = frMm;
+        DATA.level_wheel_rl_mm = rlMm;
+        DATA.level_wheel_rr_mm = rrMm;
     }
 
-    publishPose(source, pitchDeg, rollDeg, flMm, frMm, rlMm, rrMm);
+    publishPose(pitchDeg, rollDeg, flMm, frMm, rlMm, rrMm);
 }
 
-bool isInitializedState(const ImuState& state)
+bool isInitializedState(const LevelState& state)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
     return state.initialized;
 }
 
-Imu::Source sourceState(const ImuState& state)
+Level::Source sourceState(const LevelState& state)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
     return state.source;
@@ -450,34 +446,34 @@ Imu::Source sourceState(const ImuState& state)
 
 }  // namespace
 
-Imu IMU_MODULE;
+Level LEVEL_MODULE;
 
-bool Imu::init(Source source, bool isInternalRoute, uint8_t i2cAddress)
+bool Level::init(Source source, bool isInternalRoute, uint8_t i2cAddress)
 {
-    return initState(IMU_STATE, source, isInternalRoute, i2cAddress);
+    return initState(LEVEL_STATE, source, isInternalRoute, i2cAddress);
 }
 
-void Imu::process()
+void Level::process()
 {
-    processState(IMU_STATE);
+    processState(LEVEL_STATE);
 }
 
-bool Imu::isInitialized() const
+bool Level::isInitialized() const
 {
-    return isInitializedState(IMU_STATE);
+    return isInitializedState(LEVEL_STATE);
 }
 
-Imu::Source Imu::source() const
+Level::Source Level::source() const
 {
-    return sourceState(IMU_STATE);
+    return sourceState(LEVEL_STATE);
 }
 
-const char* Imu::sourceName() const
+const char* Level::sourceName() const
 {
     return sourceToString(source());
 }
 
-const char* Imu::sourceToString(Source source)
+const char* Level::sourceToString(Source source)
 {
     switch (source) {
     case Source::InternalM5:

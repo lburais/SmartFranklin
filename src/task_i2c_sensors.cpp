@@ -9,13 +9,28 @@
 #include "config_store.h"
 #include "i2c.h"
 #include "gaz.h"
-#include "imu.h"
+#include "level.h"
 #include "tank.h"
 
 namespace {
 
 static constexpr uint32_t I2C_SENSORS_INIT_RETRY_MS = 10000UL;
 static constexpr uint32_t I2C_SENSORS_LOOP_MS = 1000UL;
+
+Level::Source levelSourceFromLevelType(const sf_i2c::LevelType levelType)
+{
+    switch (levelType) {
+    case sf_i2c::LevelType::InternalM5:
+        return Level::Source::InternalM5;
+    case sf_i2c::LevelType::ExternalMpuUnit:
+        return Level::Source::ExternalMpuUnit;
+    case sf_i2c::LevelType::ExternalAdxl345:
+        return Level::Source::ExternalAdxl345;
+    case sf_i2c::LevelType::None:
+    default:
+        return Level::Source::None;
+    }
+}
 
 bool selectPaHubIfNeeded(const sf_i2c::I2C& i2c, const sf_i2c::Device& device, const char* label)
 {
@@ -52,33 +67,50 @@ void taskI2cSensors(void *pv)
 
     bool gazInitialized = false;
     bool tankInitialized = false;
-    bool imuInitialized = false;
+    bool levelInitialized = false;
     sf_i2c::I2C i2c{};
 
-    sf_i2c::Device gazDevice = { .route = sf_i2c::Route{},
-                                 .address = 0x26,
-                                 .tag = "gaz",
-                                 .deviceName = "M5Stack Weight I2C Unit" };
+    sf_i2c::Device gazDevice{};
+    gazDevice.route = sf_i2c::Route{};
+    gazDevice.address = 0x26;
+    gazDevice.tag = "gaz";
+    gazDevice.deviceName = "M5Stack Weight I2C Unit";
 
-    sf_i2c::Device tankDevice = { .route = sf_i2c::Route{},
-                                  .address = 0x57,
-                                  .tag = "tank",
-                                  .deviceName = "M5Stack Unit Ultrasonic I2C (RCWL-9600)" };
+    sf_i2c::Device tankDevice{};
+    tankDevice.route = sf_i2c::Route{};
+    tankDevice.address = 0x57;
+    tankDevice.tag = "tank";
+    tankDevice.deviceName = "M5Stack Unit Ultrasonic I2C (RCWL-9600)";
 
-    sf_i2c::Device imuMpuDevice = { .route = sf_i2c::Route{},
-                                    .address = 0x68,
-                                    .tag = "imu_mpu",
-                                    .deviceName = "M5Stack External IMU Unit (MPU-compatible)" };
+    sf_i2c::Device internalLevelDevice{};
+    internalLevelDevice.route = sf_i2c::Route{};
+    internalLevelDevice.route.mode = sf_i2c::RouteMode::Internal;
+    internalLevelDevice.route.paHubChannel = -1;
+    internalLevelDevice.address = 0x00;
+    internalLevelDevice.tag = "level";
+    internalLevelDevice.deviceName = "M5 internal Level sensor";
+    internalLevelDevice.levelType = sf_i2c::LevelType::InternalM5;
 
-    sf_i2c::Device imuAdxlDevice = { .route = sf_i2c::Route{},
-                                     .address = 0x53,
-                                     .tag = "imu_adxl345",
-                                     .deviceName = "SeeedStudio ADXL345 Accelerometer" };
+    sf_i2c::Device levelMpuDevice{};
+    levelMpuDevice.route = sf_i2c::Route{};
+    levelMpuDevice.address = 0x68;
+    levelMpuDevice.tag = "level";
+    levelMpuDevice.deviceName = "M5Stack External Level Unit (MPU-compatible)";
+    levelMpuDevice.levelType = sf_i2c::LevelType::ExternalMpuUnit;
 
-    sf_i2c::Device activeImuDevice = { .route = sf_i2c::Route{},
-                                       .address = 0x00,
-                                       .tag = "imu",
-                                       .deviceName = "IMU" };
+    sf_i2c::Device levelAdxlDevice{};
+    levelAdxlDevice.route = sf_i2c::Route{};
+    levelAdxlDevice.address = 0x53;
+    levelAdxlDevice.tag = "level";
+    levelAdxlDevice.deviceName = "SeeedStudio ADXL345 Level Sensor";
+    levelAdxlDevice.levelType = sf_i2c::LevelType::ExternalAdxl345;
+
+    sf_i2c::Device activeLevelDevice{};
+    activeLevelDevice.route = sf_i2c::Route{};
+    activeLevelDevice.address = 0x00;
+    activeLevelDevice.tag = "level";
+    activeLevelDevice.deviceName = "Level";
+    activeLevelDevice.levelType = sf_i2c::LevelType::None;
 
     i2c.beginPortA();
 
@@ -134,53 +166,52 @@ void taskI2cSensors(void *pv)
         gazInitialized = true;
 #endif
 
-#ifndef DISABLE_IMU
-        if (!imuInitialized) {
-            if (IMU_MODULE.init(Imu::Source::InternalM5, true, 0x00)) {
-                imuInitialized = true;
-                activeImuDevice = { .route = sf_i2c::Route{},
-                                    .address = 0x00,
-                                    .tag = "imu_internal",
-                                    .deviceName = "M5 internal IMU" };
+#ifndef DISABLE_LEVEL
+        if (!levelInitialized) {
+
+            if (LEVEL_MODULE.init(levelSourceFromLevelType(internalLevelDevice.levelType), true, internalLevelDevice.address)) {
+                levelInitialized = true;
+                activeLevelDevice = internalLevelDevice;
             } else {
-                if (i2c.detectRoute(imuMpuDevice.address, imuMpuDevice.route)) {
-                    i2c.publishConfiguration(imuMpuDevice);
-                    bool channelSelected = selectPaHubIfNeeded(i2c, imuMpuDevice, "I2C_SENSORS");
+                if (i2c.detectRoute(levelMpuDevice.address, levelMpuDevice.route)) {
+                    bool channelSelected = selectPaHubIfNeeded(i2c, levelMpuDevice, "I2C_SENSORS");
                     if (channelSelected) {
-                        imuInitialized = IMU_MODULE.init(Imu::Source::ExternalMpuUnit,
-                                                         sf_i2c::isInternalRoute(imuMpuDevice.route.mode),
-                                                         imuMpuDevice.address);
-                        disablePaHubIfNeeded(i2c, imuMpuDevice);
-                        if (imuInitialized) {
-                            activeImuDevice = imuMpuDevice;
+                        levelInitialized = LEVEL_MODULE.init(levelSourceFromLevelType(levelMpuDevice.levelType),
+                                                             sf_i2c::isInternalRoute(levelMpuDevice.route.mode),
+                                                             levelMpuDevice.address);
+                        disablePaHubIfNeeded(i2c, levelMpuDevice);
+                        if (levelInitialized) {
+                            activeLevelDevice = levelMpuDevice;
                         }
                     }
                 }
 
-                if (!imuInitialized && i2c.detectRoute(imuAdxlDevice.address, imuAdxlDevice.route)) {
-                    i2c.publishConfiguration(imuAdxlDevice);
-                    bool channelSelected = selectPaHubIfNeeded(i2c, imuAdxlDevice, "I2C_SENSORS");
+                if (!levelInitialized && i2c.detectRoute(levelAdxlDevice.address, levelAdxlDevice.route)) {
+                    bool channelSelected = selectPaHubIfNeeded(i2c, levelAdxlDevice, "I2C_SENSORS");
                     if (channelSelected) {
-                        imuInitialized = IMU_MODULE.init(Imu::Source::ExternalAdxl345,
-                                                         sf_i2c::isInternalRoute(imuAdxlDevice.route.mode),
-                                                         imuAdxlDevice.address);
-                        disablePaHubIfNeeded(i2c, imuAdxlDevice);
-                        if (imuInitialized) {
-                            activeImuDevice = imuAdxlDevice;
+                        levelInitialized = LEVEL_MODULE.init(levelSourceFromLevelType(levelAdxlDevice.levelType),
+                                                             sf_i2c::isInternalRoute(levelAdxlDevice.route.mode),
+                                                             levelAdxlDevice.address);
+                        disablePaHubIfNeeded(i2c, levelAdxlDevice);
+                        if (levelInitialized) {
+                            activeLevelDevice = levelAdxlDevice;
                         }
                     }
                 }
             }
 
-            if (!imuInitialized) {
-                M5_LOGW("[I2C_SENSORS] IMU init failed");
+            if (!levelInitialized) {
+                M5_LOGW("[I2C_SENSORS] LEVEL init failed");
+            } else {
+                i2c.publishConfiguration(activeLevelDevice);
+
             }
         }
 #else
-        imuInitialized = true;
+        levelInitialized = true;
 #endif
 
-        if (gazInitialized && tankInitialized && imuInitialized) {
+        if (gazInitialized && tankInitialized && levelInitialized) {
             break;
         }
 
@@ -202,12 +233,12 @@ void taskI2cSensors(void *pv)
         }
 #endif
 
-#ifndef DISABLE_IMU
-        if (IMU_MODULE.source() == Imu::Source::InternalM5) {
-            IMU_MODULE.process();
-        } else if (selectPaHubIfNeeded(i2c, activeImuDevice, "I2C_SENSORS")) {
-            IMU_MODULE.process();
-            disablePaHubIfNeeded(i2c, activeImuDevice);
+#ifndef DISABLE_LEVEL
+        if (activeLevelDevice.levelType == sf_i2c::LevelType::InternalM5) {
+            LEVEL_MODULE.process();
+        } else if (selectPaHubIfNeeded(i2c, activeLevelDevice, "I2C_SENSORS")) {
+            LEVEL_MODULE.process();
+            disablePaHubIfNeeded(i2c, activeLevelDevice);
         }
 #endif
 

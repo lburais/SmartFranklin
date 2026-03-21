@@ -215,34 +215,34 @@ struct SmartData {
     int32_t distance_tank_mm = 0;
 
     /**
-     * @brief IMU pitch angle in degrees.
+     * @brief Level pitch angle in degrees.
      */
-    float imu_pitch_deg = 0.0f;
+    float level_pitch_deg = 0.0f;
 
     /**
-     * @brief IMU roll angle in degrees.
+     * @brief Level roll angle in degrees.
      */
-    float imu_roll_deg = 0.0f;
+    float level_roll_deg = 0.0f;
 
     /**
      * @brief Front-left wheel relative height in millimeters.
      */
-    float imu_wheel_fl_mm = 0.0f;
+    float level_wheel_fl_mm = 0.0f;
 
     /**
      * @brief Front-right wheel relative height in millimeters.
      */
-    float imu_wheel_fr_mm = 0.0f;
+    float level_wheel_fr_mm = 0.0f;
 
     /**
      * @brief Rear-left wheel relative height in millimeters.
      */
-    float imu_wheel_rl_mm = 0.0f;
+    float level_wheel_rl_mm = 0.0f;
 
     /**
      * @brief Rear-right wheel relative height in millimeters.
      */
-    float imu_wheel_rr_mm = 0.0f;
+    float level_wheel_rr_mm = 0.0f;
 
     /**
      * @brief Weight sensor calibration gap value.
@@ -270,7 +270,7 @@ struct SmartData {
      * Critical for power management and safety systems.
      * 
      * Units: Volts (V)
-     * Range: 0.0 to battery maximum (typically 4.2V per cell)
+     * Range: 0.0 to battery maxLevelm (typically 4.2V per cell)
      * Precision: 2-3 decimal places typical
      * Update Rate: Configurable (default ~1 second)
      * Default: 0.0 (no measurement)

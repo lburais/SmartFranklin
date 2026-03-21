@@ -13,6 +13,13 @@ enum class RouteMode : uint8_t {
     WirePaHub,
 };
 
+enum class LevelType : uint8_t {
+    None = 0,
+    InternalM5,
+    ExternalMpuUnit,
+    ExternalAdxl345,
+};
+
 struct Route {
     RouteMode mode = RouteMode::Unset;
     int8_t paHubChannel = -1;
@@ -23,6 +30,7 @@ struct Device {
     uint8_t address;
     const char* tag;
     const char* deviceName;
+    LevelType levelType = LevelType::None;
 };
 
 class I2C {
@@ -54,5 +62,6 @@ private:
 bool isInternalRoute(RouteMode mode);
 bool isPaHubRoute(RouteMode mode);
 const char* routeModeToString(RouteMode mode);
+const char* levelTypeToString(LevelType type);
 
 }  // namespace sf_i2c

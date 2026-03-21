@@ -7,7 +7,7 @@
 
 #include <Arduino.h>
 
-class Imu {
+class Level {
 public:
     enum class Source : uint8_t {
         None = 0,
@@ -25,4 +25,4 @@ public:
     static const char* sourceToString(Source source);
 };
 
-extern Imu IMU_MODULE;
+extern Level LEVEL_MODULE;
