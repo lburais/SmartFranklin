@@ -10,13 +10,6 @@ namespace {
 
 static constexpr uint32_t I2C_SENSORS_INIT_RETRY_MS = 10000UL;
 static constexpr uint32_t I2C_SENSORS_LOOP_MS = 1000UL;
-static constexpr uint32_t I2C_SENSORS_CLOCK_HZ = 100000U;
-
-//static constexpr uint8_t GAZ_I2C_ADDRESS = 0x26;
-//static constexpr const char* GAZ_DEVICE_FULL_NAME = "M5Stack Weight I2C Unit";
-
-//static constexpr uint8_t TANK_I2C_ADDRESS = 0x57;
-//static constexpr const char* TANK_DEVICE_FULL_NAME = "M5Stack Unit Ultrasonic I2C (RCWL-9600)";
 
 bool selectPaHubIfNeeded(const sf_i2c::I2C& i2c, const sf_i2c::Device& device, const char* label)
 {

@@ -26,92 +26,80 @@ float sanitizedGap(const float gap)
     return gap;
 }
 
-class GazRuntime {
-public:
-    bool init(bool iSInternalRoute, uint8_t i2cAddress);
-    void process();
-    bool tare();
-    bool applyCalibration(float gap);
-    float readCalibrationSample();
-    bool isInitialized() const;
+struct GazState {
+    mutable std::mutex mutex;
+    m5::unit::UnitUnified units;
+    m5::unit::UnitWeightI2C unit;
 
-private:
-    void publishCalibrationGap(float gap) const;
-    void publishWeight(int32_t weightG, const int32_t fillPct) const;
-    bool refreshMeasurementLocked(int32_t& weightG, int32_t& fillPct);
-
-    mutable std::mutex m_mutex;
-    m5::unit::UnitUnified m_units;
-    m5::unit::UnitWeightI2C m_unit;
-
-    bool m_initialized = false;
-    uint8_t m_i2cAddress = 0x26;
-    float m_lastCalibrationGap = 1.0f;
-    int32_t m_lastWeightG = 0;
-    int32_t m_lastFillPct = 0;
-
+    bool initialized = false;
+    uint8_t i2cAddress = 0x26;
+    float lastCalibrationGap = 1.0f;
+    int32_t lastWeightG = 0;
+    int32_t lastFillPct = 0;
 };
 
-GazRuntime GAZ_RUNTIME;
+GazState GAZ_STATE;
 
 }  // namespace
 
 Gaz GAZ_MODULE;
 
-bool GazRuntime::init(const bool isInternalRoute, const uint8_t i2cAddress)
-{
-    std::lock_guard<std::mutex> lock(m_mutex);
-    m_i2cAddress = i2cAddress;
+static void publishCalibrationGap(const float gap);
 
-    m_units = m5::unit::UnitUnified{};
+static bool initState(GazState& state, const bool isInternalRoute, const uint8_t i2cAddress)
+{
+    std::lock_guard<std::mutex> lock(state.mutex);
+    state.i2cAddress = i2cAddress;
+
+    state.units = m5::unit::UnitUnified{};
 
     if (isInternalRoute) {
-        m_initialized = m_units.add(m_unit, M5.Ex_I2C) && m_units.begin();
+        state.initialized = state.units.add(state.unit, M5.Ex_I2C) && state.units.begin();
     } else {
-        m_initialized = m_units.add(m_unit, Wire) && m_units.begin();
+        state.initialized = state.units.add(state.unit, Wire) && state.units.begin();
     }
 
-    if (!m_initialized) {
-        m_initialized = false;
+    if (!state.initialized) {
+        state.initialized = false;
         M5_LOGW("[GAZ] Weight I2C unit was not detected on supported Wire paths");
         return false;
     }
 
     const float effectiveGap = sanitizedGap(CONFIG.scale_cal_factor);
-    if (!m_unit.writeGap(effectiveGap)) {
+    if (!state.unit.writeGap(effectiveGap)) {
         M5_LOGW("[GAZ] failed to apply calibration gap %.6f during init", effectiveGap);
     }
-    m_lastCalibrationGap = effectiveGap;
+    state.lastCalibrationGap = effectiveGap;
     publishCalibrationGap(effectiveGap);
 
     M5_LOGI("[GAZ] Weight I2C initialization complete");
-    M5_LOGI("[GAZ] address: 0x%02X", m_i2cAddress);
-    M5_LOGI("%s", m_units.debugInfo().c_str());
+    M5_LOGI("[GAZ] address: 0x%02X", state.i2cAddress);
+    M5_LOGI("%s", state.units.debugInfo().c_str());
     return true;
 }
 
-void GazRuntime::publishCalibrationGap(const float gap) const
+static void publishCalibrationGap(const float gap)
 {
     char gapBuf[24] = {0};
     snprintf(gapBuf, sizeof(gapBuf), "%.6f", gap);
     sf_mqtt::publish("smartfranklin/gaz/calibration/gap", gapBuf, 1, true);
 }
 
-bool GazRuntime::refreshMeasurementLocked(int32_t& weightG, int32_t& fillPct)
+static bool refreshMeasurementLocked(GazState& state, int32_t& weightG, int32_t& fillPct)
 {
-    m_units.update();
+    state.units.update();
 
-    if (!m_unit.updated()) {
+    if (!state.unit.updated()) {
         return false;
     }
 
-    weightG = m_unit.weight();
+    weightG = state.unit.weight();
     if (!std::isfinite(weightG)) {
         M5_LOGW("[GAZ] non-finite weight sample ignored");
         return false;
     }
 
-    m_lastWeightG = weightG;
+    state.lastWeightG = weightG;
 
     fillPct = 0;
     if (weightG <= GAZ_BOTTLE_EMPTY_G) {
@@ -122,12 +110,12 @@ bool GazRuntime::refreshMeasurementLocked(int32_t& weightG, int32_t& fillPct)
         fillPct = 100 * (static_cast<float>(weightG - GAZ_BOTTLE_EMPTY_G) / (GAZ_BOTTLE_FULL_G - GAZ_BOTTLE_EMPTY_G));
     }
 
-    m_lastFillPct = fillPct;
+    state.lastFillPct = fillPct;
 
     return true;
 }
 
-void GazRuntime::publishWeight(const int32_t weightG, const int32_t fillPct) const
+static void publishWeight(const int32_t weightG, const int32_t fillPct)
 {
     char gBuf[24] = {0};
     snprintf(gBuf, sizeof(gBuf), "%d", weightG);
@@ -140,7 +128,7 @@ void GazRuntime::publishWeight(const int32_t weightG, const int32_t fillPct) con
     M5_LOGI("[GAZ] Weight: %d g     Fill level: %d%%", weightG, fillPct);
 }
 
-void GazRuntime::process()
+static void processState(GazState& state)
 {
     int32_t weightG = 0;
     int32_t fillPct = 0;
@@ -148,22 +136,22 @@ void GazRuntime::process()
     bool hasMeasurement = false;
 
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        if (!m_initialized) {
+        std::lock_guard<std::mutex> lock(state.mutex);
+        if (!state.initialized) {
             return;
         }
 
         desiredGap = sanitizedGap(CONFIG.scale_cal_factor);
-        if (desiredGap != m_lastCalibrationGap) {
-            if (m_unit.writeGap(desiredGap)) {
-                m_lastCalibrationGap = desiredGap;
+        if (desiredGap != state.lastCalibrationGap) {
+            if (state.unit.writeGap(desiredGap)) {
+                state.lastCalibrationGap = desiredGap;
                 publishCalibrationGap(desiredGap);
             } else {
                 M5_LOGW("[GAZ] failed to refresh calibration gap %.6f", desiredGap);
             }
         }
 
-        hasMeasurement = refreshMeasurementLocked(weightG, fillPct);
+        hasMeasurement = refreshMeasurementLocked(state, weightG, fillPct);
     }
 
     if (!hasMeasurement) {
@@ -180,83 +168,83 @@ void GazRuntime::process()
     publishWeight(weightG, fillPct);
 }
 
-bool GazRuntime::tare()
+static bool tareState(GazState& state)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    if (!m_initialized) {
+    std::lock_guard<std::mutex> lock(state.mutex);
+    if (!state.initialized) {
         return false;
     }
-    const bool ok = m_unit.resetOffset();
+    const bool ok = state.unit.resetOffset();
     if (ok) {
-        m_lastWeightG = 0;
+        state.lastWeightG = 0;
     }
     return ok;
 }
 
-bool GazRuntime::applyCalibration(const float gap)
+static bool applyCalibrationState(GazState& state, const float gap)
 {
     const float effectiveGap = sanitizedGap(gap);
 
-    std::lock_guard<std::mutex> lock(m_mutex);
-    if (!m_initialized) {
+    std::lock_guard<std::mutex> lock(state.mutex);
+    if (!state.initialized) {
         return false;
     }
-    if (!m_unit.writeGap(effectiveGap)) {
+    if (!state.unit.writeGap(effectiveGap)) {
         return false;
     }
-    m_lastCalibrationGap = effectiveGap;
+    state.lastCalibrationGap = effectiveGap;
     publishCalibrationGap(effectiveGap);
     return true;
 }
 
-float GazRuntime::readCalibrationSample()
+static float readCalibrationSampleState(GazState& state)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    if (!m_initialized) {
+    std::lock_guard<std::mutex> lock(state.mutex);
+    if (!state.initialized) {
         return 0.0f;
     }
 
     int32_t weightG = 0;
     int32_t fillPct = 0;
-    if (refreshMeasurementLocked(weightG, fillPct)) {
+    if (refreshMeasurementLocked(state, weightG, fillPct)) {
         return weightG;
     }
 
-    return m_lastWeightG;
+    return state.lastWeightG;
 }
 
-bool GazRuntime::isInitialized() const
+static bool isInitializedState(const GazState& state)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    return m_initialized;
+    std::lock_guard<std::mutex> lock(state.mutex);
+    return state.initialized;
 }
 
 bool Gaz::init(bool isInternalRoute, uint8_t i2cAddress)
 {
-    return GAZ_RUNTIME.init(isInternalRoute, i2cAddress);
+    return initState(GAZ_STATE, isInternalRoute, i2cAddress);
 }
 
 void Gaz::process()
 {
-    GAZ_RUNTIME.process();
+    processState(GAZ_STATE);
 }
 
 bool Gaz::tare()
 {
-    return GAZ_RUNTIME.tare();
+    return tareState(GAZ_STATE);
 }
 
 bool Gaz::applyCalibration(const float gap)
 {
-    return GAZ_RUNTIME.applyCalibration(gap);
+    return applyCalibrationState(GAZ_STATE, gap);
 }
 
 float Gaz::readCalibrationSample()
 {
-    return GAZ_RUNTIME.readCalibrationSample();
+    return readCalibrationSampleState(GAZ_STATE);
 }
 
 bool Gaz::isInitialized() const
 {
-    return GAZ_RUNTIME.isInitialized();
+    return isInitializedState(GAZ_STATE);
 }

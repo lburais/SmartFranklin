@@ -60,38 +60,27 @@ int32_t distanceToFillPct(const int32_t distanceMm)
     return pct;
 }
 
-class TankRuntime {
-public:
-    bool init(bool isInternalRoute, uint8_t i2cAddress);
-    void process();
-    bool isInitialized() const;
-
-private:
-    void publishDistance(int32_t distanceMm, int32_t fillPct) const;
-    bool refreshMeasurementLocked(int32_t& distanceMm);
-
-    mutable std::mutex m_mutex;
-
-    bool m_initialized = false;
-    bool m_isInternalRoute = false;
-    uint8_t m_i2cAddress = 0x57;
-    int32_t m_lastDistanceMm = 0;
-
+struct TankState {
+    mutable std::mutex mutex;
+    bool initialized = false;
+    bool isInternalRoute = false;
+    uint8_t i2cAddress = 0x57;
+    int32_t lastDistanceMm = 0;
 };
 
-TankRuntime TANK_RUNTIME;
+TankState TANK_STATE;
 
 }  // namespace
 
 Tank TANK_MODULE;
 
-bool TankRuntime::refreshMeasurementLocked(int32_t& distanceMm)
+static bool refreshMeasurementLocked(TankState& state, int32_t& distanceMm)
 {
     uint32_t rawDistance = 0;
     bool readOk = false;
 
-    if (m_isInternalRoute) {
-        if (!M5.Ex_I2C.start(m_i2cAddress, false, Wire.getClock())) {
+    if (state.isInternalRoute) {
+        if (!M5.Ex_I2C.start(state.i2cAddress, false, Wire.getClock())) {
             return false;
         }
 
@@ -99,7 +88,7 @@ bool TankRuntime::refreshMeasurementLocked(int32_t& distanceMm)
             return false;
         }
     } else {
-        Wire.beginTransmission(m_i2cAddress);
+        Wire.beginTransmission(state.i2cAddress);
         Wire.write(TANK_DISTANCE_REGISTER);
         if (Wire.endTransmission() != 0) {
             return false;
@@ -108,9 +97,9 @@ bool TankRuntime::refreshMeasurementLocked(int32_t& distanceMm)
 
     delay(TANK_CONVERSION_DELAY_MS);
 
-    if (m_isInternalRoute) {
+    if (state.isInternalRoute) {
 
-        if (!M5.Ex_I2C.start(m_i2cAddress, true, Wire.getClock())) {
+        if (!M5.Ex_I2C.start(state.i2cAddress, true, Wire.getClock())) {
             return false;
         }
 
@@ -129,7 +118,7 @@ bool TankRuntime::refreshMeasurementLocked(int32_t& distanceMm)
 
         readOk = M5.Ex_I2C.stop();
     } else {
-        const uint8_t readCount = Wire.requestFrom(m_i2cAddress, static_cast<uint8_t>(3));
+        const uint8_t readCount = Wire.requestFrom(state.i2cAddress, static_cast<uint8_t>(3));
         if (readCount < 3) {
             return false;
         }
@@ -154,23 +143,23 @@ bool TankRuntime::refreshMeasurementLocked(int32_t& distanceMm)
     }
 
     distanceMm = clampDistanceMm(static_cast<int32_t>(lroundf(distanceRawMm)));
-    m_lastDistanceMm = distanceMm;
+    state.lastDistanceMm = distanceMm;
     return true;
 }
 
-bool TankRuntime::init(bool iSInternalRoute, uint8_t i2cAddress)
+static bool initState(TankState& state, bool isInternalRoute, uint8_t i2cAddress)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::mutex> lock(state.mutex);
 
-    m_isInternalRoute = iSInternalRoute;
-    m_i2cAddress = i2cAddress;
-    m_initialized = true;
+    state.isInternalRoute = isInternalRoute;
+    state.i2cAddress = i2cAddress;
+    state.initialized = true;
 
     M5_LOGI("[TANK] Ultrasonic I2C initialization complete");
     return true;
 }
 
-void TankRuntime::publishDistance(const int32_t distanceMm, const int32_t fillPct) const
+static void publishDistance(const int32_t distanceMm, const int32_t fillPct)
 {
     char mmBuf[24] = {0};
     snprintf(mmBuf, sizeof(mmBuf), "%d", distanceMm);
@@ -183,18 +172,18 @@ void TankRuntime::publishDistance(const int32_t distanceMm, const int32_t fillPc
     M5_LOGI("[TANK] Distance: %d mm     Fill level: %d%%", distanceMm, fillPct);
 }
 
-void TankRuntime::process()
+static void processState(TankState& state)
 {
     int32_t distanceMm = 0;
     bool hasMeasurement = false;
 
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        if (!m_initialized) {
+        std::lock_guard<std::mutex> lock(state.mutex);
+        if (!state.initialized) {
             return;
         }
 
-        hasMeasurement = refreshMeasurementLocked(distanceMm);
+        hasMeasurement = refreshMeasurementLocked(state, distanceMm);
     }
 
     if (!hasMeasurement) {
@@ -213,23 +202,23 @@ void TankRuntime::process()
     publishDistance(distanceMm, fillPct);
 }
 
-bool TankRuntime::isInitialized() const
+static bool isInitializedState(const TankState& state)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    return m_initialized;
+    std::lock_guard<std::mutex> lock(state.mutex);
+    return state.initialized;
 }
 
 bool Tank::init(bool isInternalRoute, uint8_t i2cAddress)
 {
-    return TANK_RUNTIME.init(isInternalRoute, i2cAddress);
+    return initState(TANK_STATE, isInternalRoute, i2cAddress);
 }
 
 void Tank::process()
 {
-    TANK_RUNTIME.process();
+    processState(TANK_STATE);
 }
 
 bool Tank::isInitialized() const
 {
-    return TANK_RUNTIME.isInitialized();
+    return isInitializedState(TANK_STATE);
 }
