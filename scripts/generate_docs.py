@@ -1,3 +1,8 @@
+"""SmartFranklin docs generation hook.
+
+SPDX-License-Identifier: MIT
+"""
+
 import os
 Import("env")
 

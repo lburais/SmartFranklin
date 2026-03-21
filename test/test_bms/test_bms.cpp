@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: MIT */
+
 #include <unity.h>
 #include "jbd_bms.h"
 

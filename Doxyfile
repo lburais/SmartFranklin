@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 # Doxyfile for SmartFranklin (ESP32/Arduino firmware)
 DOXYFILE_ENCODING      = UTF-8
 

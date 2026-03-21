@@ -1,3 +1,8 @@
+/*
+ * SmartFranklin - gas sensor module implementation
+ * SPDX-License-Identifier: MIT
+ */
+
 #include "gaz.h"
 
 #include <M5Unified.h>

@@ -1,3 +1,8 @@
+/*
+ * SmartFranklin - unified I2C sensors task
+ * SPDX-License-Identifier: MIT
+ */
+
 #include <Arduino.h>
 #include <M5Unified.h>
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Default theme = dark
 if (!localStorage.getItem("theme")) {
     localStorage.setItem("theme", "dark");

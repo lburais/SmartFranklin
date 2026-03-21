@@ -1,3 +1,8 @@
+/*
+ * SmartFranklin - tank sensor module implementation
+ * SPDX-License-Identifier: MIT
+ */
+
 #include "tank.h"
 
 #include <M5Unified.h>

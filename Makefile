@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 .PHONY: docs docs-clean docs-open
 
 docs:

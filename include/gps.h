@@ -1,24 +1,26 @@
 /*
  * SmartFranklin - GPS module interface
  * SPDX-License-Identifier: MIT
- *
- * Public API for the Gravity DFR1103 GNSS/RTC runtime module.
  */
 
 #pragma once
 
 #include <Arduino.h>
+
 /**
- * @brief Gravity DFR1103 GNSS/RTC integration class.
+ * @brief Gravity DFR1103 GNSS/RTC sensor integration module.
  *
- * This class owns one DFR1103 instance and supports either direct Wire access
- * or PA Hub-routed Wire access. It is responsible for module discovery,
- * initialization, periodic reads, DATA model updates, and MQTT publication.
+ * This class manages a DFR1103 instance for satellite positioning, altitude,
+ * and timekeeping. It supports both direct Wire access and PAHub-routed I2C.
  *
- * Typical lifecycle:
- * 1. `taskGps` calls `init()` once the task starts.
- * 2. On success, `taskGps` calls `process()` on each loop period.
- * 3. `process()` performs one read-and-publish cycle.
+ * **Lifecycle:**
+ * - `init()` - Detect I2C route, initialize sensor, configure channels
+ * - `process()` - Read position/altitude/time, update DATA, publish via MQTT
+ *
+ * **Thread Safety:** All state is protected by internal mutex.
+ *
+ * MQTT topics include fix, coordinates, altitude, satellites, UTC date/time,
+ * RTC time, and I2C diagnostic publication paths.
  */
 class GPS {
 public:
