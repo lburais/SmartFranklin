@@ -21,7 +21,7 @@
  *   a mutex to prevent race conditions in the FreeRTOS multi-tasking environment.
  * 
  * Data Categories:
- *   - Sensors: Orientation, weight, and time measurements
+ *   - Sensors: Weight and GNSS/time measurements
  *   - Power: Battery voltage, current, state of charge
  *   - Actuators: LED and buzzer control states
  *   - Settings: Target charge level and other configurable parameters
@@ -41,7 +41,7 @@
  *   - Persistence: Critical data saved to configuration store
  * 
  * Update Frequency:
- *   - Sensors: Vary by sensor type (tilt: 1s, weight: 60s)
+ *   - Sensors: Vary by sensor type (weight: 60s, GNSS configurable)
  *   - Actuators: Immediate on command receipt
  *   - Settings: On configuration changes
  *   - Time: Continuous RTC updates
@@ -120,56 +120,8 @@
  */
 struct SmartData {
     // ============================================================================
-    // Orientation Sensor Data
-    // ============================================================================
-
-    /**
-     * @brief Device pitch angle from IMU accelerometer.
-     * 
-     * Forward/backward tilt angle calculated from accelerometer data.
-     * Positive values indicate forward tilt, negative backward tilt.
-     * Used for orientation monitoring and stability control.
-     * 
-     * Units: Degrees (°)
-     * Range: -90.0 to +90.0 (limited by atan2 function)
-     * Precision: Calculated internally, stored as float
-     * Update Rate: Configurable (default ~100ms)
-     * Default: 0.0 (level orientation)
-     */
-    float pitch = 0;
-
-    /**
-     * @brief Device roll angle from IMU accelerometer.
-     * 
-     * Left/right tilt angle calculated from accelerometer data.
-     * Positive values indicate right roll, negative left roll.
-     * Used for orientation monitoring and stability control.
-     * 
-     * Units: Degrees (°)
-     * Range: -90.0 to +90.0 (limited by atan2 function)
-     * Precision: Calculated internally, stored as float
-     * Update Rate: Configurable (default ~100ms)
-     * Default: 0.0 (level orientation)
-     */
-    float roll = 0;
-
-    // ============================================================================
     // Time and Communication Data
     // ============================================================================
-
-    /**
-     * @brief Current time from Real-Time Clock.
-     * 
-     * Formatted timestamp string from RTC module in ISO-like format.
-     * Updated continuously by RTC task for system time synchronization.
-     * Used for timestamping sensor data and logging.
-     * 
-    * Format: "YYYY-MM-DDTHH:MM:SSZ" (ISO 8601 UTC)
-    * Example: "2026-03-05T14:30:25Z"
-     * Update Rate: Continuous (every few seconds)
-     * Default: Empty string (no time set)
-     */
-    String rtc_time = "";
 
     /**
      * @brief GNSS fix state from DFR1103 module.
@@ -395,7 +347,7 @@ struct SmartData {
  *   - Consistency: Update related fields atomically
  * 
  * Usage Examples:
- *   - Sensors: DATA.pitch = measurement;
+ *   - Sensors: DATA.weight_gaz = measurement;
  *   - Actuators: if (DATA.led_state) turn_on_led();
  *   - Display: show_value(DATA.bms_soc);
  *   - MQTT: publish("voltage", String(DATA.bms_voltage));
@@ -415,7 +367,7 @@ extern SmartData DATA;
  * Usage Pattern:
  *   std::lock_guard<std::mutex> lock(DATA_MUTEX);
  *   // Access DATA fields here
- *   DATA.pitch = new_value;
+ *   DATA.weight_gaz = new_value;
  *   // Lock automatically released
  * 
  * Performance Considerations:

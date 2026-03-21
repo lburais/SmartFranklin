@@ -39,15 +39,7 @@
  *      - weight_kg: Calibrated weight in kilograms
  *      - Updated by: taskGaz (periodic sensor acquisition)
  * 
- *   3. Inclination/Tilt Measurement
- *      - tilt_degrees: Angle in degrees from horizontal
- *      - Updated by: taskTilt (IMU accelerometer processing)
- * 
- *   4. System Time
- *      - timestamp_unix: Current Unix timestamp (seconds since epoch)
- *      - Updated by: taskRtc (RTC synchronization)
- * 
- *   5. Device Control State
+ *   3. Device Control State
  *      - led_state: LED on/off state (boolean)
  *      - buzzer_state: Buzzer on/off state (boolean)
  *      - target_soc: Target battery state of charge for charging (0-100%)
@@ -114,7 +106,7 @@
 // and write to this object for inter-task communication and data publishing.
 //
 // Access Pattern:
-//   - Sensor tasks (taskBmsBle, taskGaz, taskTilt, etc.) continuously
+//   - Sensor tasks (taskBmsBle, taskGaz, taskGps, etc.) continuously
 //     update DATA with latest readings
 //   - Communication tasks (taskMqttBroker, taskDisplay) read DATA to publish
 //     or display current system state

@@ -70,16 +70,6 @@
  */
 #define PERIOD_WEIGHT       60000
 
-/**
- * @brief Sampling period for tilt task updates.
- */
-#define PERIOD_TILT         1000
-
-/**
- * @brief Sampling period for RTC task updates.
- */
-#define PERIOD_RTC          60000
-
 // ============================================================================
 // External Task Handle Declarations
 // ============================================================================
@@ -91,8 +81,6 @@ extern TaskHandle_t taskWeightHandle;           // Weight sensor acquisition
 extern TaskHandle_t taskGazHandle;              // Gaz/weight sensor acquisition
 extern TaskHandle_t taskTankHandle;             // Tank ultrasonic acquisition
 extern TaskHandle_t taskI2cSensorsHandle;       // Unified I2C sensor acquisition (GAZ + TANK)
-extern TaskHandle_t taskTiltHandle;             // Tilt sensor acquisition
-extern TaskHandle_t taskRtcHandle;              // Real-time clock synchronization
 extern TaskHandle_t taskGpsHandle;              // Gravity DFR1103 GPS/RTC acquisition
 extern TaskHandle_t taskBmsBleHandle;           // BLE battery management system
 extern TaskHandle_t taskHmiHandle;              // HMI/display updates
@@ -172,30 +160,6 @@ void taskI2cSensors(void *pvParameters);
  * @return void (infinite loop, never returns)
  */
 void taskTank(void *pvParameters);
-
-/**
- * @brief Tilt/Angle sensor data acquisition task.
- * 
- * Acquires tilt angle measurements from accelerometer or inclinometer,
- * applies sensor fusion algorithms, and publishes inclination data
- * for slope monitoring or equipment orientation tracking.
- * 
- * @param pvParameters FreeRTOS task parameter (unused)
- * @return void (infinite loop, never returns)
- */
-void taskTilt(void *pvParameters);
-
-/**
- * @brief Real-time clock synchronization task.
- * 
- * Maintains system time using M5Stack's internal RTC, synchronizes with
- * NTP servers over network, manages time-based events, and provides
- * accurate timestamps for data logging and scheduled operations.
- * 
- * @param pvParameters FreeRTOS task parameter (unused)
- * @return void (infinite loop, never returns)
- */
-void taskRtc(void *pvParameters);
 
 /**
  * @brief Gravity DFR1103 GPS/RTC acquisition task.

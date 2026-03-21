@@ -400,9 +400,6 @@ void web_dashboard_init()
             doc["fill_gaz"] = DATA.fill_gaz;
             doc["tank_distance_mm"] = DATA.distance_tank_mm;
             doc["tank_fill"] = DATA.fill_tank;
-            doc["pitch"] = DATA.pitch;
-            doc["roll"] = DATA.roll;
-            doc["rtc_time"] = DATA.rtc_time;
             doc["bms_voltage"] = DATA.bms_voltage;
             doc["bms_current"] = DATA.bms_current;
             doc["bms_soc"] = DATA.bms_soc;

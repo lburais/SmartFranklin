@@ -44,8 +44,8 @@ void publish_node_report(mt_node_t *node, mt_nr_progress_t progress)
         doc["report_ts_ms"] = millis();
         {
             std::lock_guard<std::mutex> lock(DATA_MUTEX);
-            if (!DATA.rtc_time.isEmpty()) {
-                doc["report_iso"] = DATA.rtc_time;
+            if (!DATA.gps_rtc_time.isEmpty()) {
+                doc["report_iso"] = DATA.gps_rtc_time;
             }
         }
         doc["node_num"] = node->node_num;

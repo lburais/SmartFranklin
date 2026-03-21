@@ -24,12 +24,11 @@
  *   - screen-name publication for MQTT UI observability.
  *
  * Screen Map:
- *   - 0: Gaz (weight)
- *   - 1: Level (pitch/roll)
+ *   - 0: Tank
+ *   - 1: Gaz (weight)
  *   - 2: Battery (BMS)
  *   - 3: GPS
- *   - 4: RTC
- *   - 5: Scale Calibration
+ *   - 4: Scale Calibration
  *
  * ============================================================================
  * MIT License
@@ -102,7 +101,7 @@ public:
 
 private:
     /** @brief Number of available UI screens. */
-    static constexpr int kScreenCount = 6;
+    static constexpr int kScreenCount = 5;
 
     /**
      * @brief Immutable copy of shared DATA used by one render pass.
@@ -115,8 +114,6 @@ private:
         int32_t fill_gaz = 0;
         int32_t distance_tank_mm = 0;
         int32_t fill_tank = 0;
-        float pitch = 0.0f;
-        float roll = 0.0f;
         float bms_voltage = 0.0f;
         float bms_current = 0.0f;
         float bms_soc = 0.0f;
@@ -159,17 +156,11 @@ private:
     /** @brief Draws weight screen (Gaz). */
     void drawGazScreen(const DisplaySnapshot& snapshot) const;
 
-    /** @brief Draws tilt screen (Level). */
-    void drawLevelScreen(const DisplaySnapshot& snapshot) const;
-
     /** @brief Draws battery/BMS telemetry screen. */
     void drawBatteryScreen(const DisplaySnapshot& snapshot) const;
 
     /** @brief Draws GPS telemetry screen. */
     void drawGpsScreen(const DisplaySnapshot& snapshot) const;
-
-    /** @brief Draws RTC time screen. */
-    void drawRtcScreen(const DisplaySnapshot& snapshot) const;
 
     /** @brief Draws scale calibration guidance/progress screen. */
     void drawCalibrationScreen(const DisplaySnapshot& snapshot) const;

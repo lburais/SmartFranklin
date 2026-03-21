@@ -11,7 +11,7 @@ SmartFranklin is an ESP32 IoT controller for M5StickC Plus2 built around concurr
 ## What It Does
 
 - Runs a local HMI (screen navigation, button handling, scale calibration workflow)
-- Collects telemetry from weight, tilt, RTC, GPS, BLE BMS, and board sensors
+- Collects telemetry from weight, GPS, BLE BMS, and board sensors
 - Manages Wi-Fi AP/STA connectivity and a unified MQTT runtime (`taskMqtt`)
 - Bridges optional transports (Meshtastic and NB-IoT2)
 - Applies capability-gated startup based on detected hardware and configuration
@@ -32,8 +32,6 @@ flowchart TD
         T_MQTT[taskMqtt]
         T_WIFI[taskWiFi]
         T_I2C[taskI2cSensors]
-        T_TILT[taskTilt]
-        T_RTC[taskRtc]
         T_GPS[taskGps]
         T_BMS[taskBmsBle]
         T_MESH[taskMeshtasticBridge]
@@ -47,8 +45,6 @@ flowchart TD
     SETUP --> T_MQTT
     SETUP --> T_WIFI
     SETUP --> T_I2C
-    SETUP --> T_TILT
-    SETUP --> T_RTC
     SETUP --> T_GPS
     SETUP --> T_BMS
     SETUP --> T_MESH
@@ -65,8 +61,6 @@ flowchart TD
 | `taskMqtt` | Unified MQTT runtime (embedded local broker + external client path) |
 | `taskWiFi` | AP/STA connectivity lifecycle and reconnection |
 | `taskI2cSensors` | Unified GAZ + TANK acquisition |
-| `taskTilt` | Pitch/roll acquisition and publication |
-| `taskRtc` | RTC timekeeping and publication |
 | `taskGps` | GNSS/RTC acquisition and publication |
 | `taskBmsBle` | BLE BMS acquisition and publication |
 | `taskMeshtasticBridge` | Meshtastic bridge integration |

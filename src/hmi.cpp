@@ -250,12 +250,10 @@ const char* HMI::currentScreenName() const
     switch (screen_) {
     case 0: return "tank";
     case 1: return "gaz";
-    case 2: return "level";
-    case 3: return "battery";
-    case 4: return "gps";
-    case 5: return "rtc";
-    case 6: return "calibration";
-    default: return "level";
+    case 2: return "battery";
+    case 3: return "gps";
+    case 4: return "calibration";
+    default: return "gaz";
     }
 }
 
@@ -268,7 +266,7 @@ const char* HMI::currentScreenName() const
  */
 void HMI::handleCalibrationButton(bool btnB_rising)
 {
-    if (screen_ != 6 || !btnB_rising) {
+    if (screen_ != 4 || !btnB_rising) {
         return;
     }
 
@@ -328,13 +326,11 @@ void HMI::draw()
     switch (screen_) {
     case 0: drawTankScreen(snapshot); break;
     case 1: drawGazScreen(snapshot); break;
-    case 2: drawLevelScreen(snapshot); break;
-    case 3: drawBatteryScreen(snapshot); break;
-    case 4: drawGpsScreen(snapshot); break;
-    case 5: drawRtcScreen(snapshot); break;
-    case 6: drawCalibrationScreen(snapshot); break;
+    case 2: drawBatteryScreen(snapshot); break;
+    case 3: drawGpsScreen(snapshot); break;
+    case 4: drawCalibrationScreen(snapshot); break;
     default:
-        drawLevelScreen(snapshot);
+        drawGazScreen(snapshot);
         break;
     }
 
@@ -361,8 +357,6 @@ void HMI::updateSnapshot(DisplaySnapshot& snapshot)
         snapshot.fill_gaz = DATA.fill_gaz;
         snapshot.distance_tank_mm = DATA.distance_tank_mm;
         snapshot.fill_tank = DATA.fill_tank;
-        snapshot.pitch = DATA.pitch;
-        snapshot.roll = DATA.roll;
         snapshot.bms_voltage = DATA.bms_voltage;
         snapshot.bms_current = DATA.bms_current;
         snapshot.bms_soc = DATA.bms_soc;
@@ -407,17 +401,6 @@ void HMI::drawGazScreen(const DisplaySnapshot& snapshot) const
     lcd.printf("Weight: %d g\nFill: %d%%", snapshot.weight_gaz, snapshot.fill_gaz);
 }
 
-/** @brief Draw helper for Level tilt telemetry page. */
-void HMI::drawLevelScreen(const DisplaySnapshot& snapshot) const
-{
-    M5GFX& lcd = M5.Display;
-    drawTitleBox("Level");
-    beginContentArea();
-    lcd.printf("Pitch: %.1f°\nRoll:  %.1f°", 
-               snapshot.pitch, 
-               snapshot.roll);
-}
-
 /** @brief Draw helper for battery/BMS telemetry page. */
 void HMI::drawBatteryScreen(const DisplaySnapshot& snapshot) const
 {
@@ -442,17 +425,9 @@ void HMI::drawGpsScreen(const DisplaySnapshot& snapshot) const
     lcd.printf("Lat: %.6f\n", snapshot.gps_lat);
     lcd.printf("Lon: %.6f\n", snapshot.gps_lon);
     lcd.printf("Alt: %.1f m\n", snapshot.gps_alt_m);
-}
-
-/** @brief Draw helper for RTC telemetry page. */
-void HMI::drawRtcScreen(const DisplaySnapshot& snapshot) const
-{
-    M5GFX& lcd = M5.Display;
-    drawTitleBox("RTC");
-    beginContentArea();
-    lcd.println("GPS UTC:");
+    lcd.println("UTC:");
     lcd.printf("%s %s\n", snapshot.gps_utc_date.c_str(), snapshot.gps_utc_time.c_str());
-    lcd.println("RTC:");
+    lcd.println("GPS RTC:");
     lcd.println(snapshot.gps_rtc_time.c_str());
 }
 

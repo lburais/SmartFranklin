@@ -12,17 +12,17 @@
  * Version:     1.1
  * 
  * Features:
- *   - M5Stack hardware initialization (IMU, RTC, power management)
+ *   - M5Stack hardware initialization (power management)
  *   - Dual WiFi mode (AP + STA) with captive portal fallback
  *   - MQTT broker integration for remote command handling
- *   - Multi-sensor support (weight, tilt, RTC)
+ *   - Multi-sensor support (weight, GPS/GNSS)
  *   - BLE communication for battery management systems
  *   - Meshtastic bridge for mesh networking
  *   - NB-IoT connectivity
  *   - Web dashboard for device management
  *   - Configuration persistence via SPIFFS
  * 
- * Hardware:    M5Stack with integrated IMU and RTC
+ * Hardware:    M5Stack device family
  * Platform:    ESP32 (FreeRTOS)
  * 
  * ============================================================================
@@ -75,8 +75,6 @@ TaskHandle_t taskWeightHandle           = nullptr;  // Weight sensor reading
 //TaskHandle_t taskGazHandle              = nullptr;  // Gaz/weight sensor reading
 TaskHandle_t taskTankHandle             = nullptr;  // Tank ultrasonic reading
 TaskHandle_t taskI2cSensorsHandle       = nullptr;  // Unified I2C sensors (GAZ + TANK)
-TaskHandle_t taskTiltHandle             = nullptr;  // Tilt sensor reading
-TaskHandle_t taskRtcHandle              = nullptr;  // Real-time clock synchronization
 TaskHandle_t taskGpsHandle              = nullptr;  // Gravity DFR1103 GPS/RTC task
 TaskHandle_t taskBmsBleHandle           = nullptr;  // BLE battery management system
 TaskHandle_t taskHmiHandle              = nullptr;  // HMI/display task
@@ -154,11 +152,11 @@ void setup() {
 #if defined(ARDUINO_M5STACK_DIAL)
     cfg.output_power = true;
     cfg.internal_imu = false;
-    cfg.internal_rtc = true;
+    cfg.internal_rtc = false;
 #else
     cfg.output_power = true;   // Enable 5V output power for peripheral devices
-    cfg.internal_imu = true;   // Enable internal 6-axis IMU (accelerometer + gyroscope)
-    cfg.internal_rtc = true;   // Enable internal real-time clock for timekeeping
+    cfg.internal_imu = false;
+    cfg.internal_rtc = false;
 #endif
 
     M5.begin(cfg);
@@ -225,14 +223,6 @@ void setup() {
 
     #ifndef DISABLE_I2C_SENSORS
     xTaskCreatePinnedToCore(taskI2cSensors,       "I2C_SENS", 4096, nullptr, 2, &taskI2cSensorsHandle, 1);
-    #endif
-
-    #ifndef DISABLE_TILT
-    xTaskCreatePinnedToCore(taskTilt,             "TILT",     4096, nullptr, 2,  &taskTiltHandle,            1);
-    #endif
-
-    #ifndef DISABLE_RTC
-    xTaskCreatePinnedToCore(taskRtc,              "RTC",      4096, nullptr, 2,  &taskRtcHandle,             1);
     #endif
 
     #ifndef DISABLE_GPS
