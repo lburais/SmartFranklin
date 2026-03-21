@@ -1,2 +1,0 @@
-src/task_gaz.cpp
-src/task_tank.cpp
