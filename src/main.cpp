@@ -151,11 +151,11 @@ void setup() {
 
 #if defined(ARDUINO_M5STACK_DIAL)
     cfg.output_power = true;
-    cfg.internal_imu = false;
+    cfg.internal_imu = true;
     cfg.internal_rtc = false;
 #else
     cfg.output_power = true;   // Enable 5V output power for peripheral devices
-    cfg.internal_imu = false;
+    cfg.internal_imu = true;
     cfg.internal_rtc = false;
 #endif
 

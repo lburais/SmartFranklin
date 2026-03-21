@@ -55,6 +55,12 @@ struct SmartConfig {
     // Scale calibration
     float scale_cal_factor = 1.0f;
 
+    // IMU geometry calibration (millimeters)
+    float imu_wheelbase_mm = 2200.0f;
+    float imu_track_width_mm = 1600.0f;
+    float imu_offset_x_mm = 180.0f;
+    float imu_offset_y_mm = -120.0f;
+
     // Admin credentials
     String admin_user = "admin";
     String admin_pass = "admin";

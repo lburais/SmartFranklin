@@ -205,6 +205,10 @@ bool config_load()
     CONFIG.sta_ssid = doc["sta_ssid"] | defaultCONFIG.sta_ssid;
     CONFIG.sta_pass = doc["sta_pass"] | defaultCONFIG.sta_pass;
     CONFIG.scale_cal_factor = doc["scale_cal_factor"] | defaultCONFIG.scale_cal_factor;
+    CONFIG.imu_wheelbase_mm = doc["imu_wheelbase_mm"] | defaultCONFIG.imu_wheelbase_mm;
+    CONFIG.imu_track_width_mm = doc["imu_track_width_mm"] | defaultCONFIG.imu_track_width_mm;
+    CONFIG.imu_offset_x_mm = doc["imu_offset_x_mm"] | defaultCONFIG.imu_offset_x_mm;
+    CONFIG.imu_offset_y_mm = doc["imu_offset_y_mm"] | defaultCONFIG.imu_offset_y_mm;
 
     CONFIG.admin_user = doc["admin_user"] | defaultCONFIG.admin_user;
     CONFIG.admin_pass = doc["admin_pass"] | defaultCONFIG.admin_pass;
@@ -301,6 +305,10 @@ bool config_save()
     doc["sta_ssid"] = CONFIG.sta_ssid;                      // External network SSID
     doc["sta_pass"] = CONFIG.sta_pass;                      // External network password
     doc["scale_cal_factor"] = CONFIG.scale_cal_factor;      // Weight sensor calibration
+    doc["imu_wheelbase_mm"] = CONFIG.imu_wheelbase_mm;
+    doc["imu_track_width_mm"] = CONFIG.imu_track_width_mm;
+    doc["imu_offset_x_mm"] = CONFIG.imu_offset_x_mm;
+    doc["imu_offset_y_mm"] = CONFIG.imu_offset_y_mm;
 
     doc["admin_user"] = CONFIG.admin_user;                  // Web dashboard username
     doc["admin_pass"] = CONFIG.admin_pass;                  // Web dashboard password

@@ -35,6 +35,31 @@
         <div id="temp" class="value">-- °C</div>
     </div>
 
+    <div class="card">
+        <div class="label">IMU Pitch / Roll</div>
+        <div id="imu_pose" class="value">-- / -- deg</div>
+    </div>
+
+    <div class="card">
+        <div class="label">Wheel Heights (FL FR RL RR)</div>
+        <div id="imu_wheels" class="value" style="font-size:1.0em;line-height:1.4;">-- -- -- -- mm</div>
+    </div>
+
+    <div class="card">
+        <div class="label">IMU Geometry Calibration</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+            <input id="wheelbase_mm" type="number" step="1" placeholder="Wheelbase mm" />
+            <input id="track_width_mm" type="number" step="1" placeholder="Track width mm" />
+            <input id="offset_x_mm" type="number" step="1" placeholder="Offset X mm" />
+            <input id="offset_y_mm" type="number" step="1" placeholder="Offset Y mm" />
+        </div>
+        <div style="margin-top:10px;display:flex;gap:8px;">
+            <button onclick="saveImuGeometry()">Save IMU Geometry</button>
+            <button onclick="loadImuGeometry()">Reload</button>
+        </div>
+        <div id="imu_geom_status" class="label" style="margin-top:8px;">--</div>
+    </div>
+
 </div>
 
 <h2 style="color:var(--accent);margin-top:30px;">Live Charts</h2>
@@ -59,25 +84,89 @@ function initCharts() {
 }
 
 function update() {
-    fetch("/api/sensors")
+    Promise.all([
+        fetch("/api/status").then(r => r.json()),
+        fetch("/api/hw").then(r => r.json())
+    ]).then(([status, hw]) => {
+        const weight = Number(status.weight_gaz || 0);
+        const temp = Number(hw.temperature || 0);
+
+        document.getElementById("weight").textContent = weight + " g";
+        document.getElementById("temp").textContent = temp.toFixed(1) + " °C";
+
+        const pitch = Number(status.imu_pitch_deg || 0);
+        const roll = Number(status.imu_roll_deg || 0);
+        document.getElementById("imu_pose").textContent = pitch.toFixed(2) + " / " + roll.toFixed(2) + " deg";
+
+        const fl = Number(status.imu_wheel_fl_mm || 0);
+        const fr = Number(status.imu_wheel_fr_mm || 0);
+        const rl = Number(status.imu_wheel_rl_mm || 0);
+        const rr = Number(status.imu_wheel_rr_mm || 0);
+        document.getElementById("imu_wheels").textContent =
+            "FL " + fl.toFixed(1) + "  FR " + fr.toFixed(1) + "\n" +
+            "RL " + rl.toFixed(1) + "  RR " + rr.toFixed(1) + " mm";
+
+        let t = new Date().toLocaleTimeString();
+
+        weightChart.data.labels.push(t);
+        weightChart.data.datasets[0].data.push(weight);
+        if (weightChart.data.labels.length > 20) {
+            weightChart.data.labels.shift();
+            weightChart.data.datasets[0].data.shift();
+        }
+        weightChart.update();
+    }).catch(() => {
+        document.getElementById("imu_geom_status").textContent = "Live update failed";
+    });
+}
+
+function loadImuGeometry() {
+    fetch("/api/imu_geometry")
         .then(r => r.json())
-        .then(d => {
-            document.getElementById("weight").textContent = d.weight + " g";
-            document.getElementById("temp").textContent = d.temperature + " °C";
+        .then(g => {
+            document.getElementById("wheelbase_mm").value = g.imu_wheelbase_mm;
+            document.getElementById("track_width_mm").value = g.imu_track_width_mm;
+            document.getElementById("offset_x_mm").value = g.imu_offset_x_mm;
+            document.getElementById("offset_y_mm").value = g.imu_offset_y_mm;
+            document.getElementById("imu_geom_status").textContent = "Geometry loaded";
+        })
+        .catch(() => {
+            document.getElementById("imu_geom_status").textContent = "Failed to load geometry";
+        });
+}
 
-            let t = new Date().toLocaleTimeString();
+function saveImuGeometry() {
+    const wheelbase = encodeURIComponent(document.getElementById("wheelbase_mm").value);
+    const track = encodeURIComponent(document.getElementById("track_width_mm").value);
+    const ox = encodeURIComponent(document.getElementById("offset_x_mm").value);
+    const oy = encodeURIComponent(document.getElementById("offset_y_mm").value);
 
-            weightChart.data.labels.push(t);
-            weightChart.data.datasets[0].data.push(d.weight);
-            if (weightChart.data.labels.length > 20) {
-                weightChart.data.labels.shift();
-                weightChart.data.datasets[0].data.shift();
+    const url = "/api/set_imu_geometry?wheelbase_mm=" + wheelbase +
+                "&track_width_mm=" + track +
+                "&offset_x_mm=" + ox +
+                "&offset_y_mm=" + oy;
+
+    fetch(url)
+        .then(r => r.json().then(j => ({ ok: r.ok, body: j })))
+        .then(({ ok, body }) => {
+            if (!ok) {
+                document.getElementById("imu_geom_status").textContent = "Save failed: " + (body.error || "unknown");
+                return;
             }
-            weightChart.update();
+
+            document.getElementById("wheelbase_mm").value = body.imu_wheelbase_mm;
+            document.getElementById("track_width_mm").value = body.imu_track_width_mm;
+            document.getElementById("offset_x_mm").value = body.imu_offset_x_mm;
+            document.getElementById("offset_y_mm").value = body.imu_offset_y_mm;
+            document.getElementById("imu_geom_status").textContent = body.saved ? "Saved and applied" : "Applied but not persisted";
+        })
+        .catch(() => {
+            document.getElementById("imu_geom_status").textContent = "Save request failed";
         });
 }
 
 initCharts();
+loadImuGeometry();
 setInterval(update, 2000);
 update();
 </script>

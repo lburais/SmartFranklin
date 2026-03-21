@@ -215,6 +215,36 @@ struct SmartData {
     int32_t distance_tank_mm = 0;
 
     /**
+     * @brief IMU pitch angle in degrees.
+     */
+    float imu_pitch_deg = 0.0f;
+
+    /**
+     * @brief IMU roll angle in degrees.
+     */
+    float imu_roll_deg = 0.0f;
+
+    /**
+     * @brief Front-left wheel relative height in millimeters.
+     */
+    float imu_wheel_fl_mm = 0.0f;
+
+    /**
+     * @brief Front-right wheel relative height in millimeters.
+     */
+    float imu_wheel_fr_mm = 0.0f;
+
+    /**
+     * @brief Rear-left wheel relative height in millimeters.
+     */
+    float imu_wheel_rl_mm = 0.0f;
+
+    /**
+     * @brief Rear-right wheel relative height in millimeters.
+     */
+    float imu_wheel_rr_mm = 0.0f;
+
+    /**
      * @brief Weight sensor calibration gap value.
      * 
      * Calibration offset for weight sensor accuracy.

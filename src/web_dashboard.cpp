@@ -164,6 +164,8 @@
 #include <FS.h>
 #include <SPIFFS.h>
 #include <WiFi.h>
+
+#include <cmath>
 #include "data_model.h"
 #include "config_store.h"
 
@@ -222,6 +224,11 @@ body { font-family: sans-serif; margin: 10px; }
 .card { background: #f4f4f4; padding: 15px; border-radius: 10px; margin-bottom: 15px; }
 pre { white-space: pre-wrap; word-wrap: break-word; }
 a.button { display: inline-block; padding: 10px 15px; background: #0078ff; color: white; border-radius: 6px; text-decoration: none; margin-right: 5px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(140px, 1fr)); gap: 8px; }
+.btn { padding: 8px 12px; border: 0; border-radius: 6px; background: #0078ff; color: #fff; cursor: pointer; }
+.btn.warn { background: #d9534f; }
+.status { color: #444; font-size: 0.9em; margin-top: 8px; }
+input[type='number'] { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #bbb; border-radius: 6px; }
 </style>
 </head>
 <body>
@@ -235,7 +242,91 @@ a.button { display: inline-block; padding: 10px 15px; background: #0078ff; color
   <h3>Live Data</h3>
   <pre id="data">Loading...</pre>
 </div>
+
+<div class="card">
+    <h3>IMU Geometry Calibration</h3>
+    <div class="grid2">
+        <div>
+            <label for="wheelbase_mm">Wheelbase (mm)</label>
+            <input id="wheelbase_mm" type="number" step="1" />
+        </div>
+        <div>
+            <label for="track_width_mm">Track Width (mm)</label>
+            <input id="track_width_mm" type="number" step="1" />
+        </div>
+        <div>
+            <label for="offset_x_mm">IMU Offset X (mm)</label>
+            <input id="offset_x_mm" type="number" step="1" />
+        </div>
+        <div>
+            <label for="offset_y_mm">IMU Offset Y (mm)</label>
+            <input id="offset_y_mm" type="number" step="1" />
+        </div>
+    </div>
+    <div style="display:flex; gap:8px; margin-top:10px;">
+        <button class="btn" onclick="saveImuGeometry()">Save</button>
+        <button class="btn" onclick="loadImuGeometry()">Reload</button>
+        <button class="btn warn" onclick="resetImuGeometry()">Reset Defaults</button>
+    </div>
+    <div id="imu_geom_status" class="status">--</div>
+</div>
 <script>
+function updateGeometryInputs(g) {
+    document.getElementById('wheelbase_mm').value = g.imu_wheelbase_mm;
+    document.getElementById('track_width_mm').value = g.imu_track_width_mm;
+    document.getElementById('offset_x_mm').value = g.imu_offset_x_mm;
+    document.getElementById('offset_y_mm').value = g.imu_offset_y_mm;
+}
+
+async function loadImuGeometry() {
+    try {
+        const r = await fetch('/api/imu_geometry');
+        const g = await r.json();
+        updateGeometryInputs(g);
+        document.getElementById('imu_geom_status').textContent = 'Geometry loaded';
+    } catch (e) {
+        document.getElementById('imu_geom_status').textContent = 'Failed to load geometry';
+    }
+}
+
+async function saveImuGeometry() {
+    try {
+        const wheelbase = encodeURIComponent(document.getElementById('wheelbase_mm').value);
+        const track = encodeURIComponent(document.getElementById('track_width_mm').value);
+        const offsetX = encodeURIComponent(document.getElementById('offset_x_mm').value);
+        const offsetY = encodeURIComponent(document.getElementById('offset_y_mm').value);
+
+        const url = '/api/set_imu_geometry?wheelbase_mm=' + wheelbase + '&track_width_mm=' + track + '&offset_x_mm=' + offsetX + '&offset_y_mm=' + offsetY;
+        const r = await fetch(url);
+        const body = await r.json();
+        if (!r.ok) {
+            document.getElementById('imu_geom_status').textContent = 'Save failed: ' + (body.error || 'unknown');
+            return;
+        }
+
+        updateGeometryInputs(body);
+        document.getElementById('imu_geom_status').textContent = body.saved ? 'Saved and applied' : 'Applied but not persisted';
+    } catch (e) {
+        document.getElementById('imu_geom_status').textContent = 'Save request failed';
+    }
+}
+
+async function resetImuGeometry() {
+    try {
+        const r = await fetch('/api/reset_imu_geometry');
+        const body = await r.json();
+        if (!r.ok) {
+            document.getElementById('imu_geom_status').textContent = 'Reset failed';
+            return;
+        }
+
+        updateGeometryInputs(body);
+        document.getElementById('imu_geom_status').textContent = body.saved ? 'Defaults restored' : 'Defaults applied but not persisted';
+    } catch (e) {
+        document.getElementById('imu_geom_status').textContent = 'Reset request failed';
+    }
+}
+
 async function refresh() {
   try {
     const r = await fetch('/api/status');
@@ -246,6 +337,7 @@ async function refresh() {
   }
 }
 setInterval(refresh, 1000);
+loadImuGeometry();
 refresh();
 </script>
 </body>
@@ -400,6 +492,12 @@ void web_dashboard_init()
             doc["fill_gaz"] = DATA.fill_gaz;
             doc["tank_distance_mm"] = DATA.distance_tank_mm;
             doc["tank_fill"] = DATA.fill_tank;
+            doc["imu_pitch_deg"] = DATA.imu_pitch_deg;
+            doc["imu_roll_deg"] = DATA.imu_roll_deg;
+            doc["imu_wheel_fl_mm"] = DATA.imu_wheel_fl_mm;
+            doc["imu_wheel_fr_mm"] = DATA.imu_wheel_fr_mm;
+            doc["imu_wheel_rl_mm"] = DATA.imu_wheel_rl_mm;
+            doc["imu_wheel_rr_mm"] = DATA.imu_wheel_rr_mm;
             doc["bms_voltage"] = DATA.bms_voltage;
             doc["bms_current"] = DATA.bms_current;
             doc["bms_soc"] = DATA.bms_soc;
@@ -408,6 +506,95 @@ void web_dashboard_init()
         String out;
         serializeJson(doc, out);
         request->send(200, "application/json", out);
+    });
+
+    server.on("/api/imu_geometry", HTTP_GET, [](AsyncWebServerRequest *request){
+        JsonDocument doc;
+        doc["imu_wheelbase_mm"] = CONFIG.imu_wheelbase_mm;
+        doc["imu_track_width_mm"] = CONFIG.imu_track_width_mm;
+        doc["imu_offset_x_mm"] = CONFIG.imu_offset_x_mm;
+        doc["imu_offset_y_mm"] = CONFIG.imu_offset_y_mm;
+
+        String out;
+        serializeJson(doc, out);
+        request->send(200, "application/json", out);
+    });
+
+    server.on("/api/set_imu_geometry", HTTP_GET, [](AsyncWebServerRequest *request){
+        auto parseParam = [&](const char* key, float& target) {
+            if (!request->hasParam(key)) {
+                return true;
+            }
+
+            const float parsed = request->getParam(key)->value().toFloat();
+            if (!std::isfinite(parsed)) {
+                return false;
+            }
+
+            target = parsed;
+            return true;
+        };
+
+        float wheelbase = CONFIG.imu_wheelbase_mm;
+        float track = CONFIG.imu_track_width_mm;
+        float offsetX = CONFIG.imu_offset_x_mm;
+        float offsetY = CONFIG.imu_offset_y_mm;
+
+        if (!parseParam("wheelbase_mm", wheelbase) ||
+            !parseParam("track_width_mm", track) ||
+            !parseParam("offset_x_mm", offsetX) ||
+            !parseParam("offset_y_mm", offsetY)) {
+            request->send(400, "application/json", "{\"error\":\"invalid_parameter\"}");
+            return;
+        }
+
+        if (wheelbase < 100.0f || wheelbase > 10000.0f ||
+            track < 100.0f || track > 10000.0f ||
+            offsetX < -5000.0f || offsetX > 5000.0f ||
+            offsetY < -5000.0f || offsetY > 5000.0f) {
+            request->send(400, "application/json", "{\"error\":\"out_of_range\"}");
+            return;
+        }
+
+        CONFIG.imu_wheelbase_mm = wheelbase;
+        CONFIG.imu_track_width_mm = track;
+        CONFIG.imu_offset_x_mm = offsetX;
+        CONFIG.imu_offset_y_mm = offsetY;
+
+        const bool saved = config_save();
+
+        JsonDocument doc;
+        doc["saved"] = saved;
+        doc["imu_wheelbase_mm"] = CONFIG.imu_wheelbase_mm;
+        doc["imu_track_width_mm"] = CONFIG.imu_track_width_mm;
+        doc["imu_offset_x_mm"] = CONFIG.imu_offset_x_mm;
+        doc["imu_offset_y_mm"] = CONFIG.imu_offset_y_mm;
+
+        String out;
+        serializeJson(doc, out);
+        request->send(saved ? 200 : 500, "application/json", out);
+    });
+
+    server.on("/api/reset_imu_geometry", HTTP_GET, [](AsyncWebServerRequest *request){
+        const SmartConfig defaults;
+
+        CONFIG.imu_wheelbase_mm = defaults.imu_wheelbase_mm;
+        CONFIG.imu_track_width_mm = defaults.imu_track_width_mm;
+        CONFIG.imu_offset_x_mm = defaults.imu_offset_x_mm;
+        CONFIG.imu_offset_y_mm = defaults.imu_offset_y_mm;
+
+        const bool saved = config_save();
+
+        JsonDocument doc;
+        doc["saved"] = saved;
+        doc["imu_wheelbase_mm"] = CONFIG.imu_wheelbase_mm;
+        doc["imu_track_width_mm"] = CONFIG.imu_track_width_mm;
+        doc["imu_offset_x_mm"] = CONFIG.imu_offset_x_mm;
+        doc["imu_offset_y_mm"] = CONFIG.imu_offset_y_mm;
+
+        String out;
+        serializeJson(doc, out);
+        request->send(saved ? 200 : 500, "application/json", out);
     });
 
     // =========================================================================

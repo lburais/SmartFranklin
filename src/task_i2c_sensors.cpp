@@ -9,6 +9,7 @@
 #include "config_store.h"
 #include "i2c.h"
 #include "gaz.h"
+#include "imu.h"
 #include "tank.h"
 
 namespace {
@@ -51,6 +52,7 @@ void taskI2cSensors(void *pv)
 
     bool gazInitialized = false;
     bool tankInitialized = false;
+    bool imuInitialized = false;
     sf_i2c::I2C i2c{};
 
     sf_i2c::Device gazDevice = { .route = sf_i2c::Route{},
@@ -62,6 +64,21 @@ void taskI2cSensors(void *pv)
                                   .address = 0x57,
                                   .tag = "tank",
                                   .deviceName = "M5Stack Unit Ultrasonic I2C (RCWL-9600)" };
+
+    sf_i2c::Device imuMpuDevice = { .route = sf_i2c::Route{},
+                                    .address = 0x68,
+                                    .tag = "imu_mpu",
+                                    .deviceName = "M5Stack External IMU Unit (MPU-compatible)" };
+
+    sf_i2c::Device imuAdxlDevice = { .route = sf_i2c::Route{},
+                                     .address = 0x53,
+                                     .tag = "imu_adxl345",
+                                     .deviceName = "SeeedStudio ADXL345 Accelerometer" };
+
+    sf_i2c::Device activeImuDevice = { .route = sf_i2c::Route{},
+                                       .address = 0x00,
+                                       .tag = "imu",
+                                       .deviceName = "IMU" };
 
     i2c.beginPortA();
 
@@ -117,7 +134,53 @@ void taskI2cSensors(void *pv)
         gazInitialized = true;
 #endif
 
-        if (gazInitialized && tankInitialized) {
+#ifndef DISABLE_IMU
+        if (!imuInitialized) {
+            if (IMU_MODULE.init(Imu::Source::InternalM5, true, 0x00)) {
+                imuInitialized = true;
+                activeImuDevice = { .route = sf_i2c::Route{},
+                                    .address = 0x00,
+                                    .tag = "imu_internal",
+                                    .deviceName = "M5 internal IMU" };
+            } else {
+                if (i2c.detectRoute(imuMpuDevice.address, imuMpuDevice.route)) {
+                    i2c.publishConfiguration(imuMpuDevice);
+                    bool channelSelected = selectPaHubIfNeeded(i2c, imuMpuDevice, "I2C_SENSORS");
+                    if (channelSelected) {
+                        imuInitialized = IMU_MODULE.init(Imu::Source::ExternalMpuUnit,
+                                                         sf_i2c::isInternalRoute(imuMpuDevice.route.mode),
+                                                         imuMpuDevice.address);
+                        disablePaHubIfNeeded(i2c, imuMpuDevice);
+                        if (imuInitialized) {
+                            activeImuDevice = imuMpuDevice;
+                        }
+                    }
+                }
+
+                if (!imuInitialized && i2c.detectRoute(imuAdxlDevice.address, imuAdxlDevice.route)) {
+                    i2c.publishConfiguration(imuAdxlDevice);
+                    bool channelSelected = selectPaHubIfNeeded(i2c, imuAdxlDevice, "I2C_SENSORS");
+                    if (channelSelected) {
+                        imuInitialized = IMU_MODULE.init(Imu::Source::ExternalAdxl345,
+                                                         sf_i2c::isInternalRoute(imuAdxlDevice.route.mode),
+                                                         imuAdxlDevice.address);
+                        disablePaHubIfNeeded(i2c, imuAdxlDevice);
+                        if (imuInitialized) {
+                            activeImuDevice = imuAdxlDevice;
+                        }
+                    }
+                }
+            }
+
+            if (!imuInitialized) {
+                M5_LOGW("[I2C_SENSORS] IMU init failed");
+            }
+        }
+#else
+        imuInitialized = true;
+#endif
+
+        if (gazInitialized && tankInitialized && imuInitialized) {
             break;
         }
 
@@ -136,6 +199,15 @@ void taskI2cSensors(void *pv)
         if (selectPaHubIfNeeded(i2c, tankDevice, "I2C_SENSORS")) {
             TANK_MODULE.process();
             disablePaHubIfNeeded(i2c, tankDevice);
+        }
+#endif
+
+#ifndef DISABLE_IMU
+        if (IMU_MODULE.source() == Imu::Source::InternalM5) {
+            IMU_MODULE.process();
+        } else if (selectPaHubIfNeeded(i2c, activeImuDevice, "I2C_SENSORS")) {
+            IMU_MODULE.process();
+            disablePaHubIfNeeded(i2c, activeImuDevice);
         }
 #endif
 
