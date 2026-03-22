@@ -26,11 +26,18 @@ struct Route {
 };
 
 struct Device {
+    enum class ChipKind : uint8_t {
+        Unknown = 0,
+        Bm8563Like,
+        Pcd85063Like,
+    };
+
     Route route;
     uint8_t address;
     const char* tag;
     const char* deviceName;
     LevelType levelType = LevelType::None;
+    ChipKind chipKind = ChipKind::Unknown;
 };
 
 class I2C {
@@ -61,7 +68,9 @@ private:
 
 bool isInternalRoute(RouteMode mode);
 bool isPaHubRoute(RouteMode mode);
+
 const char* routeModeToString(RouteMode mode);
 const char* levelTypeToString(LevelType type);
+const char* chipKindToString(Device::ChipKind kind);
 
 }  // namespace sf_i2c

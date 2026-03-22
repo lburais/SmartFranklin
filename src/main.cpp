@@ -148,15 +148,14 @@ void setup() {
 
     // Configure M5Stack with board-appropriate internal peripherals
     auto cfg = M5.config();
+    cfg.output_power = true;   // Enable 5V output power for peripheral devices
 
 #if defined(ARDUINO_M5STACK_DIAL)
-    cfg.output_power = true;
-    cfg.internal_imu = true;
-    cfg.internal_rtc = false;
+    cfg.internal_imu = false;
+    cfg.internal_rtc = true;
 #else
-    cfg.output_power = true;   // Enable 5V output power for peripheral devices
     cfg.internal_imu = true;
-    cfg.internal_rtc = false;
+    cfg.internal_rtc = true;
 #endif
 
     M5.begin(cfg);

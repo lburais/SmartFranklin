@@ -164,6 +164,16 @@ struct SmartData {
     String gps_rtc_time = "";
 
     /**
+     * @brief Last successful RTC synchronization source.
+     */
+    String rtc_sync_source = "none";
+
+    /**
+     * @brief Current ISO UTC time read from active RTC hardware.
+     */
+    String rtc_time = "";
+
+    /**
      * @brief Last received mesh network message.
      * 
      * Most recent message received through mesh networking layer.

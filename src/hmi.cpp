@@ -368,6 +368,8 @@ void HMI::updateSnapshot(DisplaySnapshot& snapshot)
         snapshot.gps_utc_date = DATA.gps_utc_date;
         snapshot.gps_utc_time = DATA.gps_utc_time;
         snapshot.gps_rtc_time = DATA.gps_rtc_time;
+        snapshot.rtc_sync_source = DATA.rtc_sync_source;
+        snapshot.rtc_time = DATA.rtc_time;
     }
     last_snapshot_ = snapshot;
 }
@@ -427,8 +429,9 @@ void HMI::drawGpsScreen(const DisplaySnapshot& snapshot) const
     lcd.printf("Alt: %.1f m\n", snapshot.gps_alt_m);
     lcd.println("UTC:");
     lcd.printf("%s %s\n", snapshot.gps_utc_date.c_str(), snapshot.gps_utc_time.c_str());
-    lcd.println("GPS RTC:");
-    lcd.println(snapshot.gps_rtc_time.c_str());
+    lcd.printf("GPSRTC: %s\n", snapshot.gps_rtc_time.c_str());
+    lcd.printf("RTC src: %s\n", snapshot.rtc_source.c_str());
+    lcd.printf("RTC sync: %s\n", snapshot.rtc_sync_source.c_str());
 }
 
 /** @brief Draw helper for interactive scale calibration page. */

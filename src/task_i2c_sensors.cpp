@@ -10,6 +10,7 @@
 #include "i2c.h"
 #include "gaz.h"
 #include "level.h"
+#include "rtc.h"
 #include "tank.h"
 
 namespace {
@@ -68,6 +69,7 @@ void taskI2cSensors(void *pv)
     bool gazInitialized = false;
     bool tankInitialized = false;
     bool levelInitialized = false;
+    bool rtcInitialized = false;
     sf_i2c::I2C i2c{};
 
     sf_i2c::Device gazDevice{};
@@ -111,6 +113,26 @@ void taskI2cSensors(void *pv)
     activeLevelDevice.tag = "level";
     activeLevelDevice.deviceName = "Level";
     activeLevelDevice.levelType = sf_i2c::LevelType::None;
+
+    sf_i2c::Device internalRtcDevice{};
+    internalRtcDevice.route = sf_i2c::Route{};
+    internalRtcDevice.route.mode = sf_i2c::RouteMode::Internal;
+    internalRtcDevice.route.paHubChannel = -1;
+    internalRtcDevice.address = 0x51;
+    internalRtcDevice.tag = "rtc";
+    internalRtcDevice.deviceName = "M5 internal RTC";
+
+    sf_i2c::Device externalRtcDevice{};
+    externalRtcDevice.route = sf_i2c::Route{};
+    externalRtcDevice.address = 0x51;
+    externalRtcDevice.tag = "rtc";
+    externalRtcDevice.deviceName = "M5Stack RTC Unit or Seeed PCD85063TP";
+
+    sf_i2c::Device activeRtcDevice{};
+    activeRtcDevice.route = sf_i2c::Route{};
+    activeRtcDevice.address = 0x51;
+    activeRtcDevice.tag = "rtc";
+    activeRtcDevice.deviceName = "RTC";
 
     i2c.beginPortA();
 
@@ -211,7 +233,41 @@ void taskI2cSensors(void *pv)
         levelInitialized = true;
 #endif
 
-        if (gazInitialized && tankInitialized && levelInitialized) {
+#ifndef DISABLE_RTC
+        if (!rtcInitialized) {
+            if (RTC_MODULE.init(RTC::Source::InternalRtc, true, internalRtcDevice.address)) {
+                rtcInitialized = true;
+                activeRtcDevice = internalRtcDevice;
+            } else if (i2c.detectRoute(externalRtcDevice.address, externalRtcDevice.route)) {
+                bool channelSelected = selectPaHubIfNeeded(i2c, externalRtcDevice, "I2C_SENSORS");
+                if (channelSelected) {
+                    const bool isInternalRoute = sf_i2c::isInternalRoute(externalRtcDevice.route.mode);
+                    rtcInitialized = RTC_MODULE.init(RTC::Source::ExternalM5StackRtcUnit,
+                                                     isInternalRoute,
+                                                     externalRtcDevice.address);
+                    if (!rtcInitialized) {
+                        rtcInitialized = RTC_MODULE.init(RTC::Source::ExternalSeeedPcd85063tp,
+                                                         isInternalRoute,
+                                                         externalRtcDevice.address);
+                    }
+                    disablePaHubIfNeeded(i2c, externalRtcDevice);
+                    if (rtcInitialized) {
+                        activeRtcDevice = externalRtcDevice;
+                    }
+                }
+            }
+
+            if (!rtcInitialized) {
+                M5_LOGW("[I2C_SENSORS] RTC init failed");
+            } else {
+                i2c.publishConfiguration(activeRtcDevice);
+            }
+        }
+#else
+        rtcInitialized = true;
+#endif
+
+        if (gazInitialized && tankInitialized && levelInitialized && rtcInitialized) {
             break;
         }
 
@@ -242,6 +298,16 @@ void taskI2cSensors(void *pv)
         }
 #endif
 
+#ifndef DISABLE_RTC
+        if (activeRtcDevice.route.mode == sf_i2c::RouteMode::Internal) {
+            RTC_MODULE.process();
+        } else if (selectPaHubIfNeeded(i2c, activeRtcDevice, "I2C_SENSORS")) {
+            RTC_MODULE.process();
+            disablePaHubIfNeeded(i2c, activeRtcDevice);
+        }
+#endif
+
         vTaskDelay(pdMS_TO_TICKS(I2C_SENSORS_LOOP_MS));
     }
 }
+

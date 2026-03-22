@@ -125,6 +125,9 @@ private:
         String gps_utc_date;
         String gps_utc_time;
         String gps_rtc_time;
+        String rtc_source;
+        String rtc_sync_source;
+        String rtc_time;
     };
 
     /** @brief Draws the currently selected screen. */

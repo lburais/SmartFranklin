@@ -5,6 +5,8 @@
 #include <M5Unified.h>
 #include <Wire.h>
 
+#include <cstring>
+
 #include "pahub_channels.h"
 #include "mqtt.h"
 
@@ -162,8 +164,14 @@ void I2C::publishConfiguration(const Device& device) const {
     sf_mqtt::publish(topicBuf, addressBuf, 1, true);
     snprintf(topicBuf, sizeof(topicBuf), "smartfranklin/system/i2c/%s/device_name", tag);
     sf_mqtt::publish(topicBuf, device.deviceName, 1, true);
-    snprintf(topicBuf, sizeof(topicBuf), "smartfranklin/system/i2c/%s/level_type", tag);
-    sf_mqtt::publish(topicBuf, levelTypeToString(device.levelType), 1, true);
+    if (std::strcmp(tag, "level") == 0) {
+        snprintf(topicBuf, sizeof(topicBuf), "smartfranklin/system/i2c/%s/level_type", tag);
+        sf_mqtt::publish(topicBuf, levelTypeToString(device.levelType), 1, true);
+    }
+    if (std::strcmp(tag, "rtc") == 0) {
+        snprintf(topicBuf, sizeof(topicBuf), "smartfranklin/system/i2c/%s/chip_kind", tag);
+        sf_mqtt::publish(topicBuf, chipKindToString(device.chipKind), 1, true);
+    }
 }
 
 bool isInternalRoute(const RouteMode mode)
@@ -205,6 +213,19 @@ const char* levelTypeToString(const LevelType type)
     case LevelType::None:
     default:
         return "none";
+    }
+}
+
+const char* chipKindToString(const Device::ChipKind kind)
+{
+    switch (kind) {
+    case Device::ChipKind::Bm8563Like:
+        return "bm8563_like";
+    case Device::ChipKind::Pcd85063Like:
+        return "pcd85063_like";
+    case Device::ChipKind::Unknown:
+    default:
+        return "unknown";
     }
 }
 
