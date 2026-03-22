@@ -77,15 +77,7 @@ struct SmartConfig {
     String nbiot_mqtt_user;
     String nbiot_mqtt_pass;
 
-    // Meshtastic bridge
-    bool meshtastic_bridge_enabled = false;
-    String meshtastic_mqtt_prefix = "smartfranklin/mesh/in/";
-    int meshtastic_baud = 115200;
-    int meshtastic_pin_rx = 33;
-    int meshtastic_pin_tx = 32;
-
     // Task timing configuration (milliseconds)
-    int task_gps_loop_ms = 60000;
     int task_mqtt_loop_ms = 250;
     int task_hmi_loop_ms = 1000;
 };

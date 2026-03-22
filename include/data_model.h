@@ -124,46 +124,6 @@ struct SmartData {
     // ============================================================================
 
     /**
-     * @brief GNSS fix state from DFR1103 module.
-     */
-    bool gps_fix = false;
-
-    /**
-     * @brief GNSS latitude in decimal degrees.
-     */
-    double gps_lat = 0.0;
-
-    /**
-     * @brief GNSS longitude in decimal degrees.
-     */
-    double gps_lon = 0.0;
-
-    /**
-     * @brief GNSS altitude above sea level in meters.
-     */
-    double gps_alt_m = 0.0;
-
-    /**
-     * @brief Number of satellites currently used for navigation.
-     */
-    uint8_t gps_satellites = 0;
-
-    /**
-     * @brief GNSS UTC date string (YYYY-MM-DD).
-     */
-    String gps_utc_date = "";
-
-    /**
-     * @brief GNSS UTC time string (HH:MM:SS).
-     */
-    String gps_utc_time = "";
-
-    /**
-     * @brief RTC timestamp read from the DFR1103 module.
-     */
-    String gps_rtc_time = "";
-
-    /**
      * @brief Last successful RTC synchronization source.
      */
     String rtc_sync_source = "none";
@@ -172,20 +132,6 @@ struct SmartData {
      * @brief Current ISO UTC time read from active RTC hardware.
      */
     String rtc_time = "";
-
-    /**
-     * @brief Last received mesh network message.
-     * 
-     * Most recent message received through mesh networking layer.
-     * Stored for display and debugging purposes. May contain
-     * sensor data or control commands from other mesh nodes.
-     * 
-     * Format: Application-specific message format
-     * Update Rate: On message reception
-     * Default: Empty string (no messages received)
-     * Retention: Overwritten by new messages
-     */
-    String last_mesh_msg = "";
 
     // ============================================================================
     // Weight Sensor Data

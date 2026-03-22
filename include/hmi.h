@@ -117,14 +117,6 @@ private:
         float bms_voltage = 0.0f;
         float bms_current = 0.0f;
         float bms_soc = 0.0f;
-        bool gps_fix = false;
-        uint8_t gps_satellites = 0;
-        double gps_lat = 0.0;
-        double gps_lon = 0.0;
-        double gps_alt_m = 0.0;
-        String gps_utc_date;
-        String gps_utc_time;
-        String gps_rtc_time;
         String rtc_source;
         String rtc_sync_source;
         String rtc_time;

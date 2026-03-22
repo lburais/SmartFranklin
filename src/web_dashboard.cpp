@@ -95,7 +95,7 @@
  * 
  * Static Assets:
  *   - Served from SPIFFS filesystem
- *   - HTML pages: /hw.html, /nbiot.html, /meshtastic.html, /sensors.html
+ *   - HTML pages: /hw.html, /nbiot.html, /sensors.html
  *   - JavaScript: /theme.js (common UI functionality)
  *   - Cached by browser for performance
  * 
@@ -420,7 +420,6 @@ static bool checkAuth(AsyncWebServerRequest *request) {
  *   - / : Main dashboard page (HTML from PROGMEM)
  *   - /hw : Hardware status page (from SPIFFS)
  *   - /nbiot : NB-IoT status page (from SPIFFS)
- *   - /meshtastic : Meshtastic status page (from SPIFFS)
  *   - /sensors : Sensor data page (from SPIFFS)
  *   - /theme.js : Common JavaScript (from SPIFFS)
  * 
@@ -501,7 +500,6 @@ void web_dashboard_init()
             doc["bms_voltage"] = DATA.bms_voltage;
             doc["bms_current"] = DATA.bms_current;
             doc["bms_soc"] = DATA.bms_soc;
-            doc["last_mesh_msg"] = DATA.last_mesh_msg;
         }
         String out;
         serializeJson(doc, out);
@@ -639,7 +637,6 @@ void web_dashboard_init()
     // No authentication required for static content
     server.on("/hw", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(SPIFFS, "/hw.html", "text/html"); }); 
     server.on("/nbiot", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(SPIFFS, "/nbiot.html", "text/html"); }); 
-    server.on("/meshtastic", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(SPIFFS, "/meshtastic.html", "text/html"); }); 
     server.on("/sensors", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(SPIFFS, "/sensors.html", "text/html"); }); 
     server.on("/theme.js", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(SPIFFS, "/theme.js", "application/javascript"); }); 
     

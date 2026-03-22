@@ -68,6 +68,7 @@
 
 #include "config_store.h"
 #include "data_model.h"
+#include "rtc.h"
 #include "mqtt.h"
 #include "scale_control.h"
 
@@ -360,14 +361,7 @@ void HMI::updateSnapshot(DisplaySnapshot& snapshot)
         snapshot.bms_voltage = DATA.bms_voltage;
         snapshot.bms_current = DATA.bms_current;
         snapshot.bms_soc = DATA.bms_soc;
-        snapshot.gps_fix = DATA.gps_fix;
-        snapshot.gps_satellites = DATA.gps_satellites;
-        snapshot.gps_lat = DATA.gps_lat;
-        snapshot.gps_lon = DATA.gps_lon;
-        snapshot.gps_alt_m = DATA.gps_alt_m;
-        snapshot.gps_utc_date = DATA.gps_utc_date;
-        snapshot.gps_utc_time = DATA.gps_utc_time;
-        snapshot.gps_rtc_time = DATA.gps_rtc_time;
+        snapshot.rtc_source = RTC_MODULE.sourceName();
         snapshot.rtc_sync_source = DATA.rtc_sync_source;
         snapshot.rtc_time = DATA.rtc_time;
     }
@@ -419,18 +413,10 @@ void HMI::drawBatteryScreen(const DisplaySnapshot& snapshot) const
 void HMI::drawGpsScreen(const DisplaySnapshot& snapshot) const
 {
     M5GFX& lcd = M5.Display;
-    drawTitleBox("GPS");
+    drawTitleBox("RTC");
     beginContentArea();
-    lcd.printf("Fix: %s  Sat: %u\n",
-               snapshot.gps_fix ? "YES" : "NO",
-               snapshot.gps_satellites);
-    lcd.printf("Lat: %.6f\n", snapshot.gps_lat);
-    lcd.printf("Lon: %.6f\n", snapshot.gps_lon);
-    lcd.printf("Alt: %.1f m\n", snapshot.gps_alt_m);
-    lcd.println("UTC:");
-    lcd.printf("%s %s\n", snapshot.gps_utc_date.c_str(), snapshot.gps_utc_time.c_str());
-    lcd.printf("GPSRTC: %s\n", snapshot.gps_rtc_time.c_str());
     lcd.printf("RTC src: %s\n", snapshot.rtc_source.c_str());
+    lcd.printf("RTC time: %s\n", snapshot.rtc_time.c_str());
     lcd.printf("RTC sync: %s\n", snapshot.rtc_sync_source.c_str());
 }
 

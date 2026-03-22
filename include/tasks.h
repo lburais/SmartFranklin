@@ -23,7 +23,7 @@
  * 
  * Task Responsibilities:
  *   - Managing hardware peripherals (NB-IoT, BLE, LoRa, weight sensors)
- *   - Maintaining network services (MQTT broker, bridges, WiFi, Meshtastic)
+ *   - Maintaining network services (MQTT broker, WiFi)
  *   - Performing periodic data acquisition and publishing
  *   - Handling device-specific protocols and state machines
  *   - System monitoring and watchdog operations
@@ -81,10 +81,8 @@ extern TaskHandle_t taskWeightHandle;           // Weight sensor acquisition
 extern TaskHandle_t taskGazHandle;              // Gaz/weight sensor acquisition
 extern TaskHandle_t taskTankHandle;             // Tank ultrasonic acquisition
 extern TaskHandle_t taskI2cSensorsHandle;       // Unified I2C sensor acquisition (GAZ + TANK + IMU)
-extern TaskHandle_t taskGpsHandle;              // Gravity DFR1103 GPS/RTC acquisition
 extern TaskHandle_t taskBmsBleHandle;           // BLE battery management system
 extern TaskHandle_t taskHmiHandle;              // HMI/display updates
-extern TaskHandle_t taskMeshtasticBridgeHandle; // Meshtastic mesh networking bridge
 extern TaskHandle_t taskNbiotHandle;            // NB-IoT cellular communication
 
 // ============================================================================
@@ -162,17 +160,6 @@ void taskI2cSensors(void *pvParameters);
 void taskTank(void *pvParameters);
 
 /**
- * @brief Gravity DFR1103 GPS/RTC acquisition task.
- *
- * Initializes the GNSS/RTC unit on I2C, periodically reads GPS and RTC
- * values, updates shared DATA fields, and publishes them to MQTT.
- *
- * @param pvParameters FreeRTOS task parameter (unused)
- * @return void (infinite loop, never returns)
- */
-void taskGps(void *pvParameters);
-
-/**
  * @brief BLE battery management system (BMS) monitoring task.
  * 
  * Communicates with BMS devices via Bluetooth Low Energy, retrieves battery
@@ -204,18 +191,6 @@ void taskHmi(void *pvParameters);
  * @return void (infinite loop, never returns)
  */
 void taskHwMonitor(void *pvParameters);
-
-/**
- * @brief Meshtastic mesh networking bridge task.
- * 
- * Manages LoRa mesh network connectivity via Meshtastic protocol,
- * relays messages between local mesh and MQTT cloud, provides redundant
- * long-range communication in areas without WiFi coverage.
- * 
- * @param pvParameters FreeRTOS task parameter (unused)
- * @return void (infinite loop, never returns)
- */
-void taskMeshtasticBridge(void *pvParameters);
 
 /**
  * @brief NB-IoT cellular communication task.

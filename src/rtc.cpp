@@ -31,7 +31,6 @@ constexpr time_t MIN_VALID_EPOCH = 1704067200;  // 2024-01-01T00:00:00Z
 enum class SyncSource : uint8_t {
     None = 0,
     Ntp,
-    Gps,
     Rtc,
 };
 
@@ -318,8 +317,6 @@ const char* syncSourceToString(const SyncSource source)
     switch (source) {
     case SyncSource::Ntp:
         return "ntp";
-    case SyncSource::Gps:
-        return "gps";
     case SyncSource::Rtc:
         return "rtc";
     case SyncSource::None:
@@ -501,34 +498,6 @@ bool syncSystemFromNtp()
     return isSystemTimeValid(nowEpoch);
 }
 
-bool syncSystemFromGps()
-{
-    String gpsRtc;
-    {
-        std::lock_guard<std::mutex> lock(DATA_MUTEX);
-        gpsRtc = DATA.gps_rtc_time;
-    }
-
-    DateTime dt;
-    if (!parseIsoUtc(gpsRtc, dt)) {
-        return false;
-    }
-
-    time_t epoch = 0;
-    if (!datetimeToEpoch(dt, epoch)) {
-        return false;
-    }
-
-    struct timeval tv;
-    tv.tv_sec = epoch;
-    tv.tv_usec = 0;
-    if (settimeofday(&tv, nullptr) != 0) {
-        return false;
-    }
-
-    return true;
-}
-
 bool syncSystemFromRtc(const RtcState& state)
 {
     DateTime rtcDateTime;
@@ -645,8 +614,6 @@ void processState(RtcState& state)
 
     if (syncSystemFromNtp()) {
         syncSource = SyncSource::Ntp;
-    } else if (syncSystemFromGps()) {
-        syncSource = SyncSource::Gps;
     } else {
         const time_t nowEpoch = time(nullptr);
         if (!isSystemTimeValid(nowEpoch) && syncSystemFromRtc(state)) {

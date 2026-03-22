@@ -227,13 +227,6 @@ bool config_load()
     CONFIG.nbiot_mqtt_user = doc["nbiot_mqtt_user"] | defaultCONFIG.nbiot_mqtt_user;
     CONFIG.nbiot_mqtt_pass = doc["nbiot_mqtt_pass"] | defaultCONFIG.nbiot_mqtt_pass;
 
-    CONFIG.meshtastic_bridge_enabled = doc["meshtastic_bridge_enabled"] | defaultCONFIG.meshtastic_bridge_enabled;
-    CONFIG.meshtastic_mqtt_prefix    = doc["meshtastic_mqtt_prefix"] | defaultCONFIG.meshtastic_mqtt_prefix;
-    CONFIG.meshtastic_baud           = doc["meshtastic_baud"] | defaultCONFIG.meshtastic_baud;
-    CONFIG.meshtastic_pin_rx         = doc["meshtastic_pin_rx"] | defaultCONFIG.meshtastic_pin_rx;
-    CONFIG.meshtastic_pin_tx         = doc["meshtastic_pin_tx"] | defaultCONFIG.meshtastic_pin_tx;
-
-    CONFIG.task_gps_loop_ms = doc["task_gps_loop_ms"] | defaultCONFIG.task_gps_loop_ms;
     CONFIG.task_mqtt_loop_ms = doc["task_mqtt_loop_ms"] | defaultCONFIG.task_mqtt_loop_ms;
     CONFIG.task_hmi_loop_ms = doc["task_hmi_loop_ms"] | defaultCONFIG.task_hmi_loop_ms;
 
@@ -334,20 +327,9 @@ bool config_save()
     doc["nbiot_mqtt_pass"] = CONFIG.nbiot_mqtt_pass;        // Cellular MQTT password
 
     // =========================================================================
-    // Meshtastic Bridge Configuration
-    // =========================================================================
-
-    doc["meshtastic_bridge_enabled"] = CONFIG.meshtastic_bridge_enabled;
-    doc["meshtastic_mqtt_prefix"]    = CONFIG.meshtastic_mqtt_prefix;
-    doc["meshtastic_baud"]           = CONFIG.meshtastic_baud;
-    doc["meshtastic_pin_rx"]         = CONFIG.meshtastic_pin_rx;
-    doc["meshtastic_pin_tx"]         = CONFIG.meshtastic_pin_tx;
-
-    // =========================================================================
     // Task Timing Configuration
     // =========================================================================
 
-    doc["task_gps_loop_ms"] = CONFIG.task_gps_loop_ms;
     doc["task_mqtt_loop_ms"] = CONFIG.task_mqtt_loop_ms;
     doc["task_hmi_loop_ms"] = CONFIG.task_hmi_loop_ms;
 

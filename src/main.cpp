@@ -5,7 +5,7 @@
  * 
  * Project:     SmartFranklin IoT Device Controller
  * Description: Main setup and loop for M5Stack-based IoT hub with WiFi, MQTT,
- *              BLE, NB-IoT, and Meshtastic bridge capabilities.
+ *              BLE and NB-IoT capabilities.
  * 
  * Author:      Laurent Burais
  * Date:        10 March 2026
@@ -15,9 +15,8 @@
  *   - M5Stack hardware initialization (power management)
  *   - Dual WiFi mode (AP + STA) with captive portal fallback
  *   - MQTT broker integration for remote command handling
- *   - Multi-sensor support (weight, GPS/GNSS)
+ *   - Multi-sensor support (weight, tank, level, rtc)
  *   - BLE communication for battery management systems
- *   - Meshtastic bridge for mesh networking
  *   - NB-IoT connectivity
  *   - Web dashboard for device management
  *   - Configuration persistence via SPIFFS
@@ -75,10 +74,8 @@ TaskHandle_t taskWeightHandle           = nullptr;  // Weight sensor reading
 //TaskHandle_t taskGazHandle              = nullptr;  // Gaz/weight sensor reading
 TaskHandle_t taskTankHandle             = nullptr;  // Tank ultrasonic reading
 TaskHandle_t taskI2cSensorsHandle       = nullptr;  // Unified I2C sensors (GAZ + TANK)
-TaskHandle_t taskGpsHandle              = nullptr;  // Gravity DFR1103 GPS/RTC task
 TaskHandle_t taskBmsBleHandle           = nullptr;  // BLE battery management system
 TaskHandle_t taskHmiHandle              = nullptr;  // HMI/display task
-TaskHandle_t taskMeshtasticBridgeHandle = nullptr;  // Meshtastic mesh bridge
 TaskHandle_t taskNbiotHandle            = nullptr;  // NB-IoT cellular communication
 
 static constexpr uint8_t DISPLAY_UI_ROTATION = 3;
@@ -224,16 +221,8 @@ void setup() {
     xTaskCreatePinnedToCore(taskI2cSensors,       "I2C_SENS", 4096, nullptr, 2, &taskI2cSensorsHandle, 1);
     #endif
 
-    #ifndef DISABLE_GPS
-    xTaskCreatePinnedToCore(taskGps,              "GPS",      6144, nullptr, 2,  &taskGpsHandle,            1);
-    #endif
-
     #ifndef DISABLE_BMS_BLE
     xTaskCreatePinnedToCore(taskBmsBle,           "BMS_BLE",  8192, nullptr, 2,  &taskBmsBleHandle,          0);
-    #endif
-
-    #ifndef DISABLE_MESHTASTIC
-    xTaskCreatePinnedToCore(taskMeshtasticBridge, "MESH_BR", 8192, nullptr, 2, &taskMeshtasticBridgeHandle, 0);
     #endif
 
     #ifndef DISABLE_NBIOT
