@@ -189,6 +189,20 @@ bool initAdxl345(LevelState& state)
     return true;
 }
 
+bool ensureInternalImuReady()
+{
+    if (M5.Imu.isEnabled() && M5.Imu.getType() != m5::imu_t::imu_none) {
+        return true;
+    }
+
+    // Fallback: force IMU re-bind in case board boot init skipped or raced.
+    if (!M5.Imu.begin()) {
+        return false;
+    }
+
+    return M5.Imu.isEnabled() && M5.Imu.getType() != m5::imu_t::imu_none;
+}
+
 bool readAccelSampleLocked(const LevelState& state, float& ax, float& ay, float& az)
 {
     ax = 0.0f;
@@ -197,11 +211,27 @@ bool readAccelSampleLocked(const LevelState& state, float& ax, float& ay, float&
 
     switch (state.source) {
     case Level::Source::InternalM5: {
+        if (!ensureInternalImuReady()) {
+            return false;
+        }
+
         // update() refreshes internal sensor data before reading current sample.
         M5.Imu.update();
         if (!M5.Imu.getAccel(&ax, &ay, &az)) {
+            // Retry once after explicit IMU re-init to recover transient failures.
+            if (!M5.Imu.begin()) {
+                return false;
+            }
+            M5.Imu.update();
+            if (!M5.Imu.getAccel(&ax, &ay, &az)) {
+                return false;
+            }
+        }
+
+        if (!std::isfinite(ax) || !std::isfinite(ay) || !std::isfinite(az)) {
             return false;
         }
+
         return true;
     }
 
@@ -330,8 +360,8 @@ bool initState(LevelState& state, Level::Source source, bool isInternalRoute, ui
 
     switch (source) {
     case Level::Source::InternalM5:
-        // Internal IMU is available only if enabled by M5 config and detected.
-        if (!M5.Imu.isEnabled() || M5.Imu.getType() == m5::imu_t::imu_none) {
+        // Internal IMU: use M5 API fallback init before declaring unavailable.
+        if (!ensureInternalImuReady()) {
             return false;
         }
         state.source = source;
