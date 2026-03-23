@@ -154,13 +154,17 @@ static void publishWiFiStatus()
 
     // Publish WiFi operational mode
     sf_mqtt::publish("smartfranklin/system/wifi/mode", mode.c_str());
-    
+
+    // Publish configured hostname
+    const String hostname = CONFIG.hostname.isEmpty() ? String("smartfranklin") : CONFIG.hostname;
+    sf_mqtt::publish("smartfranklin/system/wifi/hostname", hostname.c_str());
+
     // Publish Access Point IP (always available if AP enabled)
     sf_mqtt::publish("smartfranklin/system/wifi/ap_ip", WiFi.softAPIP().toString().c_str());
-    
+
     // Publish Station IP (only available if STA connected)
     sf_mqtt::publish("smartfranklin/system/wifi/sta_ip", WiFi.localIP().toString().c_str());
-    
+
     // Publish WiFi signal strength (RSSI = Received Signal Strength Indicator)
     // Typical range: -30 (excellent) to -100+ (lost signal)
     sf_mqtt::publish("smartfranklin/system/wifi/rssi", String(WiFi.RSSI()).c_str());
@@ -196,8 +200,19 @@ static void publishWiFiStatus()
  */
 static void wifiInitialSetup()
 {
+    const String configuredHostname = CONFIG.hostname.isEmpty() ? String("smartfranklin")
+                                                                 : CONFIG.hostname;
+
     // Set WiFi mode to simultaneous Access Point and Station operation
     WiFi.mode(WIFI_AP_STA);
+
+    // Apply hostname before STA begin so DHCP uses configured value.
+    const bool hostnameOk = WiFi.setHostname(configuredHostname.c_str());
+    if (!hostnameOk) {
+        M5_LOGW("[WiFi] Failed to set hostname to %s", configuredHostname.c_str());
+    } else {
+        M5_LOGI("[WiFi] Hostname: %s", configuredHostname.c_str());
+    }
 
     // Start Access Point with configured credentials
     bool apOk = WiFi.softAP(CONFIG.ap_ssid.c_str(),    // AP network name (SSID)

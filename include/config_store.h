@@ -47,6 +47,7 @@
  */
 struct SmartConfig {
     // WiFi
+    String hostname = "franklin";
     String ap_ssid = "SmartFranklin-AP";
     String ap_pass = "smartfranklin";
     String sta_ssid = "jrdl";

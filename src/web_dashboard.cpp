@@ -531,6 +531,7 @@ static void fillDataJson(JsonVariant doc)
 
 static void fillConfigJson(JsonVariant doc)
 {
+    doc["hostname"] = CONFIG.hostname;
     doc["ap_ssid"] = CONFIG.ap_ssid;
     doc["ap_pass"] = CONFIG.ap_pass;
     doc["sta_ssid"] = CONFIG.sta_ssid;

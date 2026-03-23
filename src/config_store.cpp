@@ -192,6 +192,7 @@ bool config_load()
     // =========================================================================
     // Load WiFi connection parameters and web dashboard authentication
     
+    CONFIG.hostname = doc["hostname"] | defaultCONFIG.hostname;
     CONFIG.ap_ssid = doc["ap_ssid"] | defaultCONFIG.ap_ssid;
     CONFIG.ap_pass = doc["ap_pass"] | defaultCONFIG.ap_pass;
     CONFIG.sta_ssid = doc["sta_ssid"] | defaultCONFIG.sta_ssid;
@@ -280,6 +281,7 @@ bool config_save()
     // =========================================================================
     // Serialize WiFi connection parameters and authentication
     
+    doc["hostname"] = CONFIG.hostname;                      // Device hostname
     doc["ap_ssid"] = CONFIG.ap_ssid;                        // Local AP SSID
     doc["ap_pass"] = CONFIG.ap_pass;                        // Local AP password
     doc["sta_ssid"] = CONFIG.sta_ssid;                      // External network SSID
