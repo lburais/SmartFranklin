@@ -156,7 +156,6 @@
  */
 
 #include "m5_hw.h"
-#include "m5_hw.h"  // Note: Duplicate include (should be removed)
 #include "web_dashboard.h"
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
@@ -166,6 +165,7 @@
 #include <WiFi.h>
 
 #include <cmath>
+#include <cstdlib>
 #include "data_model.h"
 #include "config_store.h"
 
@@ -344,6 +344,88 @@ refresh();
 </html>
 )HTML";
 
+static const char CONFIG_PAGE[] PROGMEM = R"HTML(
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SmartFranklin - Config</title>
+<style>
+body { font-family: sans-serif; margin: 10px; }
+.card { background: #f4f4f4; padding: 15px; border-radius: 10px; margin-bottom: 15px; }
+pre { white-space: pre-wrap; word-wrap: break-word; }
+a.button { display: inline-block; padding: 10px 15px; background: #0078ff; color: white; border-radius: 6px; text-decoration: none; margin-right: 5px; }
+</style>
+</head>
+<body>
+<h1>Configuration</h1>
+<div class="card">
+    <a class="button" href="/">Dashboard</a>
+    <a class="button" href="/diagnostics">Diagnostics</a>
+    <a class="button" href="/update">Firmware Update</a>
+</div>
+<div class="card">
+    <h3>Current Config</h3>
+    <pre id="config">Loading...</pre>
+</div>
+<script>
+async function refresh() {
+    try {
+        const r = await fetch('/api/config');
+        const j = await r.json();
+        document.getElementById('config').textContent = JSON.stringify(j, null, 2);
+    } catch (e) {
+        document.getElementById('config').textContent = 'Error loading config';
+    }
+}
+setInterval(refresh, 1500);
+refresh();
+</script>
+</body>
+</html>
+)HTML";
+
+static const char DIAGNOSTICS_PAGE[] PROGMEM = R"HTML(
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SmartFranklin - Diagnostics</title>
+<style>
+body { font-family: sans-serif; margin: 10px; }
+.card { background: #f4f4f4; padding: 15px; border-radius: 10px; margin-bottom: 15px; }
+pre { white-space: pre-wrap; word-wrap: break-word; }
+a.button { display: inline-block; padding: 10px 15px; background: #0078ff; color: white; border-radius: 6px; text-decoration: none; margin-right: 5px; }
+</style>
+</head>
+<body>
+<h1>Diagnostics</h1>
+<div class="card">
+    <a class="button" href="/">Dashboard</a>
+    <a class="button" href="/config">Configuration</a>
+    <a class="button" href="/update">Firmware Update</a>
+</div>
+<div class="card">
+    <h3>Full Snapshot (Data + Config + HW + NB-IoT)</h3>
+    <pre id="diag">Loading...</pre>
+</div>
+<script>
+async function refresh() {
+    try {
+        const r = await fetch('/api/full');
+        const j = await r.json();
+        document.getElementById('diag').textContent = JSON.stringify(j, null, 2);
+    } catch (e) {
+        document.getElementById('diag').textContent = 'Error loading diagnostics';
+    }
+}
+setInterval(refresh, 1500);
+refresh();
+</script>
+</body>
+</html>
+)HTML";
+
 // ============================================================================
 // Authentication Helper Function
 // ============================================================================
@@ -401,6 +483,182 @@ static bool checkAuth(AsyncWebServerRequest *request) {
         return false;
     }
     return true;
+}
+
+static void fillDataJson(JsonVariant doc)
+{
+    std::lock_guard<std::mutex> lock(DATA_MUTEX);
+    doc["rtc_sync_source"] = DATA.rtc_sync_source;
+    doc["rtc_time"] = DATA.rtc_time;
+
+    doc["fill_gaz"] = DATA.fill_gaz;
+    doc["fill_tank"] = DATA.fill_tank;
+    doc["weight_gaz"] = DATA.weight_gaz;
+    doc["distance_tank_mm"] = DATA.distance_tank_mm;
+
+    doc["level_pitch_deg"] = DATA.level_pitch_deg;
+    doc["level_roll_deg"] = DATA.level_roll_deg;
+    doc["level_wheel_fl_mm"] = DATA.level_wheel_fl_mm;
+    doc["level_wheel_fr_mm"] = DATA.level_wheel_fr_mm;
+    doc["level_wheel_rl_mm"] = DATA.level_wheel_rl_mm;
+    doc["level_wheel_rr_mm"] = DATA.level_wheel_rr_mm;
+
+    // Backward-compatible aliases used by legacy web pages.
+    doc["imu_pitch_deg"] = DATA.level_pitch_deg;
+    doc["imu_roll_deg"] = DATA.level_roll_deg;
+    doc["imu_wheel_fl_mm"] = DATA.level_wheel_fl_mm;
+    doc["imu_wheel_fr_mm"] = DATA.level_wheel_fr_mm;
+    doc["imu_wheel_rl_mm"] = DATA.level_wheel_rl_mm;
+    doc["imu_wheel_rr_mm"] = DATA.level_wheel_rr_mm;
+    doc["tank_distance_mm"] = DATA.distance_tank_mm;
+    doc["tank_fill"] = DATA.fill_tank;
+
+    doc["gap"] = DATA.gap;
+    doc["bms_voltage"] = DATA.bms_voltage;
+    doc["bms_current"] = DATA.bms_current;
+    doc["bms_soc"] = DATA.bms_soc;
+    doc["led_state"] = DATA.led_state;
+    doc["buzzer_state"] = DATA.buzzer_state;
+    doc["target_soc"] = DATA.target_soc;
+}
+
+static void fillConfigJson(JsonVariant doc)
+{
+    doc["ap_ssid"] = CONFIG.ap_ssid;
+    doc["ap_pass"] = CONFIG.ap_pass;
+    doc["sta_ssid"] = CONFIG.sta_ssid;
+    doc["sta_pass"] = CONFIG.sta_pass;
+
+    doc["scale_cal_factor"] = CONFIG.scale_cal_factor;
+
+    doc["level_wheelbase_mm"] = CONFIG.level_wheelbase_mm;
+    doc["level_track_width_mm"] = CONFIG.level_track_width_mm;
+    doc["level_offset_x_mm"] = CONFIG.level_offset_x_mm;
+    doc["level_offset_y_mm"] = CONFIG.level_offset_y_mm;
+
+    doc["imu_wheelbase_mm"] = CONFIG.level_wheelbase_mm;
+    doc["imu_track_width_mm"] = CONFIG.level_track_width_mm;
+    doc["imu_offset_x_mm"] = CONFIG.level_offset_x_mm;
+    doc["imu_offset_y_mm"] = CONFIG.level_offset_y_mm;
+
+    doc["admin_user"] = CONFIG.admin_user;
+    doc["admin_pass"] = CONFIG.admin_pass;
+
+    doc["mqtt_port"] = CONFIG.mqtt_port;
+
+    doc["nbiot_enabled"] = CONFIG.nbiot_enabled;
+    doc["nbiot_apn"] = CONFIG.nbiot_apn;
+    doc["nbiot_mqtt_host"] = CONFIG.nbiot_mqtt_host;
+    doc["nbiot_mqtt_port"] = CONFIG.nbiot_mqtt_port;
+    doc["nbiot_mqtt_user"] = CONFIG.nbiot_mqtt_user;
+    doc["nbiot_mqtt_pass"] = CONFIG.nbiot_mqtt_pass;
+
+    doc["task_mqtt_loop_ms"] = CONFIG.task_mqtt_loop_ms;
+    doc["task_hmi_loop_ms"] = CONFIG.task_hmi_loop_ms;
+}
+
+static void fillHwJson(JsonVariant doc)
+{
+    const HwStatus st = HW.read();
+    doc["battery_voltage"] = st.battery_voltage;
+    doc["battery_percent"] = st.battery_percent;
+    doc["charging"] = st.charging;
+    doc["temperature"] = st.temperature;
+    doc["button_a"] = st.button_a;
+    doc["button_b"] = st.button_b;
+    JsonObject accel = doc["accel"].to<JsonObject>();
+    accel["x"] = st.accel_x;
+    accel["y"] = st.accel_y;
+    accel["z"] = st.accel_z;
+}
+
+static void fillNbiotJson(JsonVariant doc)
+{
+    doc["modem_ready"] = CONFIG.nbiot_enabled;
+    doc["network_attached"] = false;
+    doc["pdp_active"] = false;
+    doc["mqtt_connected"] = false;
+    doc["operator"] = "n/a";
+    doc["ip"] = "0.0.0.0";
+    doc["rssi"] = -1;
+
+    doc["configured_apn"] = CONFIG.nbiot_apn;
+    doc["configured_mqtt_host"] = CONFIG.nbiot_mqtt_host;
+    doc["configured_mqtt_port"] = CONFIG.nbiot_mqtt_port;
+}
+
+static void fillGeometryJson(JsonVariant doc, bool includeLegacyKeys)
+{
+    doc["level_wheelbase_mm"] = CONFIG.level_wheelbase_mm;
+    doc["level_track_width_mm"] = CONFIG.level_track_width_mm;
+    doc["level_offset_x_mm"] = CONFIG.level_offset_x_mm;
+    doc["level_offset_y_mm"] = CONFIG.level_offset_y_mm;
+
+    if (includeLegacyKeys) {
+        doc["imu_wheelbase_mm"] = CONFIG.level_wheelbase_mm;
+        doc["imu_track_width_mm"] = CONFIG.level_track_width_mm;
+        doc["imu_offset_x_mm"] = CONFIG.level_offset_x_mm;
+        doc["imu_offset_y_mm"] = CONFIG.level_offset_y_mm;
+    }
+}
+
+static bool parseFloatParameter(const String& text, float& out)
+{
+    const char* start = text.c_str();
+    char* end = nullptr;
+    const float value = strtof(start, &end);
+    if (end == start || *end != '\0' || !std::isfinite(value)) {
+        return false;
+    }
+    out = value;
+    return true;
+}
+
+static bool applyLevelGeometryFromRequest(AsyncWebServerRequest* request)
+{
+    auto parseParam = [&](const char* key, float& target) {
+        if (!request->hasParam(key)) {
+            return true;
+        }
+        float parsed = 0.0f;
+        if (!parseFloatParameter(request->getParam(key)->value(), parsed)) {
+            return false;
+        }
+        target = parsed;
+        return true;
+    };
+
+    float wheelbase = CONFIG.level_wheelbase_mm;
+    float track = CONFIG.level_track_width_mm;
+    float offsetX = CONFIG.level_offset_x_mm;
+    float offsetY = CONFIG.level_offset_y_mm;
+
+    if (!parseParam("wheelbase_mm", wheelbase) ||
+        !parseParam("track_width_mm", track) ||
+        !parseParam("offset_x_mm", offsetX) ||
+        !parseParam("offset_y_mm", offsetY)) {
+        return false;
+    }
+
+    if (wheelbase < 100.0f || wheelbase > 10000.0f ||
+        track < 100.0f || track > 10000.0f ||
+        offsetX < -5000.0f || offsetX > 5000.0f ||
+        offsetY < -5000.0f || offsetY > 5000.0f) {
+        return false;
+    }
+
+    CONFIG.level_wheelbase_mm = wheelbase;
+    CONFIG.level_track_width_mm = track;
+    CONFIG.level_offset_x_mm = offsetX;
+    CONFIG.level_offset_y_mm = offsetY;
+    return true;
+}
+
+static void sendJson(AsyncWebServerRequest* request, JsonDocument& doc, int statusCode = 200)
+{
+    String out;
+    serializeJson(doc, out);
+    request->send(statusCode, "application/json", out);
 }
 
 // ============================================================================
@@ -478,6 +736,14 @@ void web_dashboard_init()
         request->send(200, "text/html", MAIN_PAGE);
     });
 
+    server.on("/config", HTTP_GET, [](AsyncWebServerRequest *request){
+        request->send(200, "text/html", CONFIG_PAGE);
+    });
+
+    server.on("/diagnostics", HTTP_GET, [](AsyncWebServerRequest *request){
+        request->send(200, "text/html", DIAGNOSTICS_PAGE);
+    });
+
     // =========================================================================
     // API Status Endpoint
     // =========================================================================
@@ -485,92 +751,73 @@ void web_dashboard_init()
     // Thread-safe access to global DATA with mutex
     server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *request){
         JsonDocument doc;
-        {
-            std::lock_guard<std::mutex> lock(DATA_MUTEX);
-            doc["weight_gaz"] = DATA.weight_gaz;
-            doc["fill_gaz"] = DATA.fill_gaz;
-            doc["tank_distance_mm"] = DATA.distance_tank_mm;
-            doc["tank_fill"] = DATA.fill_tank;
-            doc["level_pitch_deg"] = DATA.level_pitch_deg;
-            doc["level_roll_deg"] = DATA.level_roll_deg;
-            doc["level_wheel_fl_mm"] = DATA.level_wheel_fl_mm;
-            doc["level_wheel_fr_mm"] = DATA.level_wheel_fr_mm;
-            doc["level_wheel_rl_mm"] = DATA.level_wheel_rl_mm;
-            doc["level_wheel_rr_mm"] = DATA.level_wheel_rr_mm;
-            doc["bms_voltage"] = DATA.bms_voltage;
-            doc["bms_current"] = DATA.bms_current;
-            doc["bms_soc"] = DATA.bms_soc;
-        }
-        String out;
-        serializeJson(doc, out);
-        request->send(200, "application/json", out);
+        fillDataJson(doc);
+        sendJson(request, doc);
+    });
+
+    server.on("/api/data", HTTP_GET, [](AsyncWebServerRequest *request){
+        JsonDocument doc;
+        fillDataJson(doc);
+        sendJson(request, doc);
+    });
+
+    server.on("/api/config", HTTP_GET, [](AsyncWebServerRequest *request){
+        JsonDocument doc;
+        fillConfigJson(doc);
+        sendJson(request, doc);
+    });
+
+    server.on("/api/full", HTTP_GET, [](AsyncWebServerRequest *request){
+        JsonDocument doc;
+        JsonObject data = doc["data"].to<JsonObject>();
+        fillDataJson(data);
+        JsonObject config = doc["config"].to<JsonObject>();
+        fillConfigJson(config);
+        JsonObject hw = doc["hw"].to<JsonObject>();
+        fillHwJson(hw);
+        JsonObject nbiot = doc["nbiot"].to<JsonObject>();
+        fillNbiotJson(nbiot);
+        sendJson(request, doc);
     });
 
     server.on("/api/level_geometry", HTTP_GET, [](AsyncWebServerRequest *request){
         JsonDocument doc;
-        doc["level_wheelbase_mm"] = CONFIG.level_wheelbase_mm;
-        doc["level_track_width_mm"] = CONFIG.level_track_width_mm;
-        doc["level_offset_x_mm"] = CONFIG.level_offset_x_mm;
-        doc["level_offset_y_mm"] = CONFIG.level_offset_y_mm;
+        fillGeometryJson(doc, true);
+        sendJson(request, doc);
+    });
 
-        String out;
-        serializeJson(doc, out);
-        request->send(200, "application/json", out);
+    server.on("/api/imu_geometry", HTTP_GET, [](AsyncWebServerRequest *request){
+        JsonDocument doc;
+        fillGeometryJson(doc, true);
+        sendJson(request, doc);
     });
 
     server.on("/api/set_level_geometry", HTTP_GET, [](AsyncWebServerRequest *request){
-        auto parseParam = [&](const char* key, float& target) {
-            if (!request->hasParam(key)) {
-                return true;
-            }
-
-            const float parsed = request->getParam(key)->value().toFloat();
-            if (!std::isfinite(parsed)) {
-                return false;
-            }
-
-            target = parsed;
-            return true;
-        };
-
-        float wheelbase = CONFIG.level_wheelbase_mm;
-        float track = CONFIG.level_track_width_mm;
-        float offsetX = CONFIG.level_offset_x_mm;
-        float offsetY = CONFIG.level_offset_y_mm;
-
-        if (!parseParam("wheelbase_mm", wheelbase) ||
-            !parseParam("track_width_mm", track) ||
-            !parseParam("offset_x_mm", offsetX) ||
-            !parseParam("offset_y_mm", offsetY)) {
+        if (!applyLevelGeometryFromRequest(request)) {
             request->send(400, "application/json", "{\"error\":\"invalid_parameter\"}");
             return;
         }
-
-        if (wheelbase < 100.0f || wheelbase > 10000.0f ||
-            track < 100.0f || track > 10000.0f ||
-            offsetX < -5000.0f || offsetX > 5000.0f ||
-            offsetY < -5000.0f || offsetY > 5000.0f) {
-            request->send(400, "application/json", "{\"error\":\"out_of_range\"}");
-            return;
-        }
-
-        CONFIG.level_wheelbase_mm = wheelbase;
-        CONFIG.level_track_width_mm = track;
-        CONFIG.level_offset_x_mm = offsetX;
-        CONFIG.level_offset_y_mm = offsetY;
 
         const bool saved = config_save();
 
         JsonDocument doc;
         doc["saved"] = saved;
-        doc["level_wheelbase_mm"] = CONFIG.level_wheelbase_mm;
-        doc["level_track_width_mm"] = CONFIG.level_track_width_mm;
-        doc["level_offset_x_mm"] = CONFIG.level_offset_x_mm;
-        doc["level_offset_y_mm"] = CONFIG.level_offset_y_mm;
+        fillGeometryJson(doc, true);
+        sendJson(request, doc, saved ? 200 : 500);
+    });
 
-        String out;
-        serializeJson(doc, out);
-        request->send(saved ? 200 : 500, "application/json", out);
+    server.on("/api/set_imu_geometry", HTTP_GET, [](AsyncWebServerRequest *request){
+        if (!applyLevelGeometryFromRequest(request)) {
+            request->send(400, "application/json", "{\"error\":\"invalid_parameter\"}");
+            return;
+        }
+
+        const bool saved = config_save();
+
+        JsonDocument doc;
+        doc["saved"] = saved;
+        fillGeometryJson(doc, true);
+        sendJson(request, doc, saved ? 200 : 500);
     });
 
     server.on("/api/reset_level_geometry", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -585,14 +832,24 @@ void web_dashboard_init()
 
         JsonDocument doc;
         doc["saved"] = saved;
-        doc["level_wheelbase_mm"] = CONFIG.level_wheelbase_mm;
-        doc["level_track_width_mm"] = CONFIG.level_track_width_mm;
-        doc["level_offset_x_mm"] = CONFIG.level_offset_x_mm;
-        doc["level_offset_y_mm"] = CONFIG.level_offset_y_mm;
+        fillGeometryJson(doc, true);
+        sendJson(request, doc, saved ? 200 : 500);
+    });
 
-        String out;
-        serializeJson(doc, out);
-        request->send(saved ? 200 : 500, "application/json", out);
+    server.on("/api/reset_imu_geometry", HTTP_GET, [](AsyncWebServerRequest *request){
+        const SmartConfig defaults;
+
+        CONFIG.level_wheelbase_mm = defaults.level_wheelbase_mm;
+        CONFIG.level_track_width_mm = defaults.level_track_width_mm;
+        CONFIG.level_offset_x_mm = defaults.level_offset_x_mm;
+        CONFIG.level_offset_y_mm = defaults.level_offset_y_mm;
+
+        const bool saved = config_save();
+
+        JsonDocument doc;
+        doc["saved"] = saved;
+        fillGeometryJson(doc, true);
+        sendJson(request, doc, saved ? 200 : 500);
     });
 
     // =========================================================================
@@ -601,20 +858,20 @@ void web_dashboard_init()
     // Returns M5Stack hardware status (battery, IMU, buttons)
     // No authentication required for status monitoring
     server.on("/api/hw", HTTP_GET, [](AsyncWebServerRequest *request){ 
-        JsonDocument doc; 
-        HwStatus st = HW.read(); 
-        doc["battery_voltage"] = st.battery_voltage; 
-        doc["battery_percent"] = st.battery_percent; 
-        doc["charging"]        = st.charging; 
-        String out; 
-        serializeJson(doc, out); 
-        request->send(200, "application/json", out); 
+        JsonDocument doc;
+        fillHwJson(doc);
+        sendJson(request, doc);
     });
 
     // =========================================================================
     // NB-IoT Status API Endpoint
     // =========================================================================
     // Returns cellular modem and network status
+    server.on("/api/nbiot", HTTP_GET, [](AsyncWebServerRequest *request){
+        JsonDocument doc;
+        fillNbiotJson(doc);
+        sendJson(request, doc);
+    });
 
     // =========================================================================
     // OTA Firmware Update Integration
@@ -629,8 +886,11 @@ void web_dashboard_init()
     // Serve HTML pages and JavaScript from SPIFFS filesystem
     // No authentication required for static content
     server.on("/hw", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(SPIFFS, "/hw.html", "text/html"); }); 
+    server.on("/hw.html", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(SPIFFS, "/hw.html", "text/html"); }); 
     server.on("/nbiot", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(SPIFFS, "/nbiot.html", "text/html"); }); 
+    server.on("/nbiot.html", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(SPIFFS, "/nbiot.html", "text/html"); }); 
     server.on("/sensors", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(SPIFFS, "/sensors.html", "text/html"); }); 
+    server.on("/sensors.html", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(SPIFFS, "/sensors.html", "text/html"); }); 
     server.on("/theme.js", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(SPIFFS, "/theme.js", "application/javascript"); }); 
     
     // =========================================================================
