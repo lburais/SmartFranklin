@@ -142,24 +142,44 @@ void taskI2c(void *pv)
 	gpsDevice.tag = "gps";
 	gpsDevice.deviceName = "DFRobot Gravity GNSS (DFR1103)";
 
+	uint32_t nextTankInitAttemptMs = 0;
+	uint32_t nextGazInitAttemptMs = 0;
+	uint32_t nextLevelInitAttemptMs = 0;
+	uint32_t nextRtcInitAttemptMs = 0;
+	uint32_t nextGpsInitAttemptMs = 0;
+
+	auto isRetryDue = [](const uint32_t nowMs, const uint32_t nextAttemptMs) {
+		return static_cast<int32_t>(nowMs - nextAttemptMs) >= 0;
+	};
+
+	auto scheduleRetry = [](uint32_t& nextAttemptMs, const uint32_t nowMs) {
+		nextAttemptMs = nowMs + I2C_SENSORS_INIT_RETRY_MS;
+	};
+
 	i2c.beginPortA();
 
 	for (;;) {
+		const uint32_t nowMs = millis();
 
 #ifndef DISABLE_TANK
-		if (!tankInitialized) {
+		if (!tankInitialized && isRetryDue(nowMs, nextTankInitAttemptMs)) {
 			if (!i2c.detectRoute(tankDevice.address, tankDevice.route)) {
 				M5_LOGW("[I2C_SENSORS] TANK route detection failed");
 				i2c.publishConfiguration(tankDevice);
 				tankInitialized = false;
+				scheduleRetry(nextTankInitAttemptMs, nowMs);
 			} else {
 				i2c.publishConfiguration(tankDevice);
 				bool channelSelected = selectPaHubIfNeeded(i2c, tankDevice, "I2C_SENSORS");
 				if (channelSelected) {
 					tankInitialized = TANK_MODULE.init(sf_i2c::isInternalRoute(tankDevice.route.mode), tankDevice.address);
 					disablePaHubIfNeeded(i2c, tankDevice);
+					if (!tankInitialized) {
+						scheduleRetry(nextTankInitAttemptMs, nowMs);
+					}
 				} else {
 					tankInitialized = false;
+					scheduleRetry(nextTankInitAttemptMs, nowMs);
 				}
 			}
 
@@ -172,19 +192,24 @@ void taskI2c(void *pv)
 #endif
 
 #ifndef DISABLE_GAZ
-		if (!gazInitialized) {
+		if (!gazInitialized && isRetryDue(nowMs, nextGazInitAttemptMs)) {
 			if (!i2c.detectRoute(gazDevice.address, gazDevice.route)) {
 				M5_LOGW("[I2C_SENSORS] GAZ route detection failed");
 				i2c.publishConfiguration(gazDevice);
 				gazInitialized = false;
+				scheduleRetry(nextGazInitAttemptMs, nowMs);
 			} else {
 				i2c.publishConfiguration(gazDevice);
 				bool channelSelected = selectPaHubIfNeeded(i2c, gazDevice, "I2C_SENSORS");
 				if (channelSelected) {
 					gazInitialized = GAZ_MODULE.init(sf_i2c::isInternalRoute(gazDevice.route.mode), gazDevice.address);
 					disablePaHubIfNeeded(i2c, gazDevice);
+					if (!gazInitialized) {
+						scheduleRetry(nextGazInitAttemptMs, nowMs);
+					}
 				} else {
 					gazInitialized = false;
+					scheduleRetry(nextGazInitAttemptMs, nowMs);
 				}
 			}
 
@@ -197,7 +222,7 @@ void taskI2c(void *pv)
 #endif
 
 #ifndef DISABLE_LEVEL
-		if (!levelInitialized) {
+		if (!levelInitialized && isRetryDue(nowMs, nextLevelInitAttemptMs)) {
 
 			if (LEVEL_MODULE.init(levelSourceFromLevelType(internalLevelDevice.levelType), true, internalLevelDevice.address)) {
 				levelInitialized = true;
@@ -232,6 +257,7 @@ void taskI2c(void *pv)
 
 			if (!levelInitialized) {
 				M5_LOGW("[I2C_SENSORS] LEVEL init failed");
+				scheduleRetry(nextLevelInitAttemptMs, nowMs);
 			} else {
 				i2c.publishConfiguration(activeLevelDevice);
 
@@ -242,7 +268,7 @@ void taskI2c(void *pv)
 #endif
 
 #ifndef DISABLE_RTC
-		if (!rtcInitialized) {
+		if (!rtcInitialized && isRetryDue(nowMs, nextRtcInitAttemptMs)) {
 			if (RTC_MODULE.init(RTC::Source::InternalRtc, true, internalRtcDevice.address)) {
 				rtcInitialized = true;
 				activeRtcDevice = internalRtcDevice;
@@ -267,6 +293,7 @@ void taskI2c(void *pv)
 
 			if (!rtcInitialized) {
 				M5_LOGW("[I2C_SENSORS] RTC init failed");
+				scheduleRetry(nextRtcInitAttemptMs, nowMs);
 			} else {
 				i2c.publishConfiguration(activeRtcDevice);
 			}
@@ -276,11 +303,12 @@ void taskI2c(void *pv)
 #endif
 
 #ifndef DISABLE_GPS
-		if (!gpsInitialized) {
+		if (!gpsInitialized && isRetryDue(nowMs, nextGpsInitAttemptMs)) {
 			if (!i2c.detectRoute(gpsDevice.address, gpsDevice.route)) {
 				M5_LOGW("[I2C_SENSORS] GPS route detection failed");
 				i2c.publishConfiguration(gpsDevice);
 				gpsInitialized = false;
+				scheduleRetry(nextGpsInitAttemptMs, nowMs);
 			} else {
 				i2c.publishConfiguration(gpsDevice);
 				bool channelSelected = selectPaHubIfNeeded(i2c, gpsDevice, "I2C_SENSORS");
@@ -289,8 +317,12 @@ void taskI2c(void *pv)
 					                                 sf_i2c::isInternalRoute(gpsDevice.route.mode),
 					                                 gpsDevice.address);
 					disablePaHubIfNeeded(i2c, gpsDevice);
+					if (!gpsInitialized) {
+						scheduleRetry(nextGpsInitAttemptMs, nowMs);
+					}
 				} else {
 					gpsInitialized = false;
+					scheduleRetry(nextGpsInitAttemptMs, nowMs);
 				}
 			}
 
@@ -302,48 +334,39 @@ void taskI2c(void *pv)
 		gpsInitialized = true;
 #endif
 
-		if (gazInitialized && tankInitialized && levelInitialized && rtcInitialized && gpsInitialized) {
-			break;
-		}
-
-		M5_LOGW("[I2C_SENSORS] init incomplete, retry in 10s");
-		vTaskDelay(pdMS_TO_TICKS(I2C_SENSORS_INIT_RETRY_MS));
-	}
-
-	for (;;) {
 #ifndef DISABLE_GAZ
-		if (selectPaHubIfNeeded(i2c, gazDevice, "I2C_SENSORS")) {
+		if (gazInitialized && selectPaHubIfNeeded(i2c, gazDevice, "I2C_SENSORS")) {
 			GAZ_MODULE.process();
 			disablePaHubIfNeeded(i2c, gazDevice);
 		}
 #endif
 #ifndef DISABLE_TANK
-		if (selectPaHubIfNeeded(i2c, tankDevice, "I2C_SENSORS")) {
+		if (tankInitialized && selectPaHubIfNeeded(i2c, tankDevice, "I2C_SENSORS")) {
 			TANK_MODULE.process();
 			disablePaHubIfNeeded(i2c, tankDevice);
 		}
 #endif
 
 #ifndef DISABLE_LEVEL
-		if (activeLevelDevice.levelType == sf_i2c::LevelType::InternalM5) {
+		if (levelInitialized && activeLevelDevice.levelType == sf_i2c::LevelType::InternalM5) {
 			LEVEL_MODULE.process();
-		} else if (selectPaHubIfNeeded(i2c, activeLevelDevice, "I2C_SENSORS")) {
+		} else if (levelInitialized && selectPaHubIfNeeded(i2c, activeLevelDevice, "I2C_SENSORS")) {
 			LEVEL_MODULE.process();
 			disablePaHubIfNeeded(i2c, activeLevelDevice);
 		}
 #endif
 
 #ifndef DISABLE_RTC
-		if (activeRtcDevice.route.mode == sf_i2c::RouteMode::Internal) {
+		if (rtcInitialized && activeRtcDevice.route.mode == sf_i2c::RouteMode::Internal) {
 			RTC_MODULE.process();
-		} else if (selectPaHubIfNeeded(i2c, activeRtcDevice, "I2C_SENSORS")) {
+		} else if (rtcInitialized && selectPaHubIfNeeded(i2c, activeRtcDevice, "I2C_SENSORS")) {
 			RTC_MODULE.process();
 			disablePaHubIfNeeded(i2c, activeRtcDevice);
 		}
 #endif
 
 #ifndef DISABLE_GPS
-		if (selectPaHubIfNeeded(i2c, gpsDevice, "I2C_SENSORS")) {
+		if (gpsInitialized && selectPaHubIfNeeded(i2c, gpsDevice, "I2C_SENSORS")) {
 			GPS_MODULE.process();
 			disablePaHubIfNeeded(i2c, gpsDevice);
 		}
