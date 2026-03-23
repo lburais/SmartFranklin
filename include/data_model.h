@@ -133,6 +133,51 @@ struct SmartData {
      */
     String rtc_time = "";
 
+    /**
+     * @brief GPS UTC time string (HH:MM:SS).
+     */
+    String gps_utc = "";
+
+    /**
+     * @brief GPS date string (YYYY-MM-DD).
+     */
+    String gps_date = "";
+
+    /**
+     * @brief GPS fix availability flag.
+     */
+    bool gps_has_fix = false;
+
+    /**
+     * @brief GPS latitude in decimal degrees.
+     */
+    double gps_latitude_deg = 0.0;
+
+    /**
+     * @brief GPS longitude in decimal degrees.
+     */
+    double gps_longitude_deg = 0.0;
+
+    /**
+     * @brief GPS altitude in meters.
+     */
+    double gps_altitude_m = 0.0;
+
+    /**
+     * @brief GPS speed over ground in knots.
+     */
+    double gps_speed_knots = 0.0;
+
+    /**
+     * @brief GPS course over ground in degrees.
+     */
+    double gps_course_deg = 0.0;
+
+    /**
+     * @brief Number of satellites used by the GNSS fix.
+     */
+    uint8_t gps_satellites = 0;
+
     // ============================================================================
     // Weight Sensor Data
     // ============================================================================

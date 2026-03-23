@@ -140,14 +140,6 @@ static const char *CFG_PATH = "/config.json";
  *   Local MQTT:
  *   - mqtt_port: 1883 (standard MQTT port)
  * 
- *   NB-IoT Cellular:
- *   - nbiot_enabled: true (enabled by default)
- *   - nbiot_apn: "iot.1nce.net" (1NCE carrier APN)
- *   - nbiot_mqtt_host: "" (not configured)
- *   - nbiot_mqtt_port: 1883 (standard MQTT port)
- *   - nbiot_mqtt_user: "" (no authentication)
- *   - nbiot_mqtt_pass: "" (no authentication)
- * 
  * Return Value:
  *   - true: Configuration successfully loaded or defaults created
  *   - false: SPIFFS initialization failed or JSON parsing error
@@ -219,13 +211,6 @@ bool config_load()
     // const bool hasLegacyExtMqttPort = !doc["ext_mqtt_port"].isNull();
 
     // CONFIG.mqtt_port = doc["mqtt_port"] | defaultCONFIG.mqtt_port;
-
-    CONFIG.nbiot_enabled   = doc["nbiot_enabled"]   | defaultCONFIG.nbiot_enabled;
-    CONFIG.nbiot_apn       = doc["nbiot_apn"]       | defaultCONFIG.nbiot_apn;
-    CONFIG.nbiot_mqtt_host = doc["nbiot_mqtt_host"] | defaultCONFIG.nbiot_mqtt_host;
-    CONFIG.nbiot_mqtt_port = doc["nbiot_mqtt_port"] | defaultCONFIG.nbiot_mqtt_port;
-    CONFIG.nbiot_mqtt_user = doc["nbiot_mqtt_user"] | defaultCONFIG.nbiot_mqtt_user;
-    CONFIG.nbiot_mqtt_pass = doc["nbiot_mqtt_pass"] | defaultCONFIG.nbiot_mqtt_pass;
 
     CONFIG.task_mqtt_loop_ms = doc["task_mqtt_loop_ms"] | defaultCONFIG.task_mqtt_loop_ms;
     CONFIG.task_hmi_loop_ms = doc["task_hmi_loop_ms"] | defaultCONFIG.task_hmi_loop_ms;
@@ -313,18 +298,6 @@ bool config_save()
     // =========================================================================
 
     doc["mqtt_port"] = CONFIG.mqtt_port;                    // Broker port number
-
-    // =========================================================================
-    // NB-IoT Cellular Configuration
-    // =========================================================================
-    // Serialize 4G LTE-M/NB-IoT backup connectivity settings
-    
-    doc["nbiot_enabled"]   = CONFIG.nbiot_enabled;          // Cellular enable flag
-    doc["nbiot_apn"]       = CONFIG.nbiot_apn;              // Carrier APN
-    doc["nbiot_mqtt_host"] = CONFIG.nbiot_mqtt_host;        // Cellular MQTT broker
-    doc["nbiot_mqtt_port"] = CONFIG.nbiot_mqtt_port;        // Cellular MQTT port
-    doc["nbiot_mqtt_user"] = CONFIG.nbiot_mqtt_user;        // Cellular MQTT username
-    doc["nbiot_mqtt_pass"] = CONFIG.nbiot_mqtt_pass;        // Cellular MQTT password
 
     // =========================================================================
     // Task Timing Configuration

@@ -80,10 +80,9 @@ extern TaskHandle_t taskMqttHandle;             // MQTT client+broker communicat
 extern TaskHandle_t taskWeightHandle;           // Weight sensor acquisition
 extern TaskHandle_t taskGazHandle;              // Gaz/weight sensor acquisition
 extern TaskHandle_t taskTankHandle;             // Tank ultrasonic acquisition
-extern TaskHandle_t taskI2cHandle;              // Unified I2C sensor acquisition (GAZ + TANK + IMU + RTC)
+extern TaskHandle_t taskI2cHandle;              // Unified I2C sensor acquisition (GAZ + TANK + IMU + RTC + GPS)
 extern TaskHandle_t taskBmsBleHandle;           // BLE battery management system
 extern TaskHandle_t taskHmiHandle;              // HMI/display updates
-extern TaskHandle_t taskNbiotHandle;            // NB-IoT cellular communication
 
 // ============================================================================
 // Task Function Declarations
@@ -140,7 +139,8 @@ void taskGaz(void *pvParameters);
  * @brief Unified I2C sensors acquisition task.
  *
  * Initializes and processes I2C sensors that share the Port A bus,
- * currently gas bottle weight (GAZ), tank ultrasonic level (TANK), and IMU.
+ * currently gas bottle weight (GAZ), tank ultrasonic level (TANK), IMU,
+ * RTC, and DFRobot Gravity GPS.
  *
  * @param pvParameters FreeRTOS task parameter (unused)
  * @return void (infinite loop, never returns)
@@ -191,18 +191,6 @@ void taskHmi(void *pvParameters);
  * @return void (infinite loop, never returns)
  */
 void taskHwMonitor(void *pvParameters);
-
-/**
- * @brief NB-IoT cellular communication task.
- * 
- * Handles 4G LTE-M/NB-IoT modem operations for cellular backup connectivity,
- * manages SIM card operations, publishes data over cellular network when
- * WiFi unavailable, and handles cellular-specific protocols and AT commands.
- * 
- * @param pvParameters FreeRTOS task parameter (unused)
- * @return void (infinite loop, never returns)
- */
-void taskNbiot(void *pvParameters);
 
 /**
  * @brief System watchdog and health monitoring task.

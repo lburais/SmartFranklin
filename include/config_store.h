@@ -69,14 +69,6 @@ struct SmartConfig {
     // Local MQTT broker
     int mqtt_port = 1883;
 
-    // NB-IoT
-    bool nbiot_enabled = false;
-    String nbiot_apn = "iot.1nce.net";
-    String nbiot_mqtt_host;
-    int nbiot_mqtt_port = 1883;
-    String nbiot_mqtt_user;
-    String nbiot_mqtt_pass;
-
     // Task timing configuration (milliseconds)
     int task_mqtt_loop_ms = 250;
     int task_hmi_loop_ms = 1000;

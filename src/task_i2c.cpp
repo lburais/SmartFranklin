@@ -7,6 +7,7 @@
 #include <M5Unified.h>
 
 #include "config_store.h"
+#include "gps.h"
 #include "i2c.h"
 #include "gaz.h"
 #include "level.h"
@@ -70,6 +71,7 @@ void taskI2c(void *pv)
 	bool tankInitialized = false;
 	bool levelInitialized = false;
 	bool rtcInitialized = false;
+	bool gpsInitialized = false;
 	sf_i2c::I2C i2c{};
 
 	sf_i2c::Device gazDevice{};
@@ -133,6 +135,12 @@ void taskI2c(void *pv)
 	activeRtcDevice.address = 0x51;
 	activeRtcDevice.tag = "rtc";
 	activeRtcDevice.deviceName = "RTC";
+
+	sf_i2c::Device gpsDevice{};
+	gpsDevice.route = sf_i2c::Route{};
+	gpsDevice.address = 0x66;
+	gpsDevice.tag = "gps";
+	gpsDevice.deviceName = "DFRobot Gravity GNSS (DFR1103)";
 
 	i2c.beginPortA();
 
@@ -267,7 +275,34 @@ void taskI2c(void *pv)
 		rtcInitialized = true;
 #endif
 
-		if (gazInitialized && tankInitialized && levelInitialized && rtcInitialized) {
+#ifndef DISABLE_GPS
+		if (!gpsInitialized) {
+			if (!i2c.detectRoute(gpsDevice.address, gpsDevice.route)) {
+				M5_LOGW("[I2C_SENSORS] GPS route detection failed");
+				i2c.publishConfiguration(gpsDevice);
+				gpsInitialized = false;
+			} else {
+				i2c.publishConfiguration(gpsDevice);
+				bool channelSelected = selectPaHubIfNeeded(i2c, gpsDevice, "I2C_SENSORS");
+				if (channelSelected) {
+					gpsInitialized = GPS_MODULE.init(GPS::Source::ExternalDfrobotGravity,
+					                                 sf_i2c::isInternalRoute(gpsDevice.route.mode),
+					                                 gpsDevice.address);
+					disablePaHubIfNeeded(i2c, gpsDevice);
+				} else {
+					gpsInitialized = false;
+				}
+			}
+
+			if (!gpsInitialized) {
+				M5_LOGW("[I2C_SENSORS] GPS init failed");
+			}
+		}
+#else
+		gpsInitialized = true;
+#endif
+
+		if (gazInitialized && tankInitialized && levelInitialized && rtcInitialized && gpsInitialized) {
 			break;
 		}
 
@@ -304,6 +339,13 @@ void taskI2c(void *pv)
 		} else if (selectPaHubIfNeeded(i2c, activeRtcDevice, "I2C_SENSORS")) {
 			RTC_MODULE.process();
 			disablePaHubIfNeeded(i2c, activeRtcDevice);
+		}
+#endif
+
+#ifndef DISABLE_GPS
+		if (selectPaHubIfNeeded(i2c, gpsDevice, "I2C_SENSORS")) {
+			GPS_MODULE.process();
+			disablePaHubIfNeeded(i2c, gpsDevice);
 		}
 #endif
 

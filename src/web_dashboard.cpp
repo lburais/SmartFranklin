@@ -38,7 +38,7 @@
  *   Configuration (/config):
  *   - WiFi settings (SSID, password)
  *   - MQTT broker configuration
- *   - NB-IoT cellular settings
+ *   - Runtime configuration settings
  *   - Admin authentication credentials
  *   - Hardware calibration factors
  * 
@@ -67,10 +67,8 @@
  *   - M5Stack-specific sensor readings
  *   - JSON response with HwStatus structure
  * 
- *   GET /api/nbiot:
- *   - NB-IoT cellular modem status
- *   - Network attachment, PDP context, MQTT connection
- *   - Signal strength and operator information
+ *   GET /api/full:
+ *   - Combined runtime snapshot (data + config + hardware)
  * 
  *   GET /api/set_brightness?value=N:
  *   - Controls display brightness (0-255)
@@ -95,7 +93,7 @@
  * 
  * Static Assets:
  *   - Served from SPIFFS filesystem
- *   - HTML pages: /hw.html, /nbiot.html, /sensors.html
+ *   - HTML pages: /hw.html, /sensors.html
  *   - JavaScript: /theme.js (common UI functionality)
  *   - Cached by browser for performance
  * 
@@ -112,7 +110,7 @@
  *   - FS.h, SPIFFS.h (SPIFFS filesystem access)
  *   - WiFi.h (network connectivity)
  *   - m5_hw.h (hardware abstraction for status)
- *   - nb_iot2.h (NB-IoT status interface)
+ *   - data_model.h (shared runtime data)
  *   - data_model.h (global DATA access)
  *   - config_store.h (configuration access)
  *   - web_dashboard.h (header declarations)
@@ -406,7 +404,7 @@ a.button { display: inline-block; padding: 10px 15px; background: #0078ff; color
     <a class="button" href="/update">Firmware Update</a>
 </div>
 <div class="card">
-    <h3>Full Snapshot (Data + Config + HW + NB-IoT)</h3>
+    <h3>Full Snapshot (Data + Config + HW)</h3>
     <pre id="diag">Loading...</pre>
 </div>
 <script>
@@ -490,6 +488,15 @@ static void fillDataJson(JsonVariant doc)
     std::lock_guard<std::mutex> lock(DATA_MUTEX);
     doc["rtc_sync_source"] = DATA.rtc_sync_source;
     doc["rtc_time"] = DATA.rtc_time;
+    doc["gps_utc"] = DATA.gps_utc;
+    doc["gps_date"] = DATA.gps_date;
+    doc["gps_has_fix"] = DATA.gps_has_fix;
+    doc["gps_latitude_deg"] = DATA.gps_latitude_deg;
+    doc["gps_longitude_deg"] = DATA.gps_longitude_deg;
+    doc["gps_altitude_m"] = DATA.gps_altitude_m;
+    doc["gps_speed_knots"] = DATA.gps_speed_knots;
+    doc["gps_course_deg"] = DATA.gps_course_deg;
+    doc["gps_satellites"] = DATA.gps_satellites;
 
     doc["fill_gaz"] = DATA.fill_gaz;
     doc["fill_tank"] = DATA.fill_tank;
@@ -546,13 +553,6 @@ static void fillConfigJson(JsonVariant doc)
 
     doc["mqtt_port"] = CONFIG.mqtt_port;
 
-    doc["nbiot_enabled"] = CONFIG.nbiot_enabled;
-    doc["nbiot_apn"] = CONFIG.nbiot_apn;
-    doc["nbiot_mqtt_host"] = CONFIG.nbiot_mqtt_host;
-    doc["nbiot_mqtt_port"] = CONFIG.nbiot_mqtt_port;
-    doc["nbiot_mqtt_user"] = CONFIG.nbiot_mqtt_user;
-    doc["nbiot_mqtt_pass"] = CONFIG.nbiot_mqtt_pass;
-
     doc["task_mqtt_loop_ms"] = CONFIG.task_mqtt_loop_ms;
     doc["task_hmi_loop_ms"] = CONFIG.task_hmi_loop_ms;
 }
@@ -570,21 +570,6 @@ static void fillHwJson(JsonVariant doc)
     accel["x"] = st.accel_x;
     accel["y"] = st.accel_y;
     accel["z"] = st.accel_z;
-}
-
-static void fillNbiotJson(JsonVariant doc)
-{
-    doc["modem_ready"] = CONFIG.nbiot_enabled;
-    doc["network_attached"] = false;
-    doc["pdp_active"] = false;
-    doc["mqtt_connected"] = false;
-    doc["operator"] = "n/a";
-    doc["ip"] = "0.0.0.0";
-    doc["rssi"] = -1;
-
-    doc["configured_apn"] = CONFIG.nbiot_apn;
-    doc["configured_mqtt_host"] = CONFIG.nbiot_mqtt_host;
-    doc["configured_mqtt_port"] = CONFIG.nbiot_mqtt_port;
 }
 
 static void fillGeometryJson(JsonVariant doc, bool includeLegacyKeys)
@@ -677,14 +662,12 @@ static void sendJson(AsyncWebServerRequest* request, JsonDocument& doc, int stat
  *   Static Routes:
  *   - / : Main dashboard page (HTML from PROGMEM)
  *   - /hw : Hardware status page (from SPIFFS)
- *   - /nbiot : NB-IoT status page (from SPIFFS)
  *   - /sensors : Sensor data page (from SPIFFS)
  *   - /theme.js : Common JavaScript (from SPIFFS)
  * 
  *   API Routes:
  *   - /api/status : Real-time sensor data (JSON)
  *   - /api/hw : Hardware status (JSON)
- *   - /api/nbiot : NB-IoT status (JSON)
  *   - /api/set_brightness : Display brightness control
  *   - /api/reboot : System restart trigger
  *   - /api/sleep : Deep sleep mode entry
@@ -775,8 +758,6 @@ void web_dashboard_init()
         fillConfigJson(config);
         JsonObject hw = doc["hw"].to<JsonObject>();
         fillHwJson(hw);
-        JsonObject nbiot = doc["nbiot"].to<JsonObject>();
-        fillNbiotJson(nbiot);
         sendJson(request, doc);
     });
 
@@ -864,16 +845,6 @@ void web_dashboard_init()
     });
 
     // =========================================================================
-    // NB-IoT Status API Endpoint
-    // =========================================================================
-    // Returns cellular modem and network status
-    server.on("/api/nbiot", HTTP_GET, [](AsyncWebServerRequest *request){
-        JsonDocument doc;
-        fillNbiotJson(doc);
-        sendJson(request, doc);
-    });
-
-    // =========================================================================
     // OTA Firmware Update Integration
     // =========================================================================
     // Initialize ElegantOTA for firmware updates
@@ -887,8 +858,6 @@ void web_dashboard_init()
     // No authentication required for static content
     server.on("/hw", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(SPIFFS, "/hw.html", "text/html"); }); 
     server.on("/hw.html", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(SPIFFS, "/hw.html", "text/html"); }); 
-    server.on("/nbiot", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(SPIFFS, "/nbiot.html", "text/html"); }); 
-    server.on("/nbiot.html", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(SPIFFS, "/nbiot.html", "text/html"); }); 
     server.on("/sensors", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(SPIFFS, "/sensors.html", "text/html"); }); 
     server.on("/sensors.html", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(SPIFFS, "/sensors.html", "text/html"); }); 
     server.on("/theme.js", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(SPIFFS, "/theme.js", "application/javascript"); }); 

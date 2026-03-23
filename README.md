@@ -13,7 +13,7 @@ SmartFranklin is an ESP32 IoT controller for M5StickC Plus2 built around concurr
 - Runs a local HMI (screen navigation, button handling, scale calibration workflow)
 - Collects telemetry from weight, GPS, BLE BMS, and board sensors
 - Manages Wi-Fi AP/STA connectivity and a unified MQTT runtime (`taskMqtt`)
-- Bridges optional transports (Meshtastic and NB-IoT2)
+- Provides local dashboard and MQTT-first telemetry publishing
 - Applies capability-gated startup based on detected hardware and configuration
 
 ## Runtime Architecture
@@ -32,10 +32,7 @@ flowchart TD
         T_MQTT[taskMqtt]
         T_WIFI[taskWiFi]
         T_I2C[taskI2c]
-        T_GPS[taskGps]
         T_BMS[taskBmsBle]
-        T_MESH[taskMeshtasticBridge]
-        T_NBIOT[taskNbiot]
     end
 
     SETUP --> LOOP
@@ -45,10 +42,7 @@ flowchart TD
     SETUP --> T_MQTT
     SETUP --> T_WIFI
     SETUP --> T_I2C
-    SETUP --> T_GPS
     SETUP --> T_BMS
-    SETUP --> T_MESH
-    SETUP --> T_NBIOT
 ```
 
 ## Execution Block Mapping
@@ -61,10 +55,8 @@ flowchart TD
 | `taskMqtt` | Unified MQTT runtime (embedded local broker + external client path) |
 | `taskWiFi` | AP/STA connectivity lifecycle and reconnection |
 | `taskI2c` | Unified GAZ + TANK acquisition |
-| `taskGps` | GNSS/RTC acquisition and publication |
 | `taskBmsBle` | BLE BMS acquisition and publication |
-| `taskMeshtasticBridge` | Meshtastic bridge integration |
-| `taskNbiot` | NB-IoT2 transport path |
+| `gps module` | GNSS acquisition integrated in `taskI2c` |
 
 Boot-time task creation is capability-gated: selected tasks are created only when hardware probing and runtime configuration confirm a valid path.
 
@@ -77,7 +69,7 @@ Boot-time task creation is capability-gated: selected tasks are created only whe
 - `src/gps.cpp`, `include/gps.h`: DFR1103 integration
 - `src/gaz.cpp`, `include/gaz.h`: weight sensor module
 - `src/tank.cpp`, `include/tank.h`: ultrasonic tank module
-- `src/task_wifi.cpp`, `src/task_meshtastic_bridge.cpp`, `src/task_nbiot.cpp`: connectivity/transport tasks
+- `src/task_wifi.cpp`: connectivity task
 - `src/task_bms_ble.cpp`, `src/task_hw_monitor.cpp`, `src/task_watchdog.cpp`: supervision and telemetry tasks
 - `include/`: shared interfaces
 - `boards/`: PlatformIO board definitions

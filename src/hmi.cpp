@@ -68,7 +68,6 @@
 
 #include "config_store.h"
 #include "data_model.h"
-#include "rtc.h"
 #include "mqtt.h"
 #include "scale_control.h"
 
@@ -361,9 +360,15 @@ void HMI::updateSnapshot(DisplaySnapshot& snapshot)
         snapshot.bms_voltage = DATA.bms_voltage;
         snapshot.bms_current = DATA.bms_current;
         snapshot.bms_soc = DATA.bms_soc;
-        snapshot.rtc_source = RTC_MODULE.sourceName();
-        snapshot.rtc_sync_source = DATA.rtc_sync_source;
-        snapshot.rtc_time = DATA.rtc_time;
+        snapshot.gps_has_fix = DATA.gps_has_fix;
+        snapshot.gps_satellites = DATA.gps_satellites;
+        snapshot.gps_latitude_deg = DATA.gps_latitude_deg;
+        snapshot.gps_longitude_deg = DATA.gps_longitude_deg;
+        snapshot.gps_altitude_m = DATA.gps_altitude_m;
+        snapshot.gps_speed_knots = DATA.gps_speed_knots;
+        snapshot.gps_course_deg = DATA.gps_course_deg;
+        snapshot.gps_date = DATA.gps_date;
+        snapshot.gps_utc = DATA.gps_utc;
     }
     last_snapshot_ = snapshot;
 }
@@ -413,11 +418,16 @@ void HMI::drawBatteryScreen(const DisplaySnapshot& snapshot) const
 void HMI::drawGpsScreen(const DisplaySnapshot& snapshot) const
 {
     M5GFX& lcd = M5.Display;
-    drawTitleBox("RTC");
+    drawTitleBox("GPS");
     beginContentArea();
-    lcd.printf("RTC src: %s\n", snapshot.rtc_source.c_str());
-    lcd.printf("RTC time: %s\n", snapshot.rtc_time.c_str());
-    lcd.printf("RTC sync: %s\n", snapshot.rtc_sync_source.c_str());
+    lcd.printf("Fix: %s\n", snapshot.gps_has_fix ? "YES" : "NO");
+    lcd.printf("Sats: %u\n", static_cast<unsigned>(snapshot.gps_satellites));
+    lcd.printf("Lat: %.5f\n", snapshot.gps_latitude_deg);
+    lcd.printf("Lon: %.5f\n", snapshot.gps_longitude_deg);
+    lcd.printf("Alt: %.1f m\n", snapshot.gps_altitude_m);
+    lcd.printf("Spd: %.1f kn\n", snapshot.gps_speed_knots);
+    lcd.printf("COG: %.1f\n", snapshot.gps_course_deg);
+    lcd.printf("UTC: %s %s\n", snapshot.gps_date.c_str(), snapshot.gps_utc.c_str());
 }
 
 /** @brief Draw helper for interactive scale calibration page. */

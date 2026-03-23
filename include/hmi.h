@@ -117,9 +117,15 @@ private:
         float bms_voltage = 0.0f;
         float bms_current = 0.0f;
         float bms_soc = 0.0f;
-        String rtc_source;
-        String rtc_sync_source;
-        String rtc_time;
+        bool gps_has_fix = false;
+        uint8_t gps_satellites = 0;
+        double gps_latitude_deg = 0.0;
+        double gps_longitude_deg = 0.0;
+        double gps_altitude_m = 0.0;
+        double gps_speed_knots = 0.0;
+        double gps_course_deg = 0.0;
+        String gps_date;
+        String gps_utc;
     };
 
     /** @brief Draws the currently selected screen. */

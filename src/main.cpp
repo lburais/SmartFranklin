@@ -76,7 +76,6 @@ TaskHandle_t taskTankHandle             = nullptr;  // Tank ultrasonic reading
 TaskHandle_t taskI2cHandle       = nullptr;  // Unified I2C sensors (GAZ + TANK)
 TaskHandle_t taskBmsBleHandle           = nullptr;  // BLE battery management system
 TaskHandle_t taskHmiHandle              = nullptr;  // HMI/display task
-TaskHandle_t taskNbiotHandle            = nullptr;  // NB-IoT cellular communication
 
 static constexpr uint8_t DISPLAY_UI_ROTATION = 3;
 static constexpr uint8_t DISPLAY_UI_BRIGHTNESS = 255;
@@ -223,10 +222,6 @@ void setup() {
 
     #ifndef DISABLE_BMS_BLE
     xTaskCreatePinnedToCore(taskBmsBle,           "BMS_BLE",  8192, nullptr, 2,  &taskBmsBleHandle,          0);
-    #endif
-
-    #ifndef DISABLE_NBIOT
-    xTaskCreatePinnedToCore(taskNbiot,            "NB_IOT", 8192, nullptr, 2, &taskNbiotHandle, 0);
     #endif
 
     #ifndef DISABLE_HW_MONITOR
