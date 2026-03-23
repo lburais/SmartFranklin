@@ -31,7 +31,7 @@ flowchart TD
         T_HW[taskHwMonitor]
         T_MQTT[taskMqtt]
         T_WIFI[taskWiFi]
-        T_I2C[taskI2cSensors]
+        T_I2C[taskI2c]
         T_GPS[taskGps]
         T_BMS[taskBmsBle]
         T_MESH[taskMeshtasticBridge]
@@ -60,7 +60,7 @@ flowchart TD
 | `taskHwMonitor` | M5 board telemetry publication |
 | `taskMqtt` | Unified MQTT runtime (embedded local broker + external client path) |
 | `taskWiFi` | AP/STA connectivity lifecycle and reconnection |
-| `taskI2cSensors` | Unified GAZ + TANK acquisition |
+| `taskI2c` | Unified GAZ + TANK acquisition |
 | `taskGps` | GNSS/RTC acquisition and publication |
 | `taskBmsBle` | BLE BMS acquisition and publication |
 | `taskMeshtasticBridge` | Meshtastic bridge integration |

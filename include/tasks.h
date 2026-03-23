@@ -80,7 +80,7 @@ extern TaskHandle_t taskMqttHandle;             // MQTT client+broker communicat
 extern TaskHandle_t taskWeightHandle;           // Weight sensor acquisition
 extern TaskHandle_t taskGazHandle;              // Gaz/weight sensor acquisition
 extern TaskHandle_t taskTankHandle;             // Tank ultrasonic acquisition
-extern TaskHandle_t taskI2cSensorsHandle;       // Unified I2C sensor acquisition (GAZ + TANK + IMU)
+extern TaskHandle_t taskI2cHandle;              // Unified I2C sensor acquisition (GAZ + TANK + IMU + RTC)
 extern TaskHandle_t taskBmsBleHandle;           // BLE battery management system
 extern TaskHandle_t taskHmiHandle;              // HMI/display updates
 extern TaskHandle_t taskNbiotHandle;            // NB-IoT cellular communication
@@ -145,7 +145,7 @@ void taskGaz(void *pvParameters);
  * @param pvParameters FreeRTOS task parameter (unused)
  * @return void (infinite loop, never returns)
  */
-void taskI2cSensors(void *pvParameters);
+void taskI2c(void *pvParameters);
 
 /**
  * @brief Tank ultrasonic level acquisition task.

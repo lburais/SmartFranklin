@@ -73,7 +73,7 @@ TaskHandle_t taskMqttHandle             = nullptr;  // MQTT client+broker commun
 TaskHandle_t taskWeightHandle           = nullptr;  // Weight sensor reading
 //TaskHandle_t taskGazHandle              = nullptr;  // Gaz/weight sensor reading
 TaskHandle_t taskTankHandle             = nullptr;  // Tank ultrasonic reading
-TaskHandle_t taskI2cSensorsHandle       = nullptr;  // Unified I2C sensors (GAZ + TANK)
+TaskHandle_t taskI2cHandle       = nullptr;  // Unified I2C sensors (GAZ + TANK)
 TaskHandle_t taskBmsBleHandle           = nullptr;  // BLE battery management system
 TaskHandle_t taskHmiHandle              = nullptr;  // HMI/display task
 TaskHandle_t taskNbiotHandle            = nullptr;  // NB-IoT cellular communication
@@ -218,7 +218,7 @@ void setup() {
     #endif
 
     #ifndef DISABLE_I2C_SENSORS
-    xTaskCreatePinnedToCore(taskI2cSensors,       "I2C_SENS", 4096, nullptr, 2, &taskI2cSensorsHandle, 1);
+    xTaskCreatePinnedToCore(taskI2c,       "I2C_SENS", 4096, nullptr, 2, &taskI2cHandle, 1);
     #endif
 
     #ifndef DISABLE_BMS_BLE

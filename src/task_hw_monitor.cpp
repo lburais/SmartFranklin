@@ -213,32 +213,11 @@ void taskHwMonitor(void *pv)
 
     for (;;) {
 
-        // --- IMU Accelerometer Reading ---
-        // Read 3-axis acceleration values from built-in IMU
-        // Sets to zero if IMU is disabled or unavailable
-        float ax = 0, ay = 0, az = 0;
-        if (M5.Imu.isEnabled()) {
-            M5.Imu.getAccel(&ax, &ay, &az);
-        }
-
         // --- Battery Status Reading ---
         // Retrieve battery voltage (mV), charge level (%), and charging state
         float batt_voltage = M5.Power.getBatteryVoltage();   // in mV
         int   batt_percent = M5.Power.getBatteryLevel();     // in %
         bool  charging = M5.Power.isCharging();
-
-        // --- Internal Temperature Reading ---
-        // IMU temperature sensor (currently commented out)
-        // Uncomment when temperature monitoring is needed
-        float temp = 0;
-        if (M5.Imu.isEnabled()) {
-            //temp = M5.Imu.getTemperature();
-        }
-
-        // --- Button State Reading ---
-        // Poll current press state of Button A and Button B
-        bool btnA = M5.BtnA.isPressed();
-        bool btnB = M5.BtnB.isPressed();
 
         // --- MQTT Publishing ---
         // Publish all hardware data to MQTT topics
@@ -252,24 +231,6 @@ void taskHwMonitor(void *pv)
 
         sf_mqtt::publish("smartfranklin/hw/charging",
                  std::string(charging ? "1" : "0"));
-
-        // Temperature publishing commented out
-        //sf_mqtt::publish("smartfranklin/hw/temperature",
-        //         std::string(String(st.temperature).c_str()));
-
-        sf_mqtt::publish("smartfranklin/hw/button_a",
-                 std::string(btnA ? "1" : "0"));
-
-        sf_mqtt::publish("smartfranklin/hw/button_b",
-                 std::string(btnB ? "1" : "0"));
-
-        // Accelerometer data as JSON object
-        String accel = String("{\"x\":") + ax +
-                       ",\"y\":" + ay +
-                       ",\"z\":" + az + "}";
-
-        sf_mqtt::publish("smartfranklin/hw/accel",
-                 std::string(accel.c_str()));
 
         // Task delay for 5-second update interval
         vTaskDelay(pdMS_TO_TICKS(5000));

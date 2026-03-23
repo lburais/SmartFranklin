@@ -106,7 +106,7 @@
 // and write to this object for inter-task communication and data publishing.
 //
 // Access Pattern:
-//   - Sensor tasks (taskBmsBle, taskGaz, taskI2cSensors, etc.) continuously
+//   - Sensor tasks (taskBmsBle, taskGaz, taskI2c, etc.) continuously
 //     update DATA with latest readings
 //   - Communication tasks (taskMqttBroker, taskDisplay) read DATA to publish
 //     or display current system state
