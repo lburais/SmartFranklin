@@ -34,6 +34,9 @@ constexpr float ADXL345_G_PER_LSB = 0.0039f;
 constexpr float PI_F = 3.14159265358979323846f;
 constexpr float RAD_TO_DEG_F = 57.2957795f;
 
+constexpr uint32_t PROCESS_PERIOD_MS = 10000; // Change as needed
+
+
 struct GeometryConfig {
     float wheelbaseMm = 2200.0f;
     float trackWidthMm = 1600.0f;
@@ -483,8 +486,15 @@ bool Level::init(Source source, bool isInternalRoute, uint8_t i2cAddress)
     return initState(LEVEL_STATE, source, isInternalRoute, i2cAddress);
 }
 
+
 void Level::process()
 {
+    static uint32_t lastProcessMs = 0;
+    const uint32_t now = millis();
+    if (now - lastProcessMs < PROCESS_PERIOD_MS) {
+        return;
+    }
+    lastProcessMs = now;
     processState(LEVEL_STATE);
 }
 

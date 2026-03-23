@@ -24,7 +24,7 @@ namespace {
 
 constexpr uint32_t RTC_PROCESS_PERIOD_MS = 5000UL;
 constexpr uint32_t RTC_PUBLISH_PERIOD_MS = 30000UL;
-constexpr uint32_t RTC_RTC_WRITE_PERIOD_MS = 60000UL;
+constexpr uint32_t RTC_WRITE_PERIOD_MS = 60000UL;
 constexpr uint32_t RTC_NTP_TIMEOUT_MS = 1500UL;
 constexpr time_t MIN_VALID_EPOCH = 1704067200;  // 2024-01-01T00:00:00Z
 
@@ -626,7 +626,7 @@ void processState(RtcState& state)
         publishSyncSource(syncSource);
     }
 
-    if ((nowMs - state.lastRtcWriteMs) >= RTC_RTC_WRITE_PERIOD_MS) {
+    if ((nowMs - state.lastRtcWriteMs) >= RTC_WRITE_PERIOD_MS) {
         if (syncRtcFromSystem(state)) {
             state.lastRtcWriteMs = nowMs;
         }

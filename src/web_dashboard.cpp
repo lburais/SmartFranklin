@@ -606,13 +606,6 @@ void web_dashboard_init()
         doc["battery_voltage"] = st.battery_voltage; 
         doc["battery_percent"] = st.battery_percent; 
         doc["charging"]        = st.charging; 
-        doc["temperature"]     = st.temperature;  // Note: temperature not in HwStatus
-        doc["button_a"]        = st.button_a; 
-        doc["button_b"]        = st.button_b; 
-        JsonObject accel = doc["accel"].to<JsonObject>(); 
-        accel["x"] = st.accel_x; 
-        accel["y"] = st.accel_y; 
-        accel["z"] = st.accel_z; 
         String out; 
         serializeJson(doc, out); 
         request->send(200, "application/json", out); 
