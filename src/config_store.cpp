@@ -204,6 +204,8 @@ bool config_load()
     CONFIG.level_track_width_mm = doc["level_track_width_mm"] | defaultCONFIG.level_track_width_mm;
     CONFIG.level_offset_x_mm = doc["level_offset_x_mm"] | defaultCONFIG.level_offset_x_mm;
     CONFIG.level_offset_y_mm = doc["level_offset_y_mm"] | defaultCONFIG.level_offset_y_mm;
+    CONFIG.level_zero_pitch_deg = doc["level_zero_pitch_deg"] | defaultCONFIG.level_zero_pitch_deg;
+    CONFIG.level_zero_roll_deg = doc["level_zero_roll_deg"] | defaultCONFIG.level_zero_roll_deg;
 
     CONFIG.admin_user = doc["admin_user"] | defaultCONFIG.admin_user;
     CONFIG.admin_pass = doc["admin_pass"] | defaultCONFIG.admin_pass;
@@ -298,6 +300,8 @@ bool config_save()
     doc["level_track_width_mm"] = CONFIG.level_track_width_mm;
     doc["level_offset_x_mm"] = CONFIG.level_offset_x_mm;
     doc["level_offset_y_mm"] = CONFIG.level_offset_y_mm;
+    doc["level_zero_pitch_deg"] = CONFIG.level_zero_pitch_deg;
+    doc["level_zero_roll_deg"] = CONFIG.level_zero_roll_deg;
 
     doc["admin_user"] = CONFIG.admin_user;                  // Web dashboard username
     doc["admin_pass"] = CONFIG.admin_pass;                  // Web dashboard password

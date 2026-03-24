@@ -437,6 +437,11 @@ void processState(LevelState& state)
         pitchDeg = atan2f(-ax, sqrtf((ay * ay) + (az * az))) * RAD_TO_DEG_F;
         rollDeg = atan2f(ay, az) * RAD_TO_DEG_F;
 
+        const float zeroPitch = sanitizeFinite(CONFIG.level_zero_pitch_deg, 0.0f, -90.0f, 90.0f);
+        const float zeroRoll = sanitizeFinite(CONFIG.level_zero_roll_deg, 0.0f, -90.0f, 90.0f);
+        pitchDeg -= zeroPitch;
+        rollDeg -= zeroRoll;
+
         if (!std::isfinite(pitchDeg) || !std::isfinite(rollDeg)) {
             M5_LOGW("[LEVEL] non-finite pose");
             return;

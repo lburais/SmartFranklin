@@ -62,6 +62,8 @@ struct SmartConfig {
     float level_track_width_mm = 1662.0f;
     float level_offset_x_mm = 0.0f;
     float level_offset_y_mm = 0.0f;
+    float level_zero_pitch_deg = 0.0f;
+    float level_zero_roll_deg = 0.0f;
 
     // Admin credentials
     String admin_user = "admin";

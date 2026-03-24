@@ -74,6 +74,7 @@
 #include <M5Unified.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <ESPmDNS.h>
 
 // ============================================================================
 // Captive Portal Detection
@@ -156,7 +157,7 @@ static void publishWiFiStatus()
     sf_mqtt::publish("smartfranklin/system/wifi/mode", mode.c_str());
 
     // Publish configured hostname
-    const String hostname = CONFIG.hostname.isEmpty() ? String("smartfranklin") : CONFIG.hostname;
+    const String hostname = CONFIG.hostname.isEmpty() ? String("franklin") : CONFIG.hostname;
     sf_mqtt::publish("smartfranklin/system/wifi/hostname", hostname.c_str());
 
     // Publish Access Point IP (always available if AP enabled)
@@ -200,7 +201,7 @@ static void publishWiFiStatus()
  */
 static void wifiInitialSetup()
 {
-    const String configuredHostname = CONFIG.hostname.isEmpty() ? String("smartfranklin")
+    const String configuredHostname = CONFIG.hostname.isEmpty() ? String("franklin")
                                                                  : CONFIG.hostname;
 
     // Set WiFi mode to simultaneous Access Point and Station operation
@@ -282,6 +283,7 @@ void taskWiFi(void *pv)
     unsigned long staConnectedSince = 0;    // Timestamp when STA became connected
     bool lastCaptive = false;               // Last known captive-portal state
     bool captiveKnown = false;              // Whether lastCaptive has been measured
+    bool mdnsStarted = false;
     
     // Reconnection attempt interval (15 seconds between attempts)
     // Prevents excessive reconnection attempts that drain power
@@ -311,6 +313,23 @@ void taskWiFi(void *pv)
         } else {
             staConnectedSince = 0;
             captiveKnown = false;
+            if (mdnsStarted) {
+                MDNS.end();
+                mdnsStarted = false;
+                M5_LOGI("[WiFi] mDNS stopped");
+            }
+        }
+
+        if (staStatus == WL_CONNECTED && !mdnsStarted) {
+            const String configuredHostname = CONFIG.hostname.isEmpty() ? String("franklin")
+                                                                         : CONFIG.hostname;
+            if (MDNS.begin(configuredHostname.c_str())) {
+                MDNS.addService("http", "tcp", 80);
+                mdnsStarted = true;
+                M5_LOGI("[WiFi] mDNS available at http://%s.local", configuredHostname.c_str());
+            } else {
+                M5_LOGW("[WiFi] mDNS start failed for %s.local", configuredHostname.c_str());
+            }
         }
 
         // --- Station Reconnection Logic ---
