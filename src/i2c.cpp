@@ -7,8 +7,9 @@
 
 #include <cstring>
 
-#include "pahub_channels.h"
 #include "mqtt.h"
+
+#define PAHUB_ADDRESS       0x70
 
 namespace sf_i2c {
 
