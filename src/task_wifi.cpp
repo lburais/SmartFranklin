@@ -363,8 +363,8 @@ void taskWiFi(void *pv)
             lastStatus = millis();
         }
 
-        // Yield to other tasks (500ms cycle time)
-        // Non-blocking sleep allows WiFi driver to run and other tasks to execute
-        vTaskDelay(pdMS_TO_TICKS(500));
+        // Yield to other tasks using configurable cycle time.
+        const int wifiLoopMs = (CONFIG.task_wifi_loop_ms > 0) ? CONFIG.task_wifi_loop_ms : 500;
+        vTaskDelay(pdMS_TO_TICKS(wifiLoopMs));
     }
 }

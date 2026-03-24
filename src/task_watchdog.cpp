@@ -118,6 +118,7 @@
 #include <M5Unified.h>
 #include "tasks.h"
 #include "watchdog.h"
+#include "config_store.h"
 #include <esp_task_wdt.h>
 
 // ============================================================================
@@ -199,7 +200,7 @@ void taskWatchdog(void *pv)
         // Reset the watchdog timer to prevent system reset
         esp_task_wdt_reset();
 
-        // Delay for 1 second before next reset
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        const int watchdogLoopMs = (CONFIG.task_watchdog_loop_ms > 0) ? CONFIG.task_watchdog_loop_ms : 60000;
+        vTaskDelay(pdMS_TO_TICKS(watchdogLoopMs));
     }
 }

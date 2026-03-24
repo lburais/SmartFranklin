@@ -17,7 +17,6 @@
 namespace {
 
 static constexpr uint32_t I2C_SENSORS_INIT_RETRY_MS = 10000UL;
-static constexpr uint32_t I2C_SENSORS_LOOP_MS = 1000UL;
 
 Level::Source levelSourceFromLevelType(const sf_i2c::LevelType levelType)
 {
@@ -372,6 +371,7 @@ void taskI2c(void *pv)
 		}
 #endif
 
-		vTaskDelay(pdMS_TO_TICKS(I2C_SENSORS_LOOP_MS));
+		const int i2cLoopMs = (CONFIG.task_i2c_loop_ms > 0) ? CONFIG.task_i2c_loop_ms : 1000;
+		vTaskDelay(pdMS_TO_TICKS(i2cLoopMs));
 	}
 }

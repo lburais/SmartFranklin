@@ -133,6 +133,7 @@
 #include "tasks.h"
 #include "m5_hw.h"
 #include "mqtt.h"
+#include "config_store.h"
 #include <M5Unified.h>
 
 // ============================================================================
@@ -232,7 +233,7 @@ void taskHwMonitor(void *pv)
         sf_mqtt::publish("smartfranklin/hw/charging",
                  std::string(charging ? "1" : "0"));
 
-        // Task delay for 5-second update interval
-        vTaskDelay(pdMS_TO_TICKS(5000));
+        const int hwMonitorLoopMs = (CONFIG.task_hw_monitor_loop_ms > 0) ? CONFIG.task_hw_monitor_loop_ms : 5000;
+        vTaskDelay(pdMS_TO_TICKS(hwMonitorLoopMs));
     }
 }

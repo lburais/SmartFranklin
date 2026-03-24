@@ -71,8 +71,15 @@ struct SmartConfig {
     int mqtt_port = 1883;
 
     // Task timing configuration (milliseconds)
+    int task_wifi_loop_ms = 500;
     int task_mqtt_loop_ms = 250;
+    int task_i2c_loop_ms = 1000;
     int task_hmi_loop_ms = 1000;
+    int task_hmi_init_retry_ms = 1000;
+    int task_hw_monitor_loop_ms = 5000;
+    int task_bms_ble_connected_loop_ms = 10000;
+    int task_bms_ble_retry_loop_ms = 50000;
+    int task_watchdog_loop_ms = 60000;
 };
 
 extern SmartConfig CONFIG;

@@ -132,6 +132,7 @@
 #include "jbd_bms.h"
 #include "data_model.h"
 #include "mqtt.h"
+#include "config_store.h"
 
 // ============================================================================
 // Global BLE Connection State
@@ -446,13 +447,19 @@ void taskBmsBle(void *pv)
             if (!connectToBms()) {
                 M5_LOGW("[BMS_BLE] Retry in 50s");
                 // Delay before retrying connection
-                vTaskDelay(pdMS_TO_TICKS(50000));
+                const int bmsRetryLoopMs = (CONFIG.task_bms_ble_retry_loop_ms > 0)
+                    ? CONFIG.task_bms_ble_retry_loop_ms
+                    : 50000;
+                vTaskDelay(pdMS_TO_TICKS(bmsRetryLoopMs));
                 continue;
             }
             M5_LOGI("[BMS_BLE] Connected");
         }
 
         // Connection active, check again in 10 second
-        vTaskDelay(pdMS_TO_TICKS(10000));
+        const int bmsConnectedLoopMs = (CONFIG.task_bms_ble_connected_loop_ms > 0)
+            ? CONFIG.task_bms_ble_connected_loop_ms
+            : 10000;
+        vTaskDelay(pdMS_TO_TICKS(bmsConnectedLoopMs));
     }
 }

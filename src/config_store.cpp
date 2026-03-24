@@ -213,8 +213,15 @@ bool config_load()
 
     // CONFIG.mqtt_port = doc["mqtt_port"] | defaultCONFIG.mqtt_port;
 
+    CONFIG.task_wifi_loop_ms = doc["task_wifi_loop_ms"] | defaultCONFIG.task_wifi_loop_ms;
     CONFIG.task_mqtt_loop_ms = doc["task_mqtt_loop_ms"] | defaultCONFIG.task_mqtt_loop_ms;
+    CONFIG.task_i2c_loop_ms = doc["task_i2c_loop_ms"] | defaultCONFIG.task_i2c_loop_ms;
     CONFIG.task_hmi_loop_ms = doc["task_hmi_loop_ms"] | defaultCONFIG.task_hmi_loop_ms;
+    CONFIG.task_hmi_init_retry_ms = doc["task_hmi_init_retry_ms"] | defaultCONFIG.task_hmi_init_retry_ms;
+    CONFIG.task_hw_monitor_loop_ms = doc["task_hw_monitor_loop_ms"] | defaultCONFIG.task_hw_monitor_loop_ms;
+    CONFIG.task_bms_ble_connected_loop_ms = doc["task_bms_ble_connected_loop_ms"] | defaultCONFIG.task_bms_ble_connected_loop_ms;
+    CONFIG.task_bms_ble_retry_loop_ms = doc["task_bms_ble_retry_loop_ms"] | defaultCONFIG.task_bms_ble_retry_loop_ms;
+    CONFIG.task_watchdog_loop_ms = doc["task_watchdog_loop_ms"] | defaultCONFIG.task_watchdog_loop_ms;
 
     // if (!hasMqttPort && hasLegacyExtMqttPort) {
     //     M5_LOGW("[CONFIG] Deprecated key 'ext_mqtt_port' detected and ignored; using mqtt_port=%d", CONFIG.mqtt_port);
@@ -305,8 +312,15 @@ bool config_save()
     // Task Timing Configuration
     // =========================================================================
 
+    doc["task_wifi_loop_ms"] = CONFIG.task_wifi_loop_ms;
     doc["task_mqtt_loop_ms"] = CONFIG.task_mqtt_loop_ms;
+    doc["task_i2c_loop_ms"] = CONFIG.task_i2c_loop_ms;
     doc["task_hmi_loop_ms"] = CONFIG.task_hmi_loop_ms;
+    doc["task_hmi_init_retry_ms"] = CONFIG.task_hmi_init_retry_ms;
+    doc["task_hw_monitor_loop_ms"] = CONFIG.task_hw_monitor_loop_ms;
+    doc["task_bms_ble_connected_loop_ms"] = CONFIG.task_bms_ble_connected_loop_ms;
+    doc["task_bms_ble_retry_loop_ms"] = CONFIG.task_bms_ble_retry_loop_ms;
+    doc["task_watchdog_loop_ms"] = CONFIG.task_watchdog_loop_ms;
 
     // Open configuration file for writing (creates or overwrites existing)
     File f = SPIFFS.open(CFG_PATH, "w");

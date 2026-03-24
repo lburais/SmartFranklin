@@ -166,6 +166,7 @@
 #include <cstdlib>
 #include "data_model.h"
 #include "config_store.h"
+#include "scale_control.h"
 
 // ============================================================================
 // Global Web Server Instance
@@ -233,6 +234,7 @@ input[type='number'] { width: 100%; box-sizing: border-box; padding: 8px; border
 <h1>SmartFranklin</h1>
 <div class="card">
   <a class="button" href="/config">Configuration</a>
+    <a class="button" href="/gaz">Gaz 907</a>
   <a class="button" href="/update">Firmware Update</a>
   <a class="button" href="/diagnostics">Diagnostics</a>
 </div>
@@ -353,31 +355,299 @@ body { font-family: sans-serif; margin: 10px; }
 .card { background: #f4f4f4; padding: 15px; border-radius: 10px; margin-bottom: 15px; }
 pre { white-space: pre-wrap; word-wrap: break-word; }
 a.button { display: inline-block; padding: 10px 15px; background: #0078ff; color: white; border-radius: 6px; text-decoration: none; margin-right: 5px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(160px, 1fr)); gap: 10px; }
+.field { display: flex; flex-direction: column; }
+label { font-size: 0.9em; margin-bottom: 4px; }
+input { padding: 8px; border: 1px solid #bbb; border-radius: 6px; width: 100%; box-sizing: border-box; }
+.actions { margin-top: 12px; display: flex; gap: 8px; }
+.btn { padding: 9px 12px; border: 0; border-radius: 6px; background: #0078ff; color: #fff; cursor: pointer; }
+.btn.secondary { background: #666; }
+.status { color: #333; font-size: 0.9em; margin-top: 10px; }
 </style>
 </head>
 <body>
 <h1>Configuration</h1>
 <div class="card">
     <a class="button" href="/">Dashboard</a>
+    <a class="button" href="/gaz">Gaz 907</a>
     <a class="button" href="/diagnostics">Diagnostics</a>
     <a class="button" href="/update">Firmware Update</a>
 </div>
 <div class="card">
-    <h3>Current Config</h3>
+    <h3>Edit Configuration</h3>
+    <div id="fields" class="grid2"></div>
+    <div class="actions">
+        <button class="btn" onclick="saveConfig()">Save</button>
+        <button class="btn secondary" onclick="loadConfig()">Reload</button>
+    </div>
+    <div id="status" class="status">Loading...</div>
+</div>
+<div class="card">
+    <h3>Current Config JSON</h3>
     <pre id="config">Loading...</pre>
 </div>
 <script>
-async function refresh() {
+const fields = [
+    { key: 'hostname', label: 'Hostname', type: 'text' },
+    { key: 'ap_ssid', label: 'AP SSID', type: 'text' },
+    { key: 'ap_pass', label: 'AP Password', type: 'password' },
+    { key: 'sta_ssid', label: 'STA SSID', type: 'text' },
+    { key: 'sta_pass', label: 'STA Password', type: 'password' },
+    { key: 'admin_user', label: 'Admin User', type: 'text' },
+    { key: 'admin_pass', label: 'Admin Password', type: 'password' },
+    { key: 'mqtt_port', label: 'MQTT Port', type: 'number', step: '1' },
+    { key: 'scale_cal_factor', label: 'Scale Cal Factor', type: 'number', step: '0.01' },
+    { key: 'level_wheelbase_mm', label: 'Level Wheelbase mm', type: 'number', step: '1' },
+    { key: 'level_track_width_mm', label: 'Level Track Width mm', type: 'number', step: '1' },
+    { key: 'level_offset_x_mm', label: 'Level Offset X mm', type: 'number', step: '1' },
+    { key: 'level_offset_y_mm', label: 'Level Offset Y mm', type: 'number', step: '1' },
+    { key: 'task_wifi_loop_ms', label: 'Task WiFi Loop ms', type: 'number', step: '1' },
+    { key: 'task_mqtt_loop_ms', label: 'Task MQTT Loop ms', type: 'number', step: '1' },
+    { key: 'task_i2c_loop_ms', label: 'Task I2C Loop ms', type: 'number', step: '1' },
+    { key: 'task_hmi_loop_ms', label: 'Task HMI Loop ms', type: 'number', step: '1' },
+    { key: 'task_hmi_init_retry_ms', label: 'Task HMI Init Retry ms', type: 'number', step: '1' },
+    { key: 'task_hw_monitor_loop_ms', label: 'Task HW Monitor Loop ms', type: 'number', step: '1' },
+    { key: 'task_bms_ble_connected_loop_ms', label: 'Task BMS Connected Loop ms', type: 'number', step: '1' },
+    { key: 'task_bms_ble_retry_loop_ms', label: 'Task BMS Retry Loop ms', type: 'number', step: '1' },
+    { key: 'task_watchdog_loop_ms', label: 'Task Watchdog Loop ms', type: 'number', step: '1' }
+];
+
+function renderFields() {
+    const container = document.getElementById('fields');
+    container.innerHTML = '';
+
+    fields.forEach((f) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'field';
+
+        const label = document.createElement('label');
+        label.htmlFor = f.key;
+        label.textContent = f.label;
+
+        const input = document.createElement('input');
+        input.id = f.key;
+        input.type = f.type || 'text';
+        if (f.step) {
+            input.step = f.step;
+        }
+
+        wrapper.appendChild(label);
+        wrapper.appendChild(input);
+        container.appendChild(wrapper);
+    });
+}
+
+async function loadConfig() {
+    document.getElementById('status').textContent = 'Loading...';
     try {
         const r = await fetch('/api/config');
         const j = await r.json();
+
+        fields.forEach((f) => {
+            const value = j[f.key];
+            document.getElementById(f.key).value = (value === undefined || value === null) ? '' : String(value);
+        });
+
         document.getElementById('config').textContent = JSON.stringify(j, null, 2);
+        document.getElementById('status').textContent = 'Configuration loaded';
     } catch (e) {
+        document.getElementById('status').textContent = 'Error loading configuration';
         document.getElementById('config').textContent = 'Error loading config';
     }
 }
-setInterval(refresh, 1500);
-refresh();
+
+async function saveConfig() {
+    const params = new URLSearchParams();
+    fields.forEach((f) => {
+        params.set(f.key, document.getElementById(f.key).value);
+    });
+
+    document.getElementById('status').textContent = 'Saving...';
+
+    try {
+        const r = await fetch('/api/set_config?' + params.toString());
+        const body = await r.json();
+        if (!r.ok) {
+            document.getElementById('status').textContent = 'Save failed: ' + (body.parameter || body.error || 'unknown');
+            return;
+        }
+
+        const cfg = body.config || {};
+        document.getElementById('config').textContent = JSON.stringify(cfg, null, 2);
+        document.getElementById('status').textContent = body.saved ? 'Saved and applied' : 'Applied but not persisted';
+    } catch (e) {
+        document.getElementById('status').textContent = 'Save request failed';
+    }
+}
+
+renderFields();
+loadConfig();
+</script>
+</body>
+</html>
+)HTML";
+
+static const char GAZ_PAGE[] PROGMEM = R"HTML(
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SmartFranklin - Gaz 907</title>
+<style>
+:root {
+    --bg: #f6f7fb;
+    --card: #ffffff;
+    --ink: #1f2d3d;
+    --accent: #0d9488;
+    --accent-soft: #99f6e4;
+    --line: #cbd5e1;
+}
+body { background: radial-gradient(circle at 10% 10%, #ecfeff, #f8fafc 45%, #eef2ff); color: var(--ink); font-family: sans-serif; margin: 10px; }
+.card { background: var(--card); border: 1px solid var(--line); padding: 15px; border-radius: 12px; margin-bottom: 15px; }
+a.button { display: inline-block; padding: 10px 15px; background: #0f766e; color: white; border-radius: 8px; text-decoration: none; margin-right: 8px; }
+.layout { display: grid; grid-template-columns: 1fr; gap: 16px; }
+.gaz-stage { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.bottle-wrap { width: 210px; height: 360px; position: relative; }
+.bottle-neck { position: absolute; top: 0; left: 78px; width: 54px; height: 54px; border: 5px solid #475569; border-bottom: 0; border-radius: 10px 10px 0 0; background: #e2e8f0; }
+.bottle-body { position: absolute; left: 20px; top: 40px; width: 170px; height: 300px; border: 5px solid #475569; border-radius: 76px 76px 64px 64px; background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%); overflow: hidden; }
+.bottle-fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0%; background: linear-gradient(180deg, #34d399 0%, #0f766e 100%); transition: height 0.5s ease; }
+.bottle-highlight { position: absolute; left: 34px; top: 58px; width: 20px; height: 240px; border-radius: 14px; background: rgba(255,255,255,0.42); }
+.overlay { position: absolute; left: 0; right: 0; top: 48%; transform: translateY(-50%); text-align: center; font-size: 2.3rem; font-weight: 700; color: #0b3a36; text-shadow: 0 1px 0 rgba(255,255,255,0.55); }
+.legend { font-size: 0.95rem; color: #334155; }
+.weight { font-size: 1.25rem; font-weight: 700; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(150px, 1fr)); gap: 10px; }
+label { font-size: 0.9em; margin-bottom: 4px; display: block; }
+input { width: 100%; box-sizing: border-box; padding: 9px; border: 1px solid #94a3b8; border-radius: 8px; }
+.actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { padding: 9px 12px; border: 0; border-radius: 8px; color: #fff; background: #0f766e; cursor: pointer; }
+.btn.step2 { background: #0369a1; }
+.btn.reload { background: #475569; }
+.status { margin-top: 10px; color: #334155; font-size: 0.95rem; min-height: 1.2em; }
+@media (max-width: 420px) {
+    .bottle-wrap { width: 180px; height: 320px; }
+    .bottle-neck { left: 66px; }
+    .bottle-body { left: 15px; width: 150px; height: 270px; }
+}
+</style>
+</head>
+<body>
+<h1>Gaz 907</h1>
+<div class="card">
+    <a class="button" href="/">Dashboard</a>
+    <a class="button" href="/config">Configuration</a>
+    <a class="button" href="/diagnostics">Diagnostics</a>
+</div>
+
+<div class="card layout">
+    <div class="gaz-stage">
+        <div class="bottle-wrap" aria-label="Bouteille Gaz 907">
+            <div class="bottle-neck"></div>
+            <div class="bottle-body">
+                <div id="bottle_fill" class="bottle-fill"></div>
+                <div class="bottle-highlight"></div>
+                <div id="fill_overlay" class="overlay">0%</div>
+            </div>
+        </div>
+        <div class="legend">Niveau estime sur plage 907 (3700g vide, 6450g plein)</div>
+        <div id="weight_text" class="weight">0 g</div>
+    </div>
+</div>
+
+<div class="card">
+    <h3>Calibration de la balance</h3>
+    <p>Etape 1: faire la tare a zero avec la bouteille vide ou retiree.</p>
+    <div class="actions">
+        <button class="btn" onclick="tareZero()">Etape 1 - Tare a zero</button>
+    </div>
+
+    <p style="margin-top:12px;">Etape 2: poser un poids de reference, saisir sa valeur, puis calibrer.</p>
+    <div class="grid2">
+        <div>
+            <label for="known_weight_g">Poids de reference (g)</label>
+            <input id="known_weight_g" type="number" step="1" min="1" value="1000" />
+        </div>
+        <div>
+            <label for="current_raw_g">Mesure capteur actuelle (g)</label>
+            <input id="current_raw_g" type="number" step="1" readonly />
+        </div>
+    </div>
+    <div class="actions">
+        <button class="btn step2" onclick="applyCalibration()">Etape 2 - Calibrer</button>
+        <button class="btn reload" onclick="refreshGaz()">Rafraichir</button>
+    </div>
+    <div id="status" class="status">Chargement...</div>
+</div>
+
+<script>
+function clamp(v, lo, hi) {
+    return Math.max(lo, Math.min(hi, v));
+}
+
+function renderGaz(data) {
+    const fill = clamp(Number(data.fill_gaz || 0), 0, 100);
+    const weight = Number(data.weight_gaz || 0);
+    document.getElementById('bottle_fill').style.height = fill + '%';
+    document.getElementById('fill_overlay').textContent = fill + '%';
+    document.getElementById('weight_text').textContent = weight + ' g';
+    document.getElementById('current_raw_g').value = weight;
+}
+
+async function refreshGaz() {
+    try {
+        const r = await fetch('/api/gaz_status');
+        const j = await r.json();
+        if (!r.ok) {
+            document.getElementById('status').textContent = 'Erreur lecture Gaz';
+            return;
+        }
+        renderGaz(j);
+        document.getElementById('status').textContent = 'Donnees Gaz a jour';
+    } catch (e) {
+        document.getElementById('status').textContent = 'Erreur reseau';
+    }
+}
+
+async function tareZero() {
+    document.getElementById('status').textContent = 'Tare en cours...';
+    try {
+        const r = await fetch('/api/gaz_calibration_tare');
+        const j = await r.json();
+        if (!r.ok) {
+            document.getElementById('status').textContent = 'Echec tare: ' + (j.error || 'unknown');
+            return;
+        }
+        await refreshGaz();
+        document.getElementById('status').textContent = j.saved ? 'Tare faite et config sauvee' : 'Tare faite';
+    } catch (e) {
+        document.getElementById('status').textContent = 'Echec tare (reseau)';
+    }
+}
+
+async function applyCalibration() {
+    const known = Number(document.getElementById('known_weight_g').value);
+    if (!Number.isFinite(known) || known <= 0) {
+        document.getElementById('status').textContent = 'Poids de reference invalide';
+        return;
+    }
+
+    document.getElementById('status').textContent = 'Calibration en cours...';
+    try {
+        const url = '/api/gaz_calibration_apply?known_weight_g=' + encodeURIComponent(String(known));
+        const r = await fetch(url);
+        const j = await r.json();
+        if (!r.ok) {
+            document.getElementById('status').textContent = 'Echec calibration: ' + (j.error || j.parameter || 'unknown');
+            return;
+        }
+        await refreshGaz();
+        document.getElementById('status').textContent = 'Calibration appliquee (factor=' + j.scale_cal_factor + ')';
+    } catch (e) {
+        document.getElementById('status').textContent = 'Echec calibration (reseau)';
+    }
+}
+
+setInterval(refreshGaz, 1500);
+refreshGaz();
 </script>
 </body>
 </html>
@@ -401,6 +671,7 @@ a.button { display: inline-block; padding: 10px 15px; background: #0078ff; color
 <div class="card">
     <a class="button" href="/">Dashboard</a>
     <a class="button" href="/config">Configuration</a>
+    <a class="button" href="/gaz">Gaz 907</a>
     <a class="button" href="/update">Firmware Update</a>
 </div>
 <div class="card">
@@ -554,8 +825,15 @@ static void fillConfigJson(JsonVariant doc)
 
     doc["mqtt_port"] = CONFIG.mqtt_port;
 
+    doc["task_wifi_loop_ms"] = CONFIG.task_wifi_loop_ms;
     doc["task_mqtt_loop_ms"] = CONFIG.task_mqtt_loop_ms;
+    doc["task_i2c_loop_ms"] = CONFIG.task_i2c_loop_ms;
     doc["task_hmi_loop_ms"] = CONFIG.task_hmi_loop_ms;
+    doc["task_hmi_init_retry_ms"] = CONFIG.task_hmi_init_retry_ms;
+    doc["task_hw_monitor_loop_ms"] = CONFIG.task_hw_monitor_loop_ms;
+    doc["task_bms_ble_connected_loop_ms"] = CONFIG.task_bms_ble_connected_loop_ms;
+    doc["task_bms_ble_retry_loop_ms"] = CONFIG.task_bms_ble_retry_loop_ms;
+    doc["task_watchdog_loop_ms"] = CONFIG.task_watchdog_loop_ms;
 }
 
 static void fillHwJson(JsonVariant doc)
@@ -597,6 +875,144 @@ static bool parseFloatParameter(const String& text, float& out)
         return false;
     }
     out = value;
+    return true;
+}
+
+static bool parseIntParameter(const String& text, int& out)
+{
+    const char* start = text.c_str();
+    char* end = nullptr;
+    const long value = strtol(start, &end, 10);
+    if (end == start || *end != '\0') {
+        return false;
+    }
+    out = static_cast<int>(value);
+    return true;
+}
+
+static bool applyConfigFromRequest(AsyncWebServerRequest* request, String& errorKey)
+{
+    SmartConfig updated = CONFIG;
+
+    auto applyString = [&](const char* key, String& target) {
+        if (!request->hasParam(key)) {
+            return true;
+        }
+        target = request->getParam(key)->value();
+        return true;
+    };
+
+    auto applyFloat = [&](const char* key, float& target) {
+        if (!request->hasParam(key)) {
+            return true;
+        }
+        float parsed = 0.0f;
+        if (!parseFloatParameter(request->getParam(key)->value(), parsed)) {
+            errorKey = key;
+            return false;
+        }
+        target = parsed;
+        return true;
+    };
+
+    auto applyInt = [&](const char* key, int& target) {
+        if (!request->hasParam(key)) {
+            return true;
+        }
+        int parsed = 0;
+        if (!parseIntParameter(request->getParam(key)->value(), parsed)) {
+            errorKey = key;
+            return false;
+        }
+        target = parsed;
+        return true;
+    };
+
+    if (!applyString("hostname", updated.hostname) ||
+        !applyString("ap_ssid", updated.ap_ssid) ||
+        !applyString("ap_pass", updated.ap_pass) ||
+        !applyString("sta_ssid", updated.sta_ssid) ||
+        !applyString("sta_pass", updated.sta_pass) ||
+        !applyFloat("scale_cal_factor", updated.scale_cal_factor) ||
+        !applyFloat("level_wheelbase_mm", updated.level_wheelbase_mm) ||
+        !applyFloat("level_track_width_mm", updated.level_track_width_mm) ||
+        !applyFloat("level_offset_x_mm", updated.level_offset_x_mm) ||
+        !applyFloat("level_offset_y_mm", updated.level_offset_y_mm) ||
+        !applyString("admin_user", updated.admin_user) ||
+        !applyString("admin_pass", updated.admin_pass) ||
+        !applyInt("mqtt_port", updated.mqtt_port) ||
+        !applyInt("task_wifi_loop_ms", updated.task_wifi_loop_ms) ||
+        !applyInt("task_mqtt_loop_ms", updated.task_mqtt_loop_ms) ||
+        !applyInt("task_i2c_loop_ms", updated.task_i2c_loop_ms) ||
+        !applyInt("task_hmi_loop_ms", updated.task_hmi_loop_ms) ||
+        !applyInt("task_hmi_init_retry_ms", updated.task_hmi_init_retry_ms) ||
+        !applyInt("task_hw_monitor_loop_ms", updated.task_hw_monitor_loop_ms) ||
+        !applyInt("task_bms_ble_connected_loop_ms", updated.task_bms_ble_connected_loop_ms) ||
+        !applyInt("task_bms_ble_retry_loop_ms", updated.task_bms_ble_retry_loop_ms) ||
+        !applyInt("task_watchdog_loop_ms", updated.task_watchdog_loop_ms)) {
+        return false;
+    }
+
+    if (updated.scale_cal_factor <= 0.0f || !std::isfinite(updated.scale_cal_factor)) {
+        errorKey = "scale_cal_factor";
+        return false;
+    }
+
+    if (updated.level_wheelbase_mm < 100.0f || updated.level_wheelbase_mm > 10000.0f ||
+        updated.level_track_width_mm < 100.0f || updated.level_track_width_mm > 10000.0f ||
+        updated.level_offset_x_mm < -5000.0f || updated.level_offset_x_mm > 5000.0f ||
+        updated.level_offset_y_mm < -5000.0f || updated.level_offset_y_mm > 5000.0f) {
+        errorKey = "level_geometry";
+        return false;
+    }
+
+    if (updated.mqtt_port <= 0 || updated.mqtt_port > 65535) {
+        errorKey = "mqtt_port";
+        return false;
+    }
+
+    auto loopMsValid = [](int value) {
+        return value >= 20 && value <= 600000;
+    };
+
+    if (!loopMsValid(updated.task_wifi_loop_ms)) {
+        errorKey = "task_wifi_loop_ms";
+        return false;
+    }
+    if (!loopMsValid(updated.task_mqtt_loop_ms)) {
+        errorKey = "task_mqtt_loop_ms";
+        return false;
+    }
+    if (!loopMsValid(updated.task_i2c_loop_ms)) {
+        errorKey = "task_i2c_loop_ms";
+        return false;
+    }
+    if (!loopMsValid(updated.task_hmi_loop_ms)) {
+        errorKey = "task_hmi_loop_ms";
+        return false;
+    }
+    if (!loopMsValid(updated.task_hmi_init_retry_ms)) {
+        errorKey = "task_hmi_init_retry_ms";
+        return false;
+    }
+    if (!loopMsValid(updated.task_hw_monitor_loop_ms)) {
+        errorKey = "task_hw_monitor_loop_ms";
+        return false;
+    }
+    if (!loopMsValid(updated.task_bms_ble_connected_loop_ms)) {
+        errorKey = "task_bms_ble_connected_loop_ms";
+        return false;
+    }
+    if (!loopMsValid(updated.task_bms_ble_retry_loop_ms)) {
+        errorKey = "task_bms_ble_retry_loop_ms";
+        return false;
+    }
+    if (!loopMsValid(updated.task_watchdog_loop_ms)) {
+        errorKey = "task_watchdog_loop_ms";
+        return false;
+    }
+
+    CONFIG = updated;
     return true;
 }
 
@@ -724,6 +1140,10 @@ void web_dashboard_init()
         request->send(200, "text/html", CONFIG_PAGE);
     });
 
+    server.on("/gaz", HTTP_GET, [](AsyncWebServerRequest *request){
+        request->send(200, "text/html", GAZ_PAGE);
+    });
+
     server.on("/diagnostics", HTTP_GET, [](AsyncWebServerRequest *request){
         request->send(200, "text/html", DIAGNOSTICS_PAGE);
     });
@@ -745,10 +1165,93 @@ void web_dashboard_init()
         sendJson(request, doc);
     });
 
+    server.on("/api/gaz_status", HTTP_GET, [](AsyncWebServerRequest *request){
+        JsonDocument doc;
+        {
+            std::lock_guard<std::mutex> lock(DATA_MUTEX);
+            doc["fill_gaz"] = DATA.fill_gaz;
+            doc["weight_gaz"] = DATA.weight_gaz;
+        }
+        doc["scale_cal_factor"] = CONFIG.scale_cal_factor;
+        sendJson(request, doc);
+    });
+
+    server.on("/api/gaz_calibration_tare", HTTP_GET, [](AsyncWebServerRequest *request){
+        scale_tare();
+        CONFIG.scale_cal_factor = 1.0f;
+        const bool saved = config_save();
+
+        JsonDocument doc;
+        doc["saved"] = saved;
+        doc["scale_cal_factor"] = CONFIG.scale_cal_factor;
+        {
+            std::lock_guard<std::mutex> lock(DATA_MUTEX);
+            doc["fill_gaz"] = DATA.fill_gaz;
+            doc["weight_gaz"] = DATA.weight_gaz;
+        }
+        sendJson(request, doc, saved ? 200 : 500);
+    });
+
+    server.on("/api/gaz_calibration_apply", HTTP_GET, [](AsyncWebServerRequest *request){
+        if (!request->hasParam("known_weight_g")) {
+            request->send(400, "application/json", "{\"error\":\"missing_known_weight_g\"}");
+            return;
+        }
+
+        float knownWeightG = 0.0f;
+        if (!parseFloatParameter(request->getParam("known_weight_g")->value(), knownWeightG) ||
+            !std::isfinite(knownWeightG) ||
+            knownWeightG <= 0.0f ||
+            knownWeightG > 50000.0f) {
+            request->send(400, "application/json", "{\"error\":\"invalid_known_weight_g\"}");
+            return;
+        }
+
+        const float rawWeightG = scale_get_raw();
+        if (!std::isfinite(rawWeightG) || std::fabs(rawWeightG) < 1.0f) {
+            request->send(400, "application/json", "{\"error\":\"invalid_raw_measurement\"}");
+            return;
+        }
+
+        const float newFactor = knownWeightG / rawWeightG;
+        if (!std::isfinite(newFactor) || std::fabs(newFactor) < 1e-6f || std::fabs(newFactor) > 1000.0f) {
+            request->send(400, "application/json", "{\"error\":\"invalid_calibration_factor\"}");
+            return;
+        }
+
+        scale_set_cal_factor(newFactor);
+        const bool saved = config_save();
+
+        JsonDocument doc;
+        doc["saved"] = saved;
+        doc["known_weight_g"] = knownWeightG;
+        doc["raw_weight_g"] = rawWeightG;
+        doc["scale_cal_factor"] = CONFIG.scale_cal_factor;
+        sendJson(request, doc, saved ? 200 : 500);
+    });
+
     server.on("/api/config", HTTP_GET, [](AsyncWebServerRequest *request){
         JsonDocument doc;
         fillConfigJson(doc);
         sendJson(request, doc);
+    });
+
+    server.on("/api/set_config", HTTP_GET, [](AsyncWebServerRequest *request){
+        String errorKey;
+        if (!applyConfigFromRequest(request, errorKey)) {
+            JsonDocument errorDoc;
+            errorDoc["error"] = "invalid_parameter";
+            errorDoc["parameter"] = errorKey;
+            sendJson(request, errorDoc, 400);
+            return;
+        }
+
+        const bool saved = config_save();
+        JsonDocument doc;
+        doc["saved"] = saved;
+        JsonObject config = doc["config"].to<JsonObject>();
+        fillConfigJson(config);
+        sendJson(request, doc, saved ? 200 : 500);
     });
 
     server.on("/api/full", HTTP_GET, [](AsyncWebServerRequest *request){

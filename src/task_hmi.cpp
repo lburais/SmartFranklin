@@ -94,7 +94,8 @@ void taskHmi(void *pvParameters)
 
     while (!g_hmi.init()) {
         M5_LOGW("[HMI] init failed, retry in 1s");
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        const int hmiInitRetryMs = (CONFIG.task_hmi_init_retry_ms > 0) ? CONFIG.task_hmi_init_retry_ms : 1000;
+        vTaskDelay(pdMS_TO_TICKS(hmiInitRetryMs));
     }
 
     // Keep Button B long-press handling in the same task that updates buttons.
