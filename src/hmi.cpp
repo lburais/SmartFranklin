@@ -32,7 +32,7 @@
  * Dependencies:
  *   - M5Unified (display, buttons, logging)
  *   - data_model.h (shared runtime state + mutex)
- *   - scale_control.h (tare + calibration factor helpers)
+ *   - gaz.h (tare + calibration factor helpers)
  *   - config_store.h (persisted calibration factor)
  *   - mqtt.h (screen-name topic publishing)
  *
@@ -68,8 +68,8 @@
 
 #include "config_store.h"
 #include "data_model.h"
+#include "gaz.h"
 #include "mqtt.h"
-#include "scale_control.h"
 
 namespace {
 

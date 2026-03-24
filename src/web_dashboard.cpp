@@ -166,7 +166,7 @@
 #include <cstdlib>
 #include "data_model.h"
 #include "config_store.h"
-#include "scale_control.h"
+#include "gaz.h"
 
 // ============================================================================
 // Global Web Server Instance

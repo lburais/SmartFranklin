@@ -253,3 +253,30 @@ bool Gaz::isInitialized() const
 {
     return isInitializedState(GAZ_STATE);
 }
+
+float scale_get_raw()
+{
+    return GAZ_MODULE.readCalibrationSample();
+}
+
+void scale_tare()
+{
+    if (!GAZ_MODULE.isInitialized()) {
+        return;
+    }
+
+    if (GAZ_MODULE.tare()) {
+        GAZ_MODULE.applyCalibration(1.0f);
+    }
+}
+
+void scale_set_cal_factor(float factor)
+{
+    if (!GAZ_MODULE.isInitialized()) {
+        return;
+    }
+
+    if (GAZ_MODULE.applyCalibration(factor)) {
+        CONFIG.scale_cal_factor = factor;
+    }
+}
