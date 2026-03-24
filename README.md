@@ -3,10 +3,13 @@
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-ESP32-F5822A?logo=platformio&logoColor=white)](https://platformio.org/)
 [![Framework](https://img.shields.io/badge/framework-Arduino-00979D?logo=arduino&logoColor=white)](https://www.arduino.cc/)
 [![Board](https://img.shields.io/badge/board-M5StickC%20Plus2-1f6feb)](https://docs.m5stack.com/en/core/m5stickc_plus2)
+[![Board](https://img.shields.io/badge/board-M5Dial-1f6feb)](https://docs.m5stack.com/en/core/m5dial)
+[![Board](https://img.shields.io/badge/board-M5NanoC6-1f6feb)](https://docs.m5stack.com/en/core/m5stack_nanoc6)
+[![Board](https://img.shields.io/badge/board-M5Dial-1f6feb)](https://docs.m5stack.com/en/core/m5dial)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-2ea44f?logo=github)](https://lburais.github.io/SmartFranklin/)
 
-SmartFranklin is an ESP32 IoT controller for M5StickC Plus2 built around concurrent execution blocks: a lightweight `loop()` plus dedicated FreeRTOS tasks.
+SmartFranklin is an ESP32 IoT controller for M5StickC Plus2, M5Dial, and M5NanoC6 built around concurrent execution blocks: a lightweight `loop()` plus dedicated FreeRTOS tasks.
 
 ## What It Does
 
@@ -59,6 +62,14 @@ flowchart TD
 | `gps module` | GNSS acquisition integrated in `taskI2c` |
 
 Boot-time task creation is capability-gated: selected tasks are created only when hardware probing and runtime configuration confirm a valid path.
+
+
+
+## Supported Boards
+
+- [M5StickC Plus2](https://docs.m5stack.com/en/core/m5stickc_plus2)
+- [M5Dial](https://docs.m5stack.com/en/core/m5dial)
+- [M5NanoC6](https://docs.m5stack.com/en/core/m5stack_nanoc6)
 
 ## Project Layout
 
