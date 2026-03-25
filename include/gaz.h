@@ -74,12 +74,17 @@ public:
      *
      * @param iSInternalRoute Use M5 internal I2C (Ex_I2C) if true; Wire if false
      * @param i2cAddress The I2C address of the sensor (typically 0x26)
+     * @param routeMode Full resolved route mode (internal/wire with or without PAHub)
+     * @param paHubChannel PAHub channel index when route uses PAHub, otherwise -1
      *
      * @return true if sensor is detected and initialized; false otherwise
      *
      * @note Applies the stored calibration gap from CONFIG.scale_cal_factor.
      */
-    bool init(bool iSInternalRoute, uint8_t i2cAddress);
+    bool init(bool iSInternalRoute,
+              uint8_t i2cAddress,
+              sf_i2c::RouteMode routeMode = sf_i2c::RouteMode::Unset,
+              int8_t paHubChannel = -1);
 
     /**
      * @brief Execute one complete weight measurement and publication cycle.
@@ -137,6 +142,20 @@ public:
     float readCalibrationSample();
 
     /**
+     * @brief Read current calibration gap value from sensor firmware.
+     * @param gap Output gap value when read succeeds.
+     * @return True when read succeeds.
+     */
+    bool readCalibrationGap(float& gap);
+
+    /**
+     * @brief Read raw ADC count from sensor firmware.
+     * @param rawAdc Output ADC value when read succeeds.
+     * @return True when read succeeds.
+     */
+    bool readRawAdc(int32_t& rawAdc);
+
+    /**
      * @brief Query whether the weight sensor has been successfully initialized.
      *
      * @return true if init() succeeded; false if not yet initialized or init failed
@@ -160,12 +179,28 @@ float scale_get_raw();
 
 /**
  * @brief Execute tare operation (zero offset capture).
+ * @return True when tare command succeeds.
  */
-void scale_tare();
+bool scale_tare();
 
 /**
  * @brief Apply calibration factor used by scale conversion workflow.
  * @param factor Calibration gap/factor to apply.
+ * @return True when calibration factor was applied.
  */
-void scale_set_cal_factor(float factor);
+bool scale_set_cal_factor(float factor);
+
+/**
+ * @brief Read live calibration gap from scale firmware.
+ * @param gap Output gap value.
+ * @return True when read succeeds.
+ */
+bool scale_get_cal_factor(float& gap);
+
+/**
+ * @brief Read live raw ADC sample from scale firmware.
+ * @param rawAdc Output ADC value.
+ * @return True when read succeeds.
+ */
+bool scale_get_raw_adc(int32_t& rawAdc);
 

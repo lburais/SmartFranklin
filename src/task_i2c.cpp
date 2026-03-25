@@ -212,15 +212,11 @@ void taskI2c(void *pv)
 				scheduleRetry(nextGazInitAttemptMs, nowMs);
 			} else {
 				i2c.publishConfiguration(gazDevice);
-				bool channelSelected = selectPaHubIfNeeded(i2c, gazDevice, "I2C_SENSORS");
-				if (channelSelected) {
-					gazInitialized = GAZ_MODULE.init(sf_i2c::isInternalRoute(gazDevice.route.mode), gazDevice.address);
-					disablePaHubIfNeeded(i2c, gazDevice);
-					if (!gazInitialized) {
-						scheduleRetry(nextGazInitAttemptMs, nowMs);
-					}
-				} else {
-					gazInitialized = false;
+				gazInitialized = GAZ_MODULE.init(sf_i2c::isInternalRoute(gazDevice.route.mode),
+				                                 gazDevice.address,
+				                                 gazDevice.route.mode,
+				                                 gazDevice.route.paHubChannel);
+				if (!gazInitialized) {
 					scheduleRetry(nextGazInitAttemptMs, nowMs);
 				}
 			}
@@ -347,9 +343,8 @@ void taskI2c(void *pv)
 #endif
 
 #ifndef DISABLE_GAZ
-		if (gazInitialized && selectPaHubIfNeeded(i2c, gazDevice, "I2C_SENSORS")) {
+		if (gazInitialized) {
 			GAZ_MODULE.process();
-			disablePaHubIfNeeded(i2c, gazDevice);
 		}
 #endif
 #ifndef DISABLE_TANK

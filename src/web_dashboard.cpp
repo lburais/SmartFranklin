@@ -527,6 +527,7 @@ input { width: 100%; box-sizing: border-box; padding: 9px; border: 1px solid #94
 .btn.step2 { background: #0369a1; }
 .btn.reload { background: #475569; }
 .status { margin-top: 10px; color: #334155; font-size: 0.95rem; min-height: 1.2em; }
+.debug { margin-top: 10px; padding: 8px; border: 1px dashed #94a3b8; border-radius: 8px; background: #f8fafc; color: #0f172a; font-size: 0.92rem; white-space: pre-wrap; }
 @media (max-width: 420px) {
     .bottle-wrap { width: 180px; height: 320px; }
     .bottle-neck { left: 66px; }
@@ -581,6 +582,7 @@ input { width: 100%; box-sizing: border-box; padding: 9px; border: 1px solid #94
         <button class="btn reload" onclick="refreshGaz()">Rafraichir</button>
     </div>
     <div id="status" class="status">Chargement...</div>
+    <div id="calib_debug" class="debug">Diagnostics calibration: chargement...</div>
 </div>
 
 <script>
@@ -597,6 +599,16 @@ function renderGaz(data) {
     document.getElementById('current_raw_g').value = weight;
 }
 
+function renderCalibrationDebug(data) {
+    const lines = [];
+    lines.push('Diagnostics calibration');
+    lines.push('config scale_cal_factor: ' + String(data.scale_cal_factor_config));
+    lines.push('live sensor gap: ' + (data.sensor_gap_read_ok ? String(data.sensor_gap) : 'read_failed'));
+    lines.push('live raw adc: ' + (data.raw_adc_read_ok ? String(data.raw_adc) : 'read_failed'));
+    lines.push('live sample g: ' + String(data.sample_weight_g));
+    document.getElementById('calib_debug').textContent = lines.join('\n');
+}
+
 async function refreshGaz() {
     try {
         const r = await fetch('/api/gaz_status');
@@ -606,9 +618,19 @@ async function refreshGaz() {
             return;
         }
         renderGaz(j);
+
+        const dr = await fetch('/api/gaz_calibration_debug');
+        const dj = await dr.json();
+        if (dr.ok) {
+            renderCalibrationDebug(dj);
+        } else {
+            document.getElementById('calib_debug').textContent = 'Diagnostics calibration: indisponibles';
+        }
+
         document.getElementById('status').textContent = 'Donnees Gaz a jour';
     } catch (e) {
         document.getElementById('status').textContent = 'Erreur reseau';
+        document.getElementById('calib_debug').textContent = 'Diagnostics calibration: erreur reseau';
     }
 }
 
@@ -1451,7 +1473,11 @@ void web_dashboard_init()
     });
 
     server.on("/api/gaz_calibration_tare", HTTP_GET, [](AsyncWebServerRequest *request){
-        scale_tare();
+        if (!scale_tare()) {
+            request->send(500, "application/json", "{\"error\":\"tare_failed\"}");
+            return;
+        }
+
         CONFIG.scale_cal_factor = 1.0f;
         const bool saved = config_save();
 
@@ -1467,13 +1493,27 @@ void web_dashboard_init()
     });
 
     server.on("/api/gaz_calibration_apply", HTTP_GET, [](AsyncWebServerRequest *request){
-        if (!request->hasParam("known_weight_g")) {
-            request->send(400, "application/json", "{\"error\":\"missing_known_weight_g\"}");
+        float knownWeightG = 0.0f;
+        bool hasKnownParam = false;
+        String knownWeightRaw;
+
+        if (request->hasParam("known_weight_g")) {
+            knownWeightRaw = request->getParam("known_weight_g")->value();
+            hasKnownParam = true;
+        } else if (request->hasParam("known_weight")) {
+            knownWeightRaw = request->getParam("known_weight")->value();
+            hasKnownParam = true;
+        } else if (request->hasParam("known_g")) {
+            knownWeightRaw = request->getParam("known_g")->value();
+            hasKnownParam = true;
+        }
+
+        if (!hasKnownParam) {
+            request->send(400, "application/json", "{\"error\":\"missing_known_weight_g\",\"accepted\":[\"known_weight_g\",\"known_weight\",\"known_g\"]}");
             return;
         }
 
-        float knownWeightG = 0.0f;
-        if (!parseFloatParameter(request->getParam("known_weight_g")->value(), knownWeightG) ||
+        if (!parseFloatParameter(knownWeightRaw, knownWeightG) ||
             !std::isfinite(knownWeightG) ||
             knownWeightG <= 0.0f ||
             knownWeightG > 50000.0f) {
@@ -1487,21 +1527,61 @@ void web_dashboard_init()
             return;
         }
 
-        const float newFactor = knownWeightG / rawWeightG;
+        float currentGap = CONFIG.scale_cal_factor;
+        if (!scale_get_cal_factor(currentGap) || !std::isfinite(currentGap) || std::fabs(currentGap) < 1e-6f) {
+            currentGap = CONFIG.scale_cal_factor;
+        }
+
+        const float newFactor = currentGap * (rawWeightG / knownWeightG);
         if (!std::isfinite(newFactor) || std::fabs(newFactor) < 1e-6f || std::fabs(newFactor) > 1000.0f) {
             request->send(400, "application/json", "{\"error\":\"invalid_calibration_factor\"}");
             return;
         }
 
-        scale_set_cal_factor(newFactor);
+        if (!scale_set_cal_factor(newFactor)) {
+            request->send(500, "application/json", "{\"error\":\"apply_calibration_failed\"}");
+            return;
+        }
+
+        float sensorGapAfter = 0.0f;
+        const bool sensorGapAfterReadOk = scale_get_cal_factor(sensorGapAfter);
         const bool saved = config_save();
 
         JsonDocument doc;
         doc["saved"] = saved;
         doc["known_weight_g"] = knownWeightG;
         doc["raw_weight_g"] = rawWeightG;
+        doc["sensor_gap_before"] = currentGap;
+        doc["sensor_gap_after_read_ok"] = sensorGapAfterReadOk;
+        if (sensorGapAfterReadOk) {
+            doc["sensor_gap_after"] = sensorGapAfter;
+        }
         doc["scale_cal_factor"] = CONFIG.scale_cal_factor;
         sendJson(request, doc, saved ? 200 : 500);
+    });
+
+    server.on("/api/gaz_calibration_debug", HTTP_GET, [](AsyncWebServerRequest *request){
+        JsonDocument doc;
+
+        float sensorGap = 0.0f;
+        int32_t rawAdc = 0;
+        const float sampleWeightG = scale_get_raw();
+        const bool gapReadOk = scale_get_cal_factor(sensorGap);
+        const bool rawAdcReadOk = scale_get_raw_adc(rawAdc);
+
+        doc["scale_cal_factor_config"] = CONFIG.scale_cal_factor;
+        doc["sample_weight_g"] = sampleWeightG;
+        doc["sensor_gap_read_ok"] = gapReadOk;
+        doc["raw_adc_read_ok"] = rawAdcReadOk;
+
+        if (gapReadOk) {
+            doc["sensor_gap"] = sensorGap;
+        }
+        if (rawAdcReadOk) {
+            doc["raw_adc"] = rawAdc;
+        }
+
+        sendJson(request, doc);
     });
 
     server.on("/api/config", HTTP_GET, [](AsyncWebServerRequest *request){

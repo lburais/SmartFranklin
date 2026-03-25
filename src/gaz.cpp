@@ -27,6 +27,8 @@ namespace {
 
 constexpr int32_t GAZ_BOTTLE_FULL_G = 6450;
 constexpr int32_t GAZ_BOTTLE_EMPTY_G = 3700;
+constexpr float CALIBRATION_GAP_EPSILON = 1e-6f;
+constexpr uint8_t PAHUB_ADDRESS = 0x70;
 
 /** Normalize invalid calibration gaps to a safe default. */
 float sanitizedGap(const float gap)
@@ -44,12 +46,59 @@ struct GazState {
 
     bool initialized = false;
     uint8_t i2cAddress = 0x26;
+    sf_i2c::RouteMode routeMode = sf_i2c::RouteMode::Unset;
+    int8_t paHubChannel = -1;
     float lastCalibrationGap = 1.0f;
     int32_t lastWeightG = 0;
     int32_t lastFillPct = 0;
 };
 
 GazState GAZ_STATE;
+
+bool selectPaHubChannelLocked(const GazState& state)
+{
+    if (!sf_i2c::isPaHubRoute(state.routeMode)) {
+        return true;
+    }
+
+    if (state.paHubChannel < 0 || state.paHubChannel > 7) {
+        M5_LOGW("[GAZ] invalid PAHub channel %d", state.paHubChannel);
+        return false;
+    }
+
+    const uint8_t mask = static_cast<uint8_t>(1U << static_cast<uint8_t>(state.paHubChannel));
+
+    if (state.routeMode == sf_i2c::RouteMode::InternalPaHub) {
+        if (!M5.Ex_I2C.start(PAHUB_ADDRESS, false, Wire.getClock())) {
+            return false;
+        }
+        const bool ok = M5.Ex_I2C.write(mask) && M5.Ex_I2C.stop();
+        return ok;
+    }
+
+    Wire.beginTransmission(PAHUB_ADDRESS);
+    Wire.write(mask);
+    return Wire.endTransmission() == 0;
+}
+
+void disablePaHubChannelLocked(const GazState& state)
+{
+    if (!sf_i2c::isPaHubRoute(state.routeMode)) {
+        return;
+    }
+
+    if (state.routeMode == sf_i2c::RouteMode::InternalPaHub) {
+        if (M5.Ex_I2C.start(PAHUB_ADDRESS, false, Wire.getClock())) {
+            M5.Ex_I2C.write(0x00);
+            M5.Ex_I2C.stop();
+        }
+        return;
+    }
+
+    Wire.beginTransmission(PAHUB_ADDRESS);
+    Wire.write(0x00);
+    Wire.endTransmission();
+}
 
 }  // namespace
 
@@ -58,10 +107,22 @@ Gaz GAZ_MODULE;
 static void publishCalibrationGap(const float gap);
 
 /** Initialize weight unit and apply persisted calibration. */
-static bool initState(GazState& state, const bool isInternalRoute, const uint8_t i2cAddress)
+static bool initState(GazState& state,
+                      const bool isInternalRoute,
+                      const uint8_t i2cAddress,
+                      const sf_i2c::RouteMode routeMode,
+                      const int8_t paHubChannel)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
     state.i2cAddress = i2cAddress;
+    state.routeMode = routeMode;
+    state.paHubChannel = paHubChannel;
+
+    if (!selectPaHubChannelLocked(state)) {
+        M5_LOGW("[GAZ] failed to select PAHub channel during init");
+        state.initialized = false;
+        return false;
+    }
 
     state.units = m5::unit::UnitUnified{};
 
@@ -73,6 +134,7 @@ static bool initState(GazState& state, const bool isInternalRoute, const uint8_t
 
     if (!state.initialized) {
         state.initialized = false;
+        disablePaHubChannelLocked(state);
         M5_LOGW("[GAZ] Weight I2C unit was not detected on supported Wire paths");
         return false;
     }
@@ -83,6 +145,7 @@ static bool initState(GazState& state, const bool isInternalRoute, const uint8_t
     }
     state.lastCalibrationGap = effectiveGap;
     publishCalibrationGap(effectiveGap);
+    disablePaHubChannelLocked(state);
 
     M5_LOGI("[GAZ] Weight I2C initialization complete");
     M5_LOGI("[GAZ] address: 0x%02X", state.i2cAddress);
@@ -101,14 +164,20 @@ static void publishCalibrationGap(const float gap)
 /** Acquire one weight sample and derive fill percentage under lock. */
 static bool refreshMeasurementLocked(GazState& state, int32_t& weightG, int32_t& fillPct)
 {
+    if (!selectPaHubChannelLocked(state)) {
+        return false;
+    }
+
     state.units.update();
 
     if (!state.unit.updated()) {
+        disablePaHubChannelLocked(state);
         return false;
     }
 
     weightG = state.unit.weight();
     if (!std::isfinite(weightG)) {
+        disablePaHubChannelLocked(state);
         M5_LOGW("[GAZ] non-finite weight sample ignored");
         return false;
     }
@@ -125,6 +194,7 @@ static bool refreshMeasurementLocked(GazState& state, int32_t& weightG, int32_t&
     }
 
     state.lastFillPct = fillPct;
+    disablePaHubChannelLocked(state);
 
     return true;
 }
@@ -158,7 +228,7 @@ static void processState(GazState& state)
         }
 
         desiredGap = sanitizedGap(CONFIG.scale_cal_factor);
-        if (desiredGap != state.lastCalibrationGap) {
+        if (fabsf(desiredGap - state.lastCalibrationGap) > CALIBRATION_GAP_EPSILON) {
             if (state.unit.writeGap(desiredGap)) {
                 state.lastCalibrationGap = desiredGap;
                 publishCalibrationGap(desiredGap);
@@ -191,7 +261,13 @@ static bool tareState(GazState& state)
     if (!state.initialized) {
         return false;
     }
+
+    if (!selectPaHubChannelLocked(state)) {
+        return false;
+    }
+
     const bool ok = state.unit.resetOffset();
+    disablePaHubChannelLocked(state);
     if (ok) {
         state.lastWeightG = 0;
     }
@@ -207,9 +283,16 @@ static bool applyCalibrationState(GazState& state, const float gap)
     if (!state.initialized) {
         return false;
     }
-    if (!state.unit.writeGap(effectiveGap)) {
+
+    if (!selectPaHubChannelLocked(state)) {
         return false;
     }
+
+    if (!state.unit.writeGap(effectiveGap)) {
+        disablePaHubChannelLocked(state);
+        return false;
+    }
+    disablePaHubChannelLocked(state);
     state.lastCalibrationGap = effectiveGap;
     publishCalibrationGap(effectiveGap);
     return true;
@@ -232,6 +315,38 @@ static float readCalibrationSampleState(GazState& state)
     return state.lastWeightG;
 }
 
+/** Read current calibration gap directly from sensor firmware. */
+static bool readCalibrationGapState(GazState& state, float& gap)
+{
+    std::lock_guard<std::mutex> lock(state.mutex);
+    if (!state.initialized) {
+        return false;
+    }
+
+    if (!selectPaHubChannelLocked(state)) {
+        return false;
+    }
+    const bool ok = state.unit.readGap(gap);
+    disablePaHubChannelLocked(state);
+    return ok;
+}
+
+/** Read raw ADC count directly from sensor firmware. */
+static bool readRawAdcState(GazState& state, int32_t& rawAdc)
+{
+    std::lock_guard<std::mutex> lock(state.mutex);
+    if (!state.initialized) {
+        return false;
+    }
+
+    if (!selectPaHubChannelLocked(state)) {
+        return false;
+    }
+    const bool ok = state.unit.readRawADC(rawAdc);
+    disablePaHubChannelLocked(state);
+    return ok;
+}
+
 /** Return initialization status from protected state. */
 static bool isInitializedState(const GazState& state)
 {
@@ -239,9 +354,12 @@ static bool isInitializedState(const GazState& state)
     return state.initialized;
 }
 
-bool Gaz::init(bool isInternalRoute, uint8_t i2cAddress)
+bool Gaz::init(bool isInternalRoute,
+               uint8_t i2cAddress,
+               sf_i2c::RouteMode routeMode,
+               int8_t paHubChannel)
 {
-    return initState(GAZ_STATE, isInternalRoute, i2cAddress);
+    return initState(GAZ_STATE, isInternalRoute, i2cAddress, routeMode, paHubChannel);
 }
 
 void Gaz::process()
@@ -264,6 +382,16 @@ float Gaz::readCalibrationSample()
     return readCalibrationSampleState(GAZ_STATE);
 }
 
+bool Gaz::readCalibrationGap(float& gap)
+{
+    return readCalibrationGapState(GAZ_STATE, gap);
+}
+
+bool Gaz::readRawAdc(int32_t& rawAdc)
+{
+    return readRawAdcState(GAZ_STATE, rawAdc);
+}
+
 bool Gaz::isInitialized() const
 {
     return isInitializedState(GAZ_STATE);
@@ -274,24 +402,63 @@ float scale_get_raw()
     return GAZ_MODULE.readCalibrationSample();
 }
 
-void scale_tare()
+bool scale_tare()
 {
     if (!GAZ_MODULE.isInitialized()) {
-        return;
+        return false;
     }
 
-    if (GAZ_MODULE.tare()) {
-        GAZ_MODULE.applyCalibration(1.0f);
+    if (!GAZ_MODULE.tare()) {
+        return false;
     }
+
+    // Keep runtime configuration aligned with tare baseline so process() does not
+    // immediately restore an old factor on the next cycle.
+    CONFIG.scale_cal_factor = 1.0f;
+    if (!GAZ_MODULE.applyCalibration(CONFIG.scale_cal_factor)) {
+        return false;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(DATA_MUTEX);
+        DATA.weight_gaz = 0;
+        DATA.fill_gaz = 0;
+    }
+
+    return true;
 }
 
-void scale_set_cal_factor(float factor)
+bool scale_set_cal_factor(float factor)
 {
     if (!GAZ_MODULE.isInitialized()) {
-        return;
+        return false;
     }
 
     if (GAZ_MODULE.applyCalibration(factor)) {
-        CONFIG.scale_cal_factor = factor;
+        float appliedGap = factor;
+        if (GAZ_MODULE.readCalibrationGap(appliedGap) && std::isfinite(appliedGap) && std::fabs(appliedGap) > 1e-6f) {
+            CONFIG.scale_cal_factor = appliedGap;
+        } else {
+            CONFIG.scale_cal_factor = factor;
+        }
+        return true;
     }
+
+    return false;
+}
+
+bool scale_get_cal_factor(float& gap)
+{
+    if (!GAZ_MODULE.isInitialized()) {
+        return false;
+    }
+    return GAZ_MODULE.readCalibrationGap(gap);
+}
+
+bool scale_get_raw_adc(int32_t& rawAdc)
+{
+    if (!GAZ_MODULE.isInitialized()) {
+        return false;
+    }
+    return GAZ_MODULE.readRawAdc(rawAdc);
 }

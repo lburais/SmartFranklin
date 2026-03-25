@@ -272,17 +272,24 @@ void HMI::handleCalibrationButton(bool btnB_rising)
 
     if (!calib_in_progress_) {
         calib_in_progress_ = true;
-        scale_tare();
+        if (!scale_tare()) {
+            calib_in_progress_ = false;
+            M5_LOGW("[HMI] scale tare failed");
+        }
         draw();
         return;
     }
 
     const float raw = scale_get_raw();
     if (raw != 0.0f) {
-        const float factor = calib_known_weight_ / raw;
-        scale_set_cal_factor(factor);
-        CONFIG.scale_cal_factor = factor;
-        config_save();
+        const float knownWeightG = calib_known_weight_ * 1000.0f;
+        const float factor = raw / knownWeightG;
+        if (scale_set_cal_factor(factor)) {
+            CONFIG.scale_cal_factor = factor;
+            config_save();
+        } else {
+            M5_LOGW("[HMI] scale calibration apply failed");
+        }
     }
     calib_in_progress_ = false;
     draw();
@@ -444,6 +451,6 @@ void HMI::drawCalibrationScreen(const DisplaySnapshot& snapshot) const
 
     lcd.println("Calibrating...");
     lcd.printf("Known: %.2f kg\n", calib_known_weight_);
-    lcd.printf("Raw:   %.3f kg\n", snapshot.weight_gaz * 1000.0f);
+    lcd.printf("Raw:   %.3f kg\n", static_cast<float>(snapshot.weight_gaz) / 1000.0f);
     lcd.println("BtnB: finish");
 }
