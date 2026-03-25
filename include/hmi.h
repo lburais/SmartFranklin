@@ -143,6 +143,9 @@ private:
     /** @brief Draws weight screen (Gaz). */
     void drawGazScreen(const DisplaySnapshot& snapshot) const;
 
+    /** @brief Draws bottle gauge for Gaz screen. */
+    void drawGazBottle(int16_t x, int16_t y, int16_t w, int16_t h, int32_t fillPct) const;
+
     /** @brief Draws battery/BMS telemetry screen. */
     void drawBatteryScreen(const DisplaySnapshot& snapshot) const;
 
@@ -172,6 +175,15 @@ private:
 
     /** @brief Last screen index published to MQTT, or -1 if none yet. */
     int last_published_screen_ = -1;
+
+    /** @brief Previous quadrature state for M5 Dial rotary encoder. */
+    int8_t dial_encoder_prev_state_ = 0;
+
+    /** @brief Accumulated quadrature steps; one detent is approximately 4 transitions. */
+    int8_t dial_encoder_accum_ = 0;
+
+    /** @brief Touch hold start timestamp used for long-press to calibration. */
+    uint32_t touch_hold_start_ms_ = 0;
 
     /** @brief Cached last known snapshot used by rendering helpers. */
     DisplaySnapshot last_snapshot_;

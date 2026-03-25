@@ -189,6 +189,9 @@ bool HMI::init()
     btnA_prev_ = false;
     btnB_prev_ = false;
     last_published_screen_ = -1;
+    dial_encoder_prev_state_ = 0;
+    dial_encoder_accum_ = 0;
+    touch_hold_start_ms_ = 0;
 
     draw();
     initialized_ = true;
@@ -221,11 +224,76 @@ void HMI::process()
     btnA_prev_ = btnA_now;
 
     const bool btnB_now = M5.BtnB.isPressed();
-    const bool btnB_rising = M5.BtnB.wasPressed() || (btnB_now && !btnB_prev_);
+    bool btnB_rising = M5.BtnB.wasPressed() || (btnB_now && !btnB_prev_);
     btnB_prev_ = btnB_now;
 
+#if defined(ARDUINO_M5STACK_DIAL)
+    // M5 Dial rotary encoder channels are wired on GPIO42 / GPIO0 (active-low).
+    const bool encA_now = (!m5gfx::gpio_in(GPIO_NUM_42)) & 1;
+    const bool encB_now = (!m5gfx::gpio_in(GPIO_NUM_0)) & 1;
+    const int8_t encoder_state = (encA_now ? 1 : 0) | (encB_now ? 2 : 0);
+    const int8_t prev_state = dial_encoder_prev_state_;
+    dial_encoder_prev_state_ = encoder_state;
+
+    // Decode one quadrature transition for clockwise/counter-clockwise navigation.
+    const int8_t transition = (prev_state << 2) | encoder_state;
+    int8_t direction = 0;
+    switch (transition) {
+    case 0b0001:
+    case 0b0111:
+    case 0b1110:
+    case 0b1000:
+        direction = +1;
+        break;
+    case 0b0010:
+    case 0b1011:
+    case 0b1101:
+    case 0b0100:
+        direction = -1;
+        break;
+    default:
+        break;
+    }
+
+    if (direction != 0) {
+        dial_encoder_accum_ = static_cast<int8_t>(dial_encoder_accum_ + direction);
+
+        // Commit one page change per encoder detent (~4 transitions).
+        if (dial_encoder_accum_ >= 4) {
+            next_screen = (next_screen + 1) % kScreenCount;
+            dial_encoder_accum_ = 0;
+        } else if (dial_encoder_accum_ <= -4) {
+            next_screen = (next_screen - 1 + kScreenCount) % kScreenCount;
+            dial_encoder_accum_ = 0;
+        }
+    }
+
+    // On Dial, BtnB is part of rotary channeling; do not use it for calibration action.
+    btnB_rising = false;
+#else
     if (btnA_rising) {
         next_screen = (next_screen + 1) % kScreenCount;
+    }
+#endif
+
+    // Long touch (>5s) opens calibration page.
+    bool anyTouchPressed = false;
+    const auto touchCount = M5.Touch.getCount();
+    for (uint8_t i = 0; i < touchCount; ++i) {
+        if (M5.Touch.getDetail(i).isPressed()) {
+            anyTouchPressed = true;
+            break;
+        }
+    }
+
+    if (anyTouchPressed) {
+        if (touch_hold_start_ms_ == 0) {
+            touch_hold_start_ms_ = millis();
+        } else if ((millis() - touch_hold_start_ms_) >= 5000UL) {
+            next_screen = 4;
+        }
+    } else {
+        touch_hold_start_ms_ = 0;
     }
 
     if (next_screen != screen_) {
@@ -404,8 +472,65 @@ void HMI::drawGazScreen(const DisplaySnapshot& snapshot) const
 {
     M5GFX& lcd = M5.Display;
     drawTitleBox("Gaz");
-    beginContentArea();
-    lcd.printf("Weight: %d g\nFill: %d%%", snapshot.weight_gaz, snapshot.fill_gaz);
+
+    const int16_t bottleW = 86;
+    const int16_t bottleH = 126;
+    const int16_t bottleX = static_cast<int16_t>((lcd.width() - bottleW) / 2);
+    const int16_t bottleY = CONTENT_Y + 4;
+
+    drawGazBottle(bottleX, bottleY, bottleW, bottleH, snapshot.fill_gaz);
+
+    lcd.setTextSize(1);
+    lcd.setTextColor(COLOR_CONTENT_TEXT, COLOR_CONTENT_BG);
+    char weightText[32];
+    snprintf(weightText, sizeof(weightText), "%d g", snapshot.weight_gaz);
+    lcd.drawCenterString(weightText, static_cast<int16_t>(lcd.width() / 2), static_cast<int16_t>(bottleY + bottleH + 4));
+
+    const int16_t footerY = static_cast<int16_t>(lcd.height() - lcd.fontHeight() - 3);
+    lcd.drawCenterString("calibrate", static_cast<int16_t>(lcd.width() / 2), footerY);
+}
+
+void HMI::drawGazBottle(int16_t x, int16_t y, int16_t w, int16_t h, int32_t fillPct) const
+{
+    M5GFX& lcd = M5.Display;
+
+    const int32_t clampedFill = std::max<int32_t>(0, std::min<int32_t>(100, fillPct));
+
+    const int16_t neckW = static_cast<int16_t>(w / 3);
+    const int16_t neckH = 14;
+    const int16_t neckX = static_cast<int16_t>(x + (w - neckW) / 2);
+    const int16_t neckY = y;
+    const int16_t bodyY = static_cast<int16_t>(y + neckH - 2);
+    const int16_t bodyH = static_cast<int16_t>(h - neckH + 2);
+
+    const uint16_t bottleBorder = 0xFFFF;
+    const uint16_t bottleBody = 0x6B4D;
+    const uint16_t fillColor = 0x07E0;
+
+    lcd.fillRoundRect(x, bodyY, w, bodyH, 20, bottleBody);
+    lcd.drawRoundRect(x, bodyY, w, bodyH, 20, bottleBorder);
+    lcd.fillRoundRect(neckX, neckY, neckW, neckH, 4, bottleBody);
+    lcd.drawRoundRect(neckX, neckY, neckW, neckH, 4, bottleBorder);
+
+    const int16_t innerPad = 6;
+    const int16_t innerX = static_cast<int16_t>(x + innerPad);
+    const int16_t innerY = static_cast<int16_t>(bodyY + innerPad);
+    const int16_t innerW = static_cast<int16_t>(w - 2 * innerPad);
+    const int16_t innerH = static_cast<int16_t>(bodyH - 2 * innerPad);
+
+    const int16_t fillH = static_cast<int16_t>((innerH * clampedFill) / 100);
+    const int16_t fillY = static_cast<int16_t>(innerY + innerH - fillH);
+
+    lcd.drawRoundRect(innerX, innerY, innerW, innerH, 10, 0xC618);
+    if (fillH > 0) {
+        lcd.fillRect(innerX + 1, fillY, innerW - 2, fillH, fillColor);
+    }
+
+    char pct[8];
+    snprintf(pct, sizeof(pct), "%ld%%", static_cast<long>(clampedFill));
+    lcd.setTextSize(2);
+    lcd.setTextColor(COLOR_CONTENT_TEXT, COLOR_CONTENT_BG);
+    lcd.drawCenterString(pct, static_cast<int16_t>(x + (w / 2)), static_cast<int16_t>(innerY + (innerH / 2) - 8));
 }
 
 /** @brief Draw helper for battery/BMS telemetry page. */
