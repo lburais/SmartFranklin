@@ -79,7 +79,7 @@ public:
      *
      * @return true if sensor is detected and initialized; false otherwise
      *
-     * @note Applies the stored calibration gap from CONFIG.scale_cal_factor.
+    * @note Applies the stored calibration gap from CONFIG.gaz_calibration_factor.
      */
     bool init(bool iSInternalRoute,
               uint8_t i2cAddress,
@@ -123,8 +123,8 @@ public:
      * @return true if calibration applied successfully; false if sensor
      *         not initialized or write failed
      *
-     * @note Called during HMI calibration workflow and on process() when
-     *       CONFIG.scale_cal_factor changes.
+    * @note Called during HMI calibration workflow and on process() when
+    *       CONFIG.gaz_calibration_factor changes.
      */
     bool applyCalibration(float gap);
 

@@ -134,7 +134,7 @@ static const char *CFG_PATH = "/config.json";
  *   - sta_pass: "" (user must configure)
  *   - admin_user: "admin" (⚠️  CHANGE ON FIRST BOOT!)
  *   - admin_pass: "admin" (⚠️  CHANGE ON FIRST BOOT!)
- *   - scale_cal_factor: 1.0 (uncalibrated)
+ *   - gaz_calibration_factor: 1.0 (uncalibrated)
  * 
  *   Local MQTT:
  *   - mqtt_port: 1883 (standard MQTT port)
@@ -197,7 +197,10 @@ bool config_load()
     CONFIG.sta_ssid = doc["sta_ssid"] | defaultCONFIG.sta_ssid;
     CONFIG.sta_pass = doc["sta_pass"] | defaultCONFIG.sta_pass;
 
-    CONFIG.scale_cal_factor = doc["scale_cal_factor"] | defaultCONFIG.scale_cal_factor;
+    CONFIG.gaz_calibration_factor = doc["gaz_calibration_factor"] |
+                                    doc["scale_cal_factor"] |
+                                    defaultCONFIG.gaz_calibration_factor;
+    CONFIG.gaz_weight_average_window = doc["gaz_weight_average_window"] | defaultCONFIG.gaz_weight_average_window;
     
     CONFIG.level_wheelbase_mm = doc["level_wheelbase_mm"] | defaultCONFIG.level_wheelbase_mm;
     CONFIG.level_track_width_mm = doc["level_track_width_mm"] | defaultCONFIG.level_track_width_mm;
@@ -258,7 +261,7 @@ bool config_load()
  *   All CONFIG object members are serialized to JSON:
  *   - WiFi credentials (sta_ssid, sta_pass)
  *   - Authentication (admin_user, admin_pass)
- *   - Hardware calibration (scale_cal_factor)
+ *   - Hardware calibration (gaz_calibration_factor)
  *   - MQTT broker settings (local and NB-IoT)
  * 
  * Return Value:
@@ -294,7 +297,8 @@ bool config_save()
     doc["ap_pass"] = CONFIG.ap_pass;                        // Local AP password
     doc["sta_ssid"] = CONFIG.sta_ssid;                      // External network SSID
     doc["sta_pass"] = CONFIG.sta_pass;                      // External network password
-    doc["scale_cal_factor"] = CONFIG.scale_cal_factor;      // Weight sensor calibration
+    doc["gaz_calibration_factor"] = CONFIG.gaz_calibration_factor;      // Weight sensor calibration
+    doc["gaz_weight_average_window"] = CONFIG.gaz_weight_average_window; // Gaz smoothing window
     doc["level_wheelbase_mm"] = CONFIG.level_wheelbase_mm;
     doc["level_track_width_mm"] = CONFIG.level_track_width_mm;
     doc["level_offset_x_mm"] = CONFIG.level_offset_x_mm;

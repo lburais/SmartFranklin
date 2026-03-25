@@ -285,7 +285,7 @@ void HMI::handleCalibrationButton(bool btnB_rising)
         const float knownWeightG = calib_known_weight_ * 1000.0f;
         const float factor = raw / knownWeightG;
         if (scale_set_cal_factor(factor)) {
-            CONFIG.scale_cal_factor = factor;
+            CONFIG.gaz_calibration_factor = factor;
             config_save();
         } else {
             M5_LOGW("[HMI] scale calibration apply failed");

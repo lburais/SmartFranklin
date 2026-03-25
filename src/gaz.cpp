@@ -15,6 +15,7 @@
 #include <M5UnitUnifiedWEIGHT.h>
 #include <M5Utility.h>
 
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <mutex>
@@ -29,6 +30,8 @@ constexpr int32_t GAZ_BOTTLE_FULL_G = 6450;
 constexpr int32_t GAZ_BOTTLE_EMPTY_G = 3700;
 constexpr float CALIBRATION_GAP_EPSILON = 1e-6f;
 constexpr uint8_t PAHUB_ADDRESS = 0x70;
+constexpr size_t GAZ_AVG_WINDOW_MIN = 1U;
+constexpr size_t GAZ_AVG_WINDOW_MAX = 64U;
 
 /** Normalize invalid calibration gaps to a safe default. */
 float sanitizedGap(const float gap)
@@ -51,6 +54,10 @@ struct GazState {
     float lastCalibrationGap = 1.0f;
     int32_t lastWeightG = 0;
     int32_t lastFillPct = 0;
+    std::array<int32_t, GAZ_AVG_WINDOW_MAX> recentWeights{};
+    size_t recentCount = 0;
+    size_t recentHead = 0;
+    size_t recentWindow = 0;
 };
 
 GazState GAZ_STATE;
@@ -79,6 +86,45 @@ bool selectPaHubChannelLocked(const GazState& state)
     Wire.beginTransmission(PAHUB_ADDRESS);
     Wire.write(mask);
     return Wire.endTransmission() == 0;
+}
+
+size_t sanitizedAveragingWindow()
+{
+    const int configured = CONFIG.gaz_weight_average_window;
+    if (configured < static_cast<int>(GAZ_AVG_WINDOW_MIN)) {
+        return GAZ_AVG_WINDOW_MIN;
+    }
+    if (configured > static_cast<int>(GAZ_AVG_WINDOW_MAX)) {
+        return GAZ_AVG_WINDOW_MAX;
+    }
+    return static_cast<size_t>(configured);
+}
+
+int32_t pushAndAverageWeightLocked(GazState& state, const int32_t rawWeightG)
+{
+    const size_t window = sanitizedAveragingWindow();
+
+    if (state.recentWindow != window) {
+        state.recentWindow = window;
+        state.recentCount = 0;
+        state.recentHead = 0;
+    }
+
+    if (state.recentCount > window) {
+        state.recentCount = window;
+    }
+
+    state.recentWeights[state.recentHead] = rawWeightG;
+    state.recentHead = (state.recentHead + 1U) % window;
+    if (state.recentCount < window) {
+        ++state.recentCount;
+    }
+
+    int64_t sum = 0;
+    for (size_t i = 0; i < state.recentCount; ++i) {
+        sum += static_cast<int64_t>(state.recentWeights[i]);
+    }
+    return static_cast<int32_t>(sum / static_cast<int64_t>(state.recentCount));
 }
 
 void disablePaHubChannelLocked(const GazState& state)
@@ -139,7 +185,7 @@ static bool initState(GazState& state,
         return false;
     }
 
-    const float effectiveGap = sanitizedGap(CONFIG.scale_cal_factor);
+    const float effectiveGap = sanitizedGap(CONFIG.gaz_calibration_factor);
     if (!state.unit.writeGap(effectiveGap)) {
         M5_LOGW("[GAZ] failed to apply calibration gap %.6f during init", effectiveGap);
     }
@@ -175,13 +221,15 @@ static bool refreshMeasurementLocked(GazState& state, int32_t& weightG, int32_t&
         return false;
     }
 
-    weightG = state.unit.weight();
-    if (!std::isfinite(weightG)) {
+    const float rawWeight = state.unit.weight();
+    if (!std::isfinite(rawWeight)) {
         disablePaHubChannelLocked(state);
         M5_LOGW("[GAZ] non-finite weight sample ignored");
         return false;
     }
 
+    const int32_t rawWeightG = static_cast<int32_t>(lroundf(rawWeight));
+    weightG = pushAndAverageWeightLocked(state, rawWeightG);
     state.lastWeightG = weightG;
 
     fillPct = 0;
@@ -227,7 +275,7 @@ static void processState(GazState& state)
             return;
         }
 
-        desiredGap = sanitizedGap(CONFIG.scale_cal_factor);
+        desiredGap = sanitizedGap(CONFIG.gaz_calibration_factor);
         if (fabsf(desiredGap - state.lastCalibrationGap) > CALIBRATION_GAP_EPSILON) {
             if (state.unit.writeGap(desiredGap)) {
                 state.lastCalibrationGap = desiredGap;
@@ -414,8 +462,8 @@ bool scale_tare()
 
     // Keep runtime configuration aligned with tare baseline so process() does not
     // immediately restore an old factor on the next cycle.
-    CONFIG.scale_cal_factor = 1.0f;
-    if (!GAZ_MODULE.applyCalibration(CONFIG.scale_cal_factor)) {
+    CONFIG.gaz_calibration_factor = 1.0f;
+    if (!GAZ_MODULE.applyCalibration(CONFIG.gaz_calibration_factor)) {
         return false;
     }
 
@@ -437,9 +485,9 @@ bool scale_set_cal_factor(float factor)
     if (GAZ_MODULE.applyCalibration(factor)) {
         float appliedGap = factor;
         if (GAZ_MODULE.readCalibrationGap(appliedGap) && std::isfinite(appliedGap) && std::fabs(appliedGap) > 1e-6f) {
-            CONFIG.scale_cal_factor = appliedGap;
+            CONFIG.gaz_calibration_factor = appliedGap;
         } else {
-            CONFIG.scale_cal_factor = factor;
+            CONFIG.gaz_calibration_factor = factor;
         }
         return true;
     }

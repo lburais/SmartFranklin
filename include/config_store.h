@@ -54,8 +54,9 @@ struct SmartConfig {
     String sta_ssid = "jrdl";
     String sta_pass = "05121996190119942106196801071964";
 
-    // Scale calibration
-    float scale_cal_factor = 1.0f;
+    // Gaz calibration and smoothing
+    float gaz_calibration_factor = 1.0f;
+    int gaz_weight_average_window = 10;
 
     // Level geometry calibration (millimeters)
     // Renault Trafic III L2H1

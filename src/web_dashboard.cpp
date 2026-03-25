@@ -24,7 +24,7 @@
  *   - Port: 80 (standard HTTP, no HTTPS for embedded constraints)
  *   - Authentication: HTTP Basic Auth with admin username/password
  *   - Content: Mixed static HTML/JS and dynamic JSON API endpoints
- *   - File System: SPIFFS for static web assets (HTML, CSS, JS)
+ *   - Static Assets: Embedded in firmware (PROGMEM)
  *   - Real-time Updates: JavaScript fetch API with 1-second polling
  * 
  * Dashboard Pages:
@@ -92,7 +92,7 @@
  *   - Session-less (credentials required for each request)
  * 
  * Static Assets:
- *   - Served from SPIFFS filesystem
+ *   - Served from embedded PROGMEM strings
  *   - HTML pages: /hw.html, /sensors.html
  *   - JavaScript: /theme.js (common UI functionality)
  *   - Cached by browser for performance
@@ -107,7 +107,7 @@
  *   - ESPAsyncWebServer.h (asynchronous web server library)
  *   - ElegantOTA.h (OTA firmware update library)
  *   - ArduinoJson.h (JSON serialization for API responses)
- *   - FS.h, SPIFFS.h (SPIFFS filesystem access)
+ *   - PROGMEM embedded page/script constants
  *   - WiFi.h (network connectivity)
  *   - m5_hw.h (hardware abstraction for status)
  *   - data_model.h (shared runtime data)
@@ -158,8 +158,6 @@
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
 #include <ElegantOTA.h>
-#include <FS.h>
-#include <SPIFFS.h>
 #include <WiFi.h>
 
 #include <cmath>
@@ -182,8 +180,327 @@
 static AsyncWebServer server(80);
 
 // ============================================================================
-// Embedded HTML Content
-// ============================================================================
+// Embedded Theme JS
+static const char THEME_JS[] PROGMEM = R"JS(
+// SPDX-License-Identifier: MIT
+
+// Default theme = dark
+if (!localStorage.getItem("theme")) {
+    localStorage.setItem("theme", "dark");
+}
+
+function applyTheme() {
+    const t = localStorage.getItem("theme");
+
+    if (t === "light") {
+        document.documentElement.style.setProperty("--bg", "#f5f5f5");
+        document.documentElement.style.setProperty("--fg", "#111");
+        document.documentElement.style.setProperty("--fg-soft", "#444");
+        document.documentElement.style.setProperty("--fg-strong", "#000");
+        document.documentElement.style.setProperty("--card", "#fff");
+        document.documentElement.style.setProperty("--border", "#ccc");
+        document.documentElement.style.setProperty("--accent", "#0077cc");
+        document.documentElement.style.setProperty("--accent-glow", "#66bfff");
+    } else {
+        document.documentElement.style.setProperty("--bg", "#0a0a0f");
+        document.documentElement.style.setProperty("--fg", "#e0e0ff");
+        document.documentElement.style.setProperty("--fg-soft", "#8aa");
+        document.documentElement.style.setProperty("--fg-strong", "#fff");
+        document.documentElement.style.setProperty("--card", "#11111a");
+        document.documentElement.style.setProperty("--border", "#222");
+        document.documentElement.style.setProperty("--accent", "#6ecbff");
+        document.documentElement.style.setProperty("--accent-glow", "#0099ff");
+    }
+}
+
+applyTheme();
+
+// Toggle theme
+function toggleTheme() {
+    const t = localStorage.getItem("theme");
+    localStorage.setItem("theme", t === "light" ? "dark" : "light");
+    applyTheme();
+}
+)JS";
+
+static const char HW_PAGE[] PROGMEM = R"HTML(
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SmartFranklin - Hardware Monitor</title>
+    <script src="/theme.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background: var(--bg); color: var(--fg); margin: 0; padding: 20px; }
+        h1 { color: var(--accent); margin-bottom: 10px; text-shadow: 0 0 8px var(--accent-glow); }
+        .nav { margin-bottom: 14px; }
+        .nav a { display: inline-block; padding: 8px 12px; margin-right: 6px; border-radius: 6px; text-decoration: none; background: var(--accent); color: #fff; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+        .card { background: var(--card); padding: 15px; border-radius: 12px; border: 1px solid var(--border); }
+        .value { font-size: 1.6em; font-weight: bold; color: var(--fg-strong); }
+        .label { font-size: 0.9em; color: var(--fg-soft); }
+        .btn { display: inline-block; padding: 10px 14px; background: #1a1a2a; border-radius: 6px; margin-top: 10px; color: #ccc; cursor: pointer; user-select: none; border: 1px solid #333; }
+        .btn.active { background: #00c853; color: #fff; box-shadow: 0 0 10px #00ff88; }
+        .slider { width: 100%; }
+        canvas { width: 100%; height: 180px; background: #000; border-radius: 8px; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+<h1>Hardware Monitor</h1>
+<div class="nav">
+    <a href="/">Dashboard</a>
+    <a href="/config">Configuration</a>
+    <a href="/sensors">Sensors</a>
+    <a href="/level">Level</a>
+</div>
+
+<div class="grid">
+    <div class="card"><div class="label">Battery Voltage</div><div id="battery_voltage" class="value">--</div></div>
+    <div class="card"><div class="label">Battery Level</div><div id="battery_percent" class="value">-- %</div></div>
+    <div class="card"><div class="label">Charging</div><div id="charging" class="value">--</div></div>
+    <div class="card"><div class="label">Temperature</div><div id="temperature" class="value">-- C</div></div>
+    <div class="card"><div class="label">Button A</div><div id="button_a" class="btn">Released</div></div>
+    <div class="card"><div class="label">Button B</div><div id="button_b" class="btn">Released</div></div>
+    <div class="card"><div class="label">Brightness</div><input id="brightness" type="range" min="10" max="255" value="128" class="slider"></div>
+    <div class="card"><div class="label">Actions</div><div id="reboot" class="btn">Reboot</div><div id="sleep" class="btn">Deep Sleep</div></div>
+</div>
+
+<h2 style="color:var(--accent);margin-top:30px;">Live Charts</h2>
+<div class="grid">
+    <div class="card"><div class="label">Battery Voltage (V)</div><canvas id="chart_batt"></canvas></div>
+    <div class="card"><div class="label">IMU Acceleration (XYZ)</div><canvas id="chart_imu"></canvas></div>
+</div>
+
+<script>
+let battChart, imuChart;
+
+function initCharts() {
+    const ctx1 = document.getElementById('chart_batt').getContext('2d');
+    battChart = new Chart(ctx1, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: "Voltage", data: [], borderColor: "#6ecbff", borderWidth: 2 }] },
+        options: { animation: false }
+    });
+
+    const ctx2 = document.getElementById('chart_imu').getContext('2d');
+    imuChart = new Chart(ctx2, {
+        type: 'line',
+        data: { labels: [], datasets: [
+            { label: "X", data: [], borderColor: "#ff5252", borderWidth: 2 },
+            { label: "Y", data: [], borderColor: "#4caf50", borderWidth: 2 },
+            { label: "Z", data: [], borderColor: "#ffeb3b", borderWidth: 2 }
+        ] },
+        options: { animation: false }
+    });
+}
+
+function updateHw() {
+    fetch("/api/hw").then(r => r.json()).then(data => {
+        document.getElementById("battery_voltage").textContent = data.battery_voltage.toFixed(2) + " V";
+        document.getElementById("battery_percent").textContent = data.battery_percent + " %";
+        document.getElementById("charging").textContent = data.charging ? "Charging" : "Not Charging";
+        document.getElementById("temperature").textContent = data.temperature.toFixed(1) + " C";
+
+        const btnA = document.getElementById("button_a");
+        const btnB = document.getElementById("button_b");
+        btnA.classList.toggle("active", data.button_a);
+        btnA.textContent = data.button_a ? "Pressed" : "Released";
+        btnB.classList.toggle("active", data.button_b);
+        btnB.textContent = data.button_b ? "Pressed" : "Released";
+
+        const t = new Date().toLocaleTimeString();
+        battChart.data.labels.push(t);
+        battChart.data.datasets[0].data.push(data.battery_voltage);
+        if (battChart.data.labels.length > 20) {
+            battChart.data.labels.shift();
+            battChart.data.datasets[0].data.shift();
+        }
+        battChart.update();
+
+        imuChart.data.labels.push(t);
+        imuChart.data.datasets[0].data.push(data.accel.x);
+        imuChart.data.datasets[1].data.push(data.accel.y);
+        imuChart.data.datasets[2].data.push(data.accel.z);
+        if (imuChart.data.labels.length > 20) {
+            imuChart.data.labels.shift();
+            imuChart.data.datasets.forEach(ds => ds.data.shift());
+        }
+        imuChart.update();
+    });
+}
+
+document.getElementById("brightness").addEventListener("input", e => fetch("/api/set_brightness?value=" + e.target.value));
+document.getElementById("reboot").addEventListener("click", () => fetch("/api/reboot"));
+document.getElementById("sleep").addEventListener("click", () => fetch("/api/sleep"));
+
+initCharts();
+setInterval(updateHw, 2000);
+updateHw();
+</script>
+</body>
+</html>
+)HTML";
+
+static const char SENSORS_PAGE[] PROGMEM = R"HTML(
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SmartFranklin - Sensors Monitor</title>
+    <script src="/theme.js"></script>
+    <style>
+        body { font-family: Arial; background: var(--bg); color: var(--fg); padding:20px; }
+        h1 { color: var(--accent); text-shadow:0 0 8px var(--accent-glow); }
+        .nav { margin-bottom: 14px; }
+        .nav a { display: inline-block; padding: 8px 12px; margin-right: 6px; border-radius: 6px; text-decoration: none; background: var(--accent); color: #fff; }
+        .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:20px; }
+        .card { background:var(--card); padding:15px; border-radius:12px; border:1px solid var(--border); }
+        .value { font-size:1.6em; font-weight:bold; color:var(--fg-strong); }
+        .label { font-size:0.9em; color:var(--fg-soft); }
+        canvas { width:100%; height:180px; background:#000; border-radius:8px; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<h1>Sensors Monitor</h1>
+<div class="nav">
+    <a href="/">Dashboard</a>
+    <a href="/config">Configuration</a>
+    <a href="/hw">Hardware</a>
+    <a href="/level">Level</a>
+</div>
+
+<div class="grid">
+    <div class="card"><div class="label">Weight (U180)</div><div id="weight" class="value">-- g</div></div>
+    <div class="card"><div class="label">Temperature</div><div id="temp" class="value">-- C</div></div>
+    <div class="card"><div class="label">IMU Pitch / Roll</div><div id="imu_pose" class="value">-- / -- deg</div></div>
+    <div class="card"><div class="label">Wheel Heights (FL FR RL RR)</div><div id="imu_wheels" class="value" style="font-size:1.0em;line-height:1.4;">-- -- -- -- mm</div></div>
+    <div class="card">
+        <div class="label">IMU Geometry Calibration</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+            <input id="wheelbase_mm" type="number" step="1" placeholder="Wheelbase mm" />
+            <input id="track_width_mm" type="number" step="1" placeholder="Track width mm" />
+            <input id="offset_x_mm" type="number" step="1" placeholder="Offset X mm" />
+            <input id="offset_y_mm" type="number" step="1" placeholder="Offset Y mm" />
+        </div>
+        <div style="margin-top:10px;display:flex;gap:8px;">
+            <button onclick="saveImuGeometry()">Save IMU Geometry</button>
+            <button onclick="loadImuGeometry()">Reload</button>
+        </div>
+        <div id="imu_geom_status" class="label" style="margin-top:8px;">--</div>
+    </div>
+</div>
+
+<h2 style="color:var(--accent);margin-top:30px;">Live Charts</h2>
+<div class="grid">
+    <div class="card"><div class="label">Weight (g)</div><canvas id="chart_weight"></canvas></div>
+</div>
+
+<script>
+let weightChart;
+
+function initCharts() {
+    weightChart = new Chart(document.getElementById('chart_weight'), {
+        type: 'line',
+        data: { labels: [], datasets: [{ label:"Weight", data:[], borderColor:"#6ecbff", borderWidth:2 }] },
+        options: { animation:false }
+    });
+}
+
+function update() {
+    Promise.all([
+        fetch("/api/status").then(r => r.json()),
+        fetch("/api/hw").then(r => r.json())
+    ]).then(([status, hw]) => {
+        const weight = Number(status.weight_gaz || 0);
+        const temp = Number(hw.temperature || 0);
+
+        document.getElementById("weight").textContent = weight + " g";
+        document.getElementById("temp").textContent = temp.toFixed(1) + " C";
+
+        const pitch = Number(status.imu_pitch_deg || 0);
+        const roll = Number(status.imu_roll_deg || 0);
+        document.getElementById("imu_pose").textContent = pitch.toFixed(2) + " / " + roll.toFixed(2) + " deg";
+
+        const fl = Number(status.imu_wheel_fl_mm || 0);
+        const fr = Number(status.imu_wheel_fr_mm || 0);
+        const rl = Number(status.imu_wheel_rl_mm || 0);
+        const rr = Number(status.imu_wheel_rr_mm || 0);
+        document.getElementById("imu_wheels").textContent =
+            "FL " + fl.toFixed(1) + "  FR " + fr.toFixed(1) + "\n" +
+            "RL " + rl.toFixed(1) + "  RR " + rr.toFixed(1) + " mm";
+
+        const t = new Date().toLocaleTimeString();
+        weightChart.data.labels.push(t);
+        weightChart.data.datasets[0].data.push(weight);
+        if (weightChart.data.labels.length > 20) {
+            weightChart.data.labels.shift();
+            weightChart.data.datasets[0].data.shift();
+        }
+        weightChart.update();
+    }).catch(() => {
+        document.getElementById("imu_geom_status").textContent = "Live update failed";
+    });
+}
+
+function loadImuGeometry() {
+    fetch("/api/imu_geometry")
+        .then(r => r.json())
+        .then(g => {
+            document.getElementById("wheelbase_mm").value = g.imu_wheelbase_mm;
+            document.getElementById("track_width_mm").value = g.imu_track_width_mm;
+            document.getElementById("offset_x_mm").value = g.imu_offset_x_mm;
+            document.getElementById("offset_y_mm").value = g.imu_offset_y_mm;
+            document.getElementById("imu_geom_status").textContent = "Geometry loaded";
+        })
+        .catch(() => {
+            document.getElementById("imu_geom_status").textContent = "Failed to load geometry";
+        });
+}
+
+function saveImuGeometry() {
+    const wheelbase = encodeURIComponent(document.getElementById("wheelbase_mm").value);
+    const track = encodeURIComponent(document.getElementById("track_width_mm").value);
+    const ox = encodeURIComponent(document.getElementById("offset_x_mm").value);
+    const oy = encodeURIComponent(document.getElementById("offset_y_mm").value);
+
+    const url = "/api/set_imu_geometry?wheelbase_mm=" + wheelbase +
+                "&track_width_mm=" + track +
+                "&offset_x_mm=" + ox +
+                "&offset_y_mm=" + oy;
+
+    fetch(url)
+        .then(r => r.json().then(j => ({ ok: r.ok, body: j })))
+        .then(({ ok, body }) => {
+            if (!ok) {
+                document.getElementById("imu_geom_status").textContent = "Save failed: " + (body.error || "unknown");
+                return;
+            }
+
+            document.getElementById("wheelbase_mm").value = body.imu_wheelbase_mm;
+            document.getElementById("track_width_mm").value = body.imu_track_width_mm;
+            document.getElementById("offset_x_mm").value = body.imu_offset_x_mm;
+            document.getElementById("offset_y_mm").value = body.imu_offset_y_mm;
+            document.getElementById("imu_geom_status").textContent = body.saved ? "Saved and applied" : "Applied but not persisted";
+        })
+        .catch(() => {
+            document.getElementById("imu_geom_status").textContent = "Save request failed";
+        });
+}
+
+initCharts();
+loadImuGeometry();
+setInterval(update, 2000);
+update();
+</script>
+
+</body>
+</html>
+)HTML";
 
 /**
  * @brief Main dashboard HTML page served from PROGMEM.
@@ -233,11 +550,13 @@ input[type='number'] { width: 100%; box-sizing: border-box; padding: 8px; border
 <body>
 <h1>SmartFranklin</h1>
 <div class="card">
-  <a class="button" href="/config">Configuration</a>
+    <a class="button" href="/config">Configuration</a>
+    <a class="button" href="/hw">Hardware</a>
+    <a class="button" href="/sensors">Sensors</a>
     <a class="button" href="/level">Level</a>
     <a class="button" href="/gaz">Gaz 907</a>
-  <a class="button" href="/update">Firmware Update</a>
-  <a class="button" href="/diagnostics">Diagnostics</a>
+    <a class="button" href="/update">Firmware Update</a>
+    <a class="button" href="/diagnostics">Diagnostics</a>
 </div>
 <div class="card">
   <h3>Live Data</h3>
@@ -398,7 +717,8 @@ const fields = [
     { key: 'admin_user', label: 'Admin User', type: 'text' },
     { key: 'admin_pass', label: 'Admin Password', type: 'password' },
     { key: 'mqtt_port', label: 'MQTT Port', type: 'number', step: '1' },
-    { key: 'scale_cal_factor', label: 'Scale Cal Factor', type: 'number', step: '0.01' },
+    { key: 'gaz_calibration_factor', label: 'Gaz Calibration Factor', type: 'number', step: '0.01' },
+    { key: 'gaz_weight_average_window', label: 'Gaz Average Window', type: 'number', step: '1' },
     { key: 'level_wheelbase_mm', label: 'Level Wheelbase mm', type: 'number', step: '1' },
     { key: 'level_track_width_mm', label: 'Level Track Width mm', type: 'number', step: '1' },
     { key: 'level_offset_x_mm', label: 'Level Offset X mm', type: 'number', step: '1' },
@@ -602,7 +922,7 @@ function renderGaz(data) {
 function renderCalibrationDebug(data) {
     const lines = [];
     lines.push('Diagnostics calibration');
-    lines.push('config scale_cal_factor: ' + String(data.scale_cal_factor_config));
+    lines.push('config gaz_calibration_factor: ' + String(data.gaz_calibration_factor_config));
     lines.push('live sensor gap: ' + (data.sensor_gap_read_ok ? String(data.sensor_gap) : 'read_failed'));
     lines.push('live raw adc: ' + (data.raw_adc_read_ok ? String(data.raw_adc) : 'read_failed'));
     lines.push('live sample g: ' + String(data.sample_weight_g));
@@ -667,7 +987,7 @@ async function applyCalibration() {
             return;
         }
         await refreshGaz();
-        document.getElementById('status').textContent = 'Calibration appliquee (factor=' + j.scale_cal_factor + ')';
+        document.getElementById('status').textContent = 'Calibration appliquee (factor=' + j.gaz_calibration_factor + ')';
     } catch (e) {
         document.getElementById('status').textContent = 'Echec calibration (reseau)';
     }
@@ -858,7 +1178,6 @@ async function captureZero() {
 }
 
 async function resetZero() {
-    document.getElementById('zero_status').textContent = 'Annulation en cours...';
     try {
         const r = await fetch('/api/level_zero_reset');
         const j = await r.json();
@@ -929,51 +1248,9 @@ refresh();
 
 /**
  * @brief Checks HTTP Basic Authentication for incoming requests.
- * 
- * Validates admin credentials against CONFIG.admin_user and CONFIG.admin_pass.
- * Sends authentication challenge if credentials missing or invalid.
- * Used to protect sensitive configuration and control endpoints.
- * 
- * Authentication Process:
- *   1. Check if request contains valid Basic Auth credentials
- *   2. Compare username/password against configuration
- *   3. Return true if authenticated, false otherwise
- *   4. Send 401 response with authentication challenge on failure
- * 
- * Security Notes:
- *   - HTTP Basic Auth sends credentials base64-encoded (not encrypted)
- *   - Only secure on local networks (not over internet)
- *   - Credentials stored in CONFIG (SPIFFS persistence)
- *   - Default credentials should be changed immediately
- * 
- * Usage Pattern:
- *   @code
- *   server.on("/config", HTTP_GET, [](AsyncWebServerRequest *request){
- *       if (!checkAuth(request)) return;  // Reject if not authenticated
- *       // Handle authenticated request...
- *   });
- *   @endcode
- * 
- * Error Handling:
- *   - Invalid credentials: 401 response with realm "SmartFranklin Config"
- *   - Missing credentials: Same 401 challenge response
- *   - Function returns false, caller must return immediately
- * 
- * @param request - Pointer to AsyncWebServerRequest containing HTTP request
- *                  Must be valid and contain authentication headers if present
- * 
- * @return bool - true if authentication successful, false if rejected
- *                - false: Request rejected, 401 response sent
- *                - true: Authentication passed, request can proceed
- * 
- * @note This function sends HTTP response on authentication failure.
- *       Caller must return immediately after false result.
- *       Example: if (!checkAuth(request)) return;
- * 
- * @see CONFIG.admin_user - Admin username from configuration
- * @see CONFIG.admin_pass - Admin password from configuration
  */
-static bool checkAuth(AsyncWebServerRequest *request) {
+static bool checkAuth(AsyncWebServerRequest *request)
+{
     if (!request->authenticate(CONFIG.admin_user.c_str(),
                                CONFIG.admin_pass.c_str())) {
         request->requestAuthentication("SmartFranklin Config");
@@ -1034,9 +1311,12 @@ static void fillConfigJson(JsonVariant doc)
     doc["ap_ssid"] = CONFIG.ap_ssid;
     doc["ap_pass"] = CONFIG.ap_pass;
     doc["sta_ssid"] = CONFIG.sta_ssid;
+
     doc["sta_pass"] = CONFIG.sta_pass;
 
-    doc["scale_cal_factor"] = CONFIG.scale_cal_factor;
+    doc["gaz_calibration_factor"] = CONFIG.gaz_calibration_factor;
+    doc["scale_cal_factor"] = CONFIG.gaz_calibration_factor;
+    doc["gaz_weight_average_window"] = CONFIG.gaz_weight_average_window;
 
     doc["level_wheelbase_mm"] = CONFIG.level_wheelbase_mm;
     doc["level_track_width_mm"] = CONFIG.level_track_width_mm;
@@ -1163,7 +1443,9 @@ static bool applyConfigFromRequest(AsyncWebServerRequest* request, String& error
         !applyString("ap_pass", updated.ap_pass) ||
         !applyString("sta_ssid", updated.sta_ssid) ||
         !applyString("sta_pass", updated.sta_pass) ||
-        !applyFloat("scale_cal_factor", updated.scale_cal_factor) ||
+        !applyFloat("scale_cal_factor", updated.gaz_calibration_factor) ||
+        !applyFloat("gaz_calibration_factor", updated.gaz_calibration_factor) ||
+        !applyInt("gaz_weight_average_window", updated.gaz_weight_average_window) ||
         !applyFloat("level_wheelbase_mm", updated.level_wheelbase_mm) ||
         !applyFloat("level_track_width_mm", updated.level_track_width_mm) ||
         !applyFloat("level_offset_x_mm", updated.level_offset_x_mm) ||
@@ -1185,8 +1467,13 @@ static bool applyConfigFromRequest(AsyncWebServerRequest* request, String& error
         return false;
     }
 
-    if (updated.scale_cal_factor <= 0.0f || !std::isfinite(updated.scale_cal_factor)) {
-        errorKey = "scale_cal_factor";
+    if (updated.gaz_calibration_factor <= 0.0f || !std::isfinite(updated.gaz_calibration_factor)) {
+        errorKey = "gaz_calibration_factor";
+        return false;
+    }
+
+    if (updated.gaz_weight_average_window < 1 || updated.gaz_weight_average_window > 64) {
+        errorKey = "gaz_weight_average_window";
         return false;
     }
 
@@ -1311,16 +1598,16 @@ static void sendJson(AsyncWebServerRequest* request, JsonDocument& doc, int stat
  * @brief Initializes the web dashboard server and registers all routes.
  * 
  * Sets up the AsyncWebServer with all endpoints for dashboard access,
- * API calls, static file serving, and OTA firmware updates. Must be
+ * API calls, embedded page serving, and OTA firmware updates. Must be
  * called once during system initialization after WiFi is connected.
  * 
  * Route Registration:
  * 
  *   Static Routes:
  *   - / : Main dashboard page (HTML from PROGMEM)
- *   - /hw : Hardware status page (from SPIFFS)
- *   - /sensors : Sensor data page (from SPIFFS)
- *   - /theme.js : Common JavaScript (from SPIFFS)
+ *   - /hw : Hardware status page (from PROGMEM)
+ *   - /sensors : Sensor data page (from PROGMEM)
+ *   - /theme.js : Common JavaScript (from PROGMEM)
  * 
  *   API Routes:
  *   - /api/status : Real-time sensor data (JSON)
@@ -1346,7 +1633,6 @@ static void sendJson(AsyncWebServerRequest* request, JsonDocument& doc, int stat
  *   - Rollback capability if update fails
  * 
  * Error Handling:
- *   - SPIFFS file access failures handled by AsyncWebServer
  *   - API endpoint errors return appropriate HTTP status codes
  *   - Network errors handled by underlying TCP stack
  * 
@@ -1468,7 +1754,8 @@ void web_dashboard_init()
             doc["fill_gaz"] = DATA.fill_gaz;
             doc["weight_gaz"] = DATA.weight_gaz;
         }
-        doc["scale_cal_factor"] = CONFIG.scale_cal_factor;
+        doc["gaz_calibration_factor"] = CONFIG.gaz_calibration_factor;
+        doc["scale_cal_factor"] = CONFIG.gaz_calibration_factor;
         sendJson(request, doc);
     });
 
@@ -1478,12 +1765,13 @@ void web_dashboard_init()
             return;
         }
 
-        CONFIG.scale_cal_factor = 1.0f;
+        CONFIG.gaz_calibration_factor = 1.0f;
         const bool saved = config_save();
 
         JsonDocument doc;
         doc["saved"] = saved;
-        doc["scale_cal_factor"] = CONFIG.scale_cal_factor;
+        doc["gaz_calibration_factor"] = CONFIG.gaz_calibration_factor;
+        doc["scale_cal_factor"] = CONFIG.gaz_calibration_factor;
         {
             std::lock_guard<std::mutex> lock(DATA_MUTEX);
             doc["fill_gaz"] = DATA.fill_gaz;
@@ -1527,9 +1815,9 @@ void web_dashboard_init()
             return;
         }
 
-        float currentGap = CONFIG.scale_cal_factor;
+        float currentGap = CONFIG.gaz_calibration_factor;
         if (!scale_get_cal_factor(currentGap) || !std::isfinite(currentGap) || std::fabs(currentGap) < 1e-6f) {
-            currentGap = CONFIG.scale_cal_factor;
+            currentGap = CONFIG.gaz_calibration_factor;
         }
 
         const float newFactor = currentGap * (rawWeightG / knownWeightG);
@@ -1556,7 +1844,8 @@ void web_dashboard_init()
         if (sensorGapAfterReadOk) {
             doc["sensor_gap_after"] = sensorGapAfter;
         }
-        doc["scale_cal_factor"] = CONFIG.scale_cal_factor;
+        doc["gaz_calibration_factor"] = CONFIG.gaz_calibration_factor;
+        doc["scale_cal_factor"] = CONFIG.gaz_calibration_factor;
         sendJson(request, doc, saved ? 200 : 500);
     });
 
@@ -1569,7 +1858,9 @@ void web_dashboard_init()
         const bool gapReadOk = scale_get_cal_factor(sensorGap);
         const bool rawAdcReadOk = scale_get_raw_adc(rawAdc);
 
-        doc["scale_cal_factor_config"] = CONFIG.scale_cal_factor;
+        doc["gaz_calibration_factor_config"] = CONFIG.gaz_calibration_factor;
+        doc["scale_cal_factor_config"] = CONFIG.gaz_calibration_factor;
+        doc["gaz_weight_average_window"] = CONFIG.gaz_weight_average_window;
         doc["sample_weight_g"] = sampleWeightG;
         doc["sensor_gap_read_ok"] = gapReadOk;
         doc["raw_adc_read_ok"] = rawAdcReadOk;
@@ -1710,15 +2001,13 @@ void web_dashboard_init()
     ElegantOTA.begin(&server, CONFIG.admin_user.c_str(), CONFIG.admin_pass.c_str());
 
     // =========================================================================
-    // Static File Serving from SPIFFS
+    // Embedded Hardware/Sensors Pages and Theme Script
     // =========================================================================
-    // Serve HTML pages and JavaScript from SPIFFS filesystem
-    // No authentication required for static content
-    server.on("/hw", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(SPIFFS, "/hw.html", "text/html"); }); 
-    server.on("/hw.html", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(SPIFFS, "/hw.html", "text/html"); }); 
-    server.on("/sensors", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(SPIFFS, "/sensors.html", "text/html"); }); 
-    server.on("/sensors.html", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(SPIFFS, "/sensors.html", "text/html"); }); 
-    server.on("/theme.js", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(SPIFFS, "/theme.js", "application/javascript"); }); 
+    server.on("/hw", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(200, "text/html", HW_PAGE); });
+    server.on("/hw.html", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(200, "text/html", HW_PAGE); });
+    server.on("/sensors", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(200, "text/html", SENSORS_PAGE); });
+    server.on("/sensors.html", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(200, "text/html", SENSORS_PAGE); });
+    server.on("/theme.js", HTTP_GET, [](AsyncWebServerRequest *req){ req->send(200, "application/javascript", THEME_JS); });
     
     // =========================================================================
     // Control API Endpoints
