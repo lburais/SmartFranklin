@@ -1,6 +1,11 @@
-/*
- * SmartFranklin - RTC module implementation
- * SPDX-License-Identifier: MIT
+/**
+ * @file rtc.cpp
+ * @brief Implements RTC probing, NTP/system synchronization, and MQTT time publication.
+ * @details
+ * The module supports internal and external RTC devices, validates/register-map probes,
+ * translates between RTC register encoding and UTC time, keeps system time synchronized from
+ * NTP or RTC fallback, periodically writes system time back to hardware RTC, and publishes
+ * current RTC/sync status to telemetry topics.
  */
 
 #include "rtc.h"
@@ -60,6 +65,7 @@ struct RtcState {
 
 RtcState RTC_STATE;
 
+/** @brief Encodes a decimal value as packed BCD. */
 uint8_t toBcd(const int value)
 {
     const int tens = value / 10;
@@ -67,11 +73,13 @@ uint8_t toBcd(const int value)
     return static_cast<uint8_t>((tens << 4) | ones);
 }
 
+/** @brief Decodes a packed BCD value into decimal representation. */
 int fromBcd(const uint8_t value)
 {
     return ((value >> 4) * 10) + (value & 0x0F);
 }
 
+/** @brief Validates packed BCD format and upper decimal bound. */
 bool isValidBcd(const uint8_t value, const int maxDec)
 {
     const int high = (value >> 4) & 0x0F;
@@ -82,6 +90,7 @@ bool isValidBcd(const uint8_t value, const int maxDec)
     return ((high * 10) + low) <= maxDec;
 }
 
+/** @brief Writes a register burst over the active RTC route. */
 bool writeBurst(const RtcState& state, const uint8_t reg, const uint8_t* data, const size_t len)
 {
     if (data == nullptr || len == 0) {
@@ -116,6 +125,7 @@ bool writeBurst(const RtcState& state, const uint8_t reg, const uint8_t* data, c
     return Wire.endTransmission() == 0;
 }
 
+/** @brief Reads a register burst over the active RTC route. */
 bool readBurst(const RtcState& state, const uint8_t reg, uint8_t* out, const size_t len)
 {
     if (out == nullptr || len == 0) {
@@ -164,11 +174,13 @@ bool readBurst(const RtcState& state, const uint8_t reg, uint8_t* out, const siz
     return true;
 }
 
+/** @brief Checks whether a UNIX timestamp is considered valid for SmartFranklin. */
 bool isSystemTimeValid(const time_t t)
 {
     return t >= MIN_VALID_EPOCH;
 }
 
+/** @brief Converts a civil date into days offset from UNIX epoch origin. */
 int64_t daysFromCivil(int year, unsigned month, unsigned day)
 {
     year -= (month <= 2U) ? 1 : 0;
@@ -179,6 +191,7 @@ int64_t daysFromCivil(int year, unsigned month, unsigned day)
     return static_cast<int64_t>(era) * 146097LL + static_cast<int64_t>(doe) - 719468LL;
 }
 
+/** @brief Converts a UTC date-time tuple into UNIX epoch seconds. */
 bool datetimeToEpoch(const DateTime& dt, time_t& outEpoch)
 {
     const int64_t days = daysFromCivil(dt.year, static_cast<unsigned>(dt.month), static_cast<unsigned>(dt.day));
@@ -195,6 +208,7 @@ bool datetimeToEpoch(const DateTime& dt, time_t& outEpoch)
     return true;
 }
 
+/** @brief Converts UNIX epoch seconds into a UTC date-time tuple. */
 bool epochToDateTime(const time_t epoch, DateTime& out)
 {
     struct tm tmUtc;
@@ -211,6 +225,7 @@ bool epochToDateTime(const time_t epoch, DateTime& out)
     return true;
 }
 
+/** @brief Parses an ISO-8601 UTC timestamp string without fractional seconds. */
 bool parseIsoUtc(const String& value, DateTime& out)
 {
     if (value.length() < 19) {
@@ -251,6 +266,7 @@ bool parseIsoUtc(const String& value, DateTime& out)
     return true;
 }
 
+/** @brief Formats UTC date-time as ISO-8601 with trailing Z suffix. */
 void formatIsoUtc(const DateTime& dt, char* out, const size_t outLen)
 {
     if (out == nullptr || outLen == 0) {
@@ -268,6 +284,7 @@ void formatIsoUtc(const DateTime& dt, char* out, const size_t outLen)
              dt.second);
 }
 
+/** @brief Reads current date-time from the board-level internal RTC API. */
 bool readDateTimeFromInternalApi(DateTime& out)
 {
     if (!M5.Rtc.isEnabled()) {
@@ -288,6 +305,7 @@ bool readDateTimeFromInternalApi(DateTime& out)
     return true;
 }
 
+/** @brief Writes date-time to board-level internal RTC API and verifies readback. */
 bool writeDateTimeToInternalApi(const DateTime& dt)
 {
     if (!M5.Rtc.isEnabled()) {
@@ -312,6 +330,7 @@ bool writeDateTimeToInternalApi(const DateTime& dt)
     return readDateTimeFromInternalApi(verify);
 }
 
+/** @brief Converts synchronization source enum into a stable telemetry token. */
 const char* syncSourceToString(const SyncSource source)
 {
     switch (source) {
@@ -325,11 +344,13 @@ const char* syncSourceToString(const SyncSource source)
     }
 }
 
+/** @brief Publishes active RTC source identity to retained MQTT topic. */
 void publishSource(const RTC::Source source)
 {
     sf_mqtt::publish("smartfranklin/rtc/source", RTC::sourceToString(source), 1, true);
 }
 
+/** @brief Publishes the last time synchronization origin and updates shared model. */
 void publishSyncSource(const SyncSource source)
 {
     sf_mqtt::publish("smartfranklin/rtc/sync_source", syncSourceToString(source), 1, true);
@@ -338,6 +359,7 @@ void publishSyncSource(const SyncSource source)
     DATA.rtc_sync_source = syncSourceToString(source);
 }
 
+/** @brief Publishes formatted RTC time and mirrors it into shared data state. */
 void publishRtcTime(const DateTime& dt)
 {
     char timeBuf[32] = {0};
@@ -350,6 +372,7 @@ void publishRtcTime(const DateTime& dt)
     DATA.rtc_time = timeBuf;
 }
 
+/** @brief Heuristically checks if a register snapshot matches BM8563-style layout. */
 bool probeBm8563Like(const uint8_t* regs, const size_t len)
 {
     if (regs == nullptr || len < 9U) {
@@ -364,6 +387,7 @@ bool probeBm8563Like(const uint8_t* regs, const size_t len)
            isValidBcd(regs[8], 99);
 }
 
+/** @brief Heuristically checks if a register snapshot matches PCD85063-style layout. */
 bool probePcd85063Like(const uint8_t* regs, const size_t len)
 {
     if (regs == nullptr || len < 11U) {
@@ -378,6 +402,7 @@ bool probePcd85063Like(const uint8_t* regs, const size_t len)
            isValidBcd(regs[10], 99);
 }
 
+/** @brief Reads date-time from the selected RTC backend into normalized fields. */
 bool readDateTimeFromRtc(const RtcState& state, DateTime& out)
 {
     if (state.source == RTC::Source::InternalRtc && readDateTimeFromInternalApi(out)) {
@@ -414,6 +439,7 @@ bool readDateTimeFromRtc(const RtcState& state, DateTime& out)
     }
 }
 
+/** @brief Writes normalized date-time values to the selected RTC backend. */
 bool writeDateTimeToRtc(const RtcState& state, const DateTime& dt)
 {
     if (state.source == RTC::Source::InternalRtc) {
@@ -452,6 +478,7 @@ bool writeDateTimeToRtc(const RtcState& state, const DateTime& dt)
     return false;
 }
 
+/** @brief Selects chip-kind decoder based on requested source and probe validity. */
 bool selectChipKind(const RTC::Source requestedSource,
                     const uint8_t* regs,
                     const size_t len,
@@ -482,6 +509,7 @@ bool selectChipKind(const RTC::Source requestedSource,
     }
 }
 
+/** @brief Attempts to synchronize system clock from NTP when Wi-Fi is available. */
 bool syncSystemFromNtp()
 {
     if (WiFi.status() != WL_CONNECTED) {
@@ -498,6 +526,7 @@ bool syncSystemFromNtp()
     return isSystemTimeValid(nowEpoch);
 }
 
+/** @brief Synchronizes system clock from RTC hardware reading. */
 bool syncSystemFromRtc(const RtcState& state)
 {
     DateTime rtcDateTime;
@@ -520,6 +549,7 @@ bool syncSystemFromRtc(const RtcState& state)
     return true;
 }
 
+/** @brief Synchronizes RTC hardware from current system clock. */
 bool syncRtcFromSystem(const RtcState& state)
 {
     const time_t nowEpoch = time(nullptr);
@@ -535,6 +565,7 @@ bool syncRtcFromSystem(const RtcState& state)
     return writeDateTimeToRtc(state, nowDt);
 }
 
+/** @brief Initializes RTC module state and validates the selected backend. */
 bool initState(RtcState& state, RTC::Source source, const bool isInternalRoute, const uint8_t i2cAddress)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
@@ -597,6 +628,7 @@ bool initState(RtcState& state, RTC::Source source, const bool isInternalRoute, 
     return true;
 }
 
+/** @brief Executes periodic RTC sync/write/publish workflow. */
 void processState(RtcState& state)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
@@ -641,12 +673,14 @@ void processState(RtcState& state)
     }
 }
 
+/** @brief Reports whether RTC module state is initialized. */
 bool isInitializedState(const RtcState& state)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
     return state.initialized;
 }
 
+/** @brief Returns current RTC source from module state. */
 RTC::Source sourceState(const RtcState& state)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
@@ -657,31 +691,37 @@ RTC::Source sourceState(const RtcState& state)
 
 RTC RTC_MODULE;
 
+/** @brief Initializes RTC backend and communication route. */
 bool RTC::init(Source source, bool isInternalRoute, uint8_t i2cAddress)
 {
     return initState(RTC_STATE, source, isInternalRoute, i2cAddress);
 }
 
+/** @brief Runs one RTC process iteration. */
 void RTC::process()
 {
     processState(RTC_STATE);
 }
 
+/** @brief Returns true when RTC module initialization succeeded. */
 bool RTC::isInitialized() const
 {
     return isInitializedState(RTC_STATE);
 }
 
+/** @brief Returns the active RTC source enum. */
 RTC::Source RTC::source() const
 {
     return sourceState(RTC_STATE);
 }
 
+/** @brief Returns the string identifier for the active RTC source. */
 const char* RTC::sourceName() const
 {
     return sourceToString(source());
 }
 
+/** @brief Converts RTC source enum values to telemetry/log strings. */
 const char* RTC::sourceToString(Source source)
 {
     switch (source) {

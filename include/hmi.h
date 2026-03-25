@@ -1,4 +1,4 @@
-/*
+/**
  * ============================================================================
  * HMI Interface Module - SmartFranklin
  * ============================================================================
@@ -6,29 +6,15 @@
  * File:        hmi.h
  * Project:     SmartFranklin IoT Device Controller
  * Description: Public API for the Human-Machine Interface (HMI) runtime.
- *              Defines lifecycle hooks, rendering helpers, and local-control
- *              state used by the dedicated HMI task.
  *
  * Author:      Laurent Burais
  * Date:        12 March 2026
  * Version:     1.1
  *
  * Overview:
- *   The HMI class provides a compact application-facing API that mirrors
- *   other SmartFranklin runtime modules (`init`, `process`, `isInitialized`).
  *
- *   It owns:
- *   - LCD page rendering for all local operator views,
- *   - Button-driven page navigation and calibration control,
- *   - Snapshot-based reads from shared DATA under mutex protection,
- *   - screen-name publication for MQTT UI observability.
  *
  * Screen Map:
- *   - 0: Tank
- *   - 1: Gaz (weight)
- *   - 2: Battery (BMS)
- *   - 3: GPS
- *   - 4: Scale Calibration
  *
  * ============================================================================
  * MIT License

@@ -1,4 +1,12 @@
-// SPDX-License-Identifier: MIT
+/**
+ * @file i2c.cpp
+ * @brief I2C route probing and PAHub channel control implementation.
+ *
+ * This module detects whether peripherals are reachable over internal I2C,
+ * Wire, or PAHub-routed buses and publishes resolved wiring metadata.
+ *
+ * SPDX-License-Identifier: MIT
+ */
 
 #include "i2c.h"
 
@@ -33,17 +41,20 @@ void I2C::beginPortA() const
     M5.Ex_I2C.begin();
 }
 
+/** Probe one address on Wire. */
 bool I2C::wireDeviceExists(const uint8_t address) const
 {
     Wire.beginTransmission(address);
     return Wire.endTransmission() == 0;
 }
 
+/** Probe one address on internal Ex_I2C bus. */
 bool I2C::exDeviceExists(const uint8_t address) const
 {
     return M5.Ex_I2C.scanID(address, m_clockHz);
 }
 
+/** Select PAHub channel through Wire bus. */
 bool I2C::wireSelectPaHubChannel(const uint8_t channel) const
 {
     Wire.beginTransmission(PAHUB_ADDRESS);
@@ -51,6 +62,7 @@ bool I2C::wireSelectPaHubChannel(const uint8_t channel) const
     return Wire.endTransmission() == 0;
 }
 
+/** Disable all PAHub channels through Wire bus. */
 void I2C::wireDisablePaHubChannels() const
 {
     Wire.beginTransmission(PAHUB_ADDRESS);
@@ -58,6 +70,7 @@ void I2C::wireDisablePaHubChannels() const
     Wire.endTransmission();
 }
 
+/** Select PAHub channel through Ex_I2C bus. */
 bool I2C::exSelectPaHubChannel(const uint8_t channel) const
 {
     if (!M5.Ex_I2C.start(PAHUB_ADDRESS, false, m_clockHz)) {
@@ -69,6 +82,7 @@ bool I2C::exSelectPaHubChannel(const uint8_t channel) const
     return writeOk && stopOk;
 }
 
+/** Disable all PAHub channels through Ex_I2C bus. */
 void I2C::exDisablePaHubChannels() const
 {
     if (!M5.Ex_I2C.start(PAHUB_ADDRESS, false, m_clockHz)) {

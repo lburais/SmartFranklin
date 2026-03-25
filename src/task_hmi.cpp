@@ -84,11 +84,11 @@ HMI g_hmi;
  * - handles Button B long-press reboot logic
  * - updates heartbeat and sleeps until next period
  *
- * @param pvParameters Unused task parameter.
+ * @param pv Unused task parameter.
  */
-void taskHmi(void *pvParameters)
+void taskHmi(void *pv)
 {
-    (void)pvParameters;
+    (void)pv;
 
     M5_LOGI("[HMI] Task started");
 

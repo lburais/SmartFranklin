@@ -415,10 +415,8 @@ static bool connectToBms()
  *   - Power impact: BLE activity increases consumption
  *   - Responsiveness: 1-second connection checks
  * 
- * @param pv - FreeRTOS task parameter (unused, nullptr)
- * 
- * @return void (task runs indefinitely)
- * 
+ * @param pv FreeRTOS task parameter (unused, nullptr)
+ *
  * @note This task must be created during system initialization.
  *       It handles all BLE BMS communication autonomously.
  *       Watchdog integration prevents task hangs from resetting system.

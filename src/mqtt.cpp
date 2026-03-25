@@ -120,7 +120,8 @@ static bool                     s_connected = false;
  * @param event - ESP-IDF MQTT event structure containing event details
  *                Includes event type, topic, payload, and metadata
  * 
- * @return esp_err_t - Always returns ESP_OK (required by ESP-IDF)
+ * @note This handler does not return a value; ESP-IDF callback adapters
+ *       handle required return conventions for each IDF version.
  * 
  * @note This function is registered with ESP-IDF MQTT client during init().
  *       Keep processing minimal to avoid blocking the MQTT task.
@@ -245,10 +246,8 @@ static esp_err_t event_handler_cb(esp_mqtt_event_handle_t event)
  *   - Configuration strings are copied by ESP-IDF
  *   - No dynamic allocation in this function
  * 
- * @param cfg - Configuration structure containing MQTT broker details
  *              Must include valid URI, optional authentication and settings
  * 
- * @param cb - Message callback function for incoming MQTT messages
  *             Called with (topic, payload) when messages arrive
  *             Can be nullptr if no message processing needed
  * 
@@ -423,19 +422,15 @@ bool is_connected()
  *   - Memory usage: Minimal (ESP-IDF manages buffers)
  *   - Network: Asynchronous transmission
  * 
- * @param topic - MQTT topic string to publish to
  *                Must be valid MQTT topic (no wildcards for publish)
  *                Example: "smartfranklin/sensor/temperature"
  * 
- * @param payload - Message payload as string
  *                  Can be empty for null messages
  *                  Binary data should be base64 encoded
  * 
- * @param qos - Quality of Service level (0, 1, or 2)
  *              Default: 0 (at most once delivery)
  *              Higher QoS increases reliability but network overhead
  * 
- * @param retain - Whether to retain message on broker
  *                 Default: false (deliver to current subscribers only)
  *                 true: Persist for future subscribers
  * 
@@ -522,11 +517,9 @@ bool publish(const std::string &topic,
  *   - Memory usage: Minimal (ESP-IDF manages subscription table)
  *   - Network: Asynchronous subscription request
  * 
- * @param topic - MQTT topic pattern to subscribe to
  *                Can include wildcards (+ for single level, # for multi-level)
  *                Example: "smartfranklin/commands/#"
  * 
- * @param qos - Quality of Service level for subscription (0, 1, or 2)
  *              Default: 0 (at most once delivery)
  *              Determines delivery guarantees for received messages
  * 

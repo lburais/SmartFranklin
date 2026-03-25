@@ -172,10 +172,8 @@
  *   - Enables automatic recovery from critical failures
  *   - Supports development and production system stability
  * 
- * @param pv - FreeRTOS task parameter (unused, nullptr)
- * 
- * @return void (task runs indefinitely)
- * 
+ * @param pv FreeRTOS task parameter (unused, nullptr)
+ *
  * @note This task is critical for system stability and should not be disabled.
  *       Watchdog timeout will reset the system if this task stops responding.
  *       Reset interval should be shorter than configured TWDT timeout.

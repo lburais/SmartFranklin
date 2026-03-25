@@ -120,7 +120,6 @@
  * @param doc - ArduinoJson JsonDocument containing parsed command JSON
  *              Must contain "led", "buzzer", or "target_soc" fields
  * 
- * @return void
  * 
  * @note Called by command_handler_process() when "set" command is detected.
  *       All state changes are immediately published to corresponding MQTT topics.
@@ -217,7 +216,6 @@ static void handle_set(JsonDocument& doc) {
  * @param doc - ArduinoJson JsonDocument containing parsed command JSON
  *              Must contain "what" field specifying query target
  * 
- * @return void
  * 
  * @note Called by command_handler_process() when "get" command is detected.
  *       Responses are published asynchronously to MQTT broker.
@@ -328,7 +326,6 @@ static void handle_get(JsonDocument& doc) {
  *               Expected format: {"cmd":"...", param1:value1, ...}
  *               Example: {"cmd":"set","led":true}
  * 
- * @return void
  * 
  * @note Typically called from MQTT message callback when command topic received.
  *       All errors and results are reported asynchronously via MQTT.

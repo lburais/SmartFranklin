@@ -1,4 +1,4 @@
-/*
+/**
  * ============================================================================
  * Web Dashboard Module - SmartFranklin
  * ============================================================================
@@ -6,59 +6,24 @@
  * File:        web_dashboard.h
  * Project:     SmartFranklin IoT Device Controller
  * Description: Header file for the embedded web-server dashboard.  Declares
- *              initialization routine and related types used to serve the
- *              configuration/status web pages that run on the device.
  * 
  * Author:      Laurent Burais
  * Date:        5 March 2026
  * Version:     1.0
  * 
  * Overview:
- *   The web dashboard module implements a lightweight HTTP/HTTPS server on the
- *   SmartFranklin device.  The dashboard exposes a simple web interface that
- *   allows local clients (desktop browser, mobile phone) to view system status,
- *   change configuration options and trigger actions without requiring an
- *   external cloud service.  It is intended to run over the same Wi-Fi or
- *   cellular link used by the rest of the system or in AP/access-point mode.
  * 
  * Features:
- *   - Serves HTML/JavaScript pages from SPIFFS/LittleFS
- *   - REST-style JSON API for status, configuration and control
- *   - Optional basic authentication and TLS support
- *   - Auto-refresh of sensor values and connection indicators
- *   - Configuration forms for network, MQTT, calibration parameters
- *   - Firmware-update page (OTA) when enabled
- *   - Lightweight footprint suitable for ESP32
  * 
  * Integration:
- *   - Called from main setup() after networking is brought up
- *   - Reads and writes CONFIG structure for persistent settings
- *   - Publishes DATA snapshot to the web API on demand
- *   - Uses Mongoose or ESPAsyncWebServer under the hood
- *   - Works together with captive-portal module to configure Wi-Fi
  * 
  * Dependencies:
- *   - Arduino.h  : basic types
- *   - FS.h, SPIFFS/LittleFS : file system for static assets
- *   - WiFi.h / Ethernet.h  : network stack
- *   - web_dashboard.cpp : implementation of the functions declared here
  * 
  * Limitations:
- *   - Designed for local LAN access only; not hardened for public
- *     Internet exposure.
- *   - Single-user interface, no multi-session support.
- *   - Pages are static; extensive dynamic interaction is via the JSON API.
- *   - TLS requires certificate provisioning and increases RAM usage.
  * 
  * Best practices:
- *   - Protect access with a password when used on untrusted networks.
- *   - Use the API from automation scripts rather than screen scraping.
- *   - Keep static assets small to conserve flash and RAM.
- *   - Regenerate OTA pages after firmware updates if asset layout changes.
  * 
  * Usage:
- *   web_dashboard_init();   // call once in setup()
- *   // nothing else required; server runs in background
  * 
  * ============================================================================
  * MIT License

@@ -1,6 +1,11 @@
-/*
- * SmartFranklin - IMU module implementation
- * SPDX-License-Identifier: MIT
+/**
+ * @file level.cpp
+ * @brief Implements inclinometer acquisition, vehicle pose estimation, and corner height projection.
+ * @details
+ * This module reads acceleration vectors from either the integrated M5 IMU or supported external
+ * sensors, converts them to pitch/roll angles, applies configurable zero offsets, projects the
+ * resulting plane onto the four wheel points, updates shared telemetry state, and publishes the
+ * measurements through MQTT.
  */
 
 #include "level.h"
@@ -71,6 +76,9 @@ float sanitizePositive(const float value, const float fallback, const float minV
     return value;
 }
 
+/**
+ * @brief Validates a finite bounded numeric value and returns a fallback when invalid.
+ */
 float sanitizeFinite(const float value, const float fallback, const float minValue, const float maxValue)
 {
     if (!std::isfinite(value) || value < minValue || value > maxValue) {
@@ -79,6 +87,9 @@ float sanitizeFinite(const float value, const float fallback, const float minVal
     return value;
 }
 
+/**
+ * @brief Builds normalized geometry parameters from configuration storage.
+ */
 GeometryConfig geometryFromConfig()
 {
     GeometryConfig g;
@@ -91,6 +102,9 @@ GeometryConfig geometryFromConfig()
     return g;
 }
 
+/**
+ * @brief Writes a single register to the selected IMU over the active route.
+ */
 bool writeRegister(const LevelState& state, uint8_t reg, uint8_t value)
 {
     if (state.isInternalRoute) {
@@ -107,6 +121,9 @@ bool writeRegister(const LevelState& state, uint8_t reg, uint8_t value)
     return Wire.endTransmission() == 0;
 }
 
+/**
+ * @brief Reads a contiguous register window from the selected IMU.
+ */
 bool readRegisters(const LevelState& state, uint8_t reg, uint8_t* out, size_t len)
 {
     if (out == nullptr || len == 0) {
@@ -155,6 +172,9 @@ bool readRegisters(const LevelState& state, uint8_t reg, uint8_t* out, size_t le
     return true;
 }
 
+/**
+ * @brief Initializes an MPU6050-compatible accelerometer for +-2g full-scale mode.
+ */
 bool initMpu6050(LevelState& state)
 {
     if (!writeRegister(state, MPU6050_REG_PWR_MGMT_1, 0x00)) {
@@ -168,6 +188,9 @@ bool initMpu6050(LevelState& state)
     return true;
 }
 
+/**
+ * @brief Initializes an ADXL345 accelerometer in full-resolution measurement mode.
+ */
 bool initAdxl345(LevelState& state)
 {
     uint8_t devid = 0;
@@ -192,6 +215,9 @@ bool initAdxl345(LevelState& state)
     return true;
 }
 
+/**
+ * @brief Ensures the internal M5 IMU backend is active and readable.
+ */
 bool ensureInternalImuReady()
 {
     if (M5.Imu.isEnabled() && M5.Imu.getType() != m5::imu_t::imu_none) {
@@ -206,6 +232,9 @@ bool ensureInternalImuReady()
     return M5.Imu.isEnabled() && M5.Imu.getType() != m5::imu_t::imu_none;
 }
 
+/**
+ * @brief Reads one acceleration sample in g units from the configured source.
+ */
 bool readAccelSampleLocked(const LevelState& state, float& ax, float& ay, float& az)
 {
     ax = 0.0f;
@@ -277,6 +306,9 @@ bool readAccelSampleLocked(const LevelState& state, float& ax, float& ay, float&
     }
 }
 
+/**
+ * @brief Projects pitch/roll orientation onto vehicle wheel corners.
+ */
 void computeWheelHeights(const float pitchDeg,
                          const float rollDeg,
                          const GeometryConfig& geometry,
@@ -315,6 +347,9 @@ void computeWheelHeights(const float pitchDeg,
     rrMm = heightAt(xRr, yRr);
 }
 
+/**
+ * @brief Publishes pose angles and projected wheel heights to MQTT topics.
+ */
 void publishPose(const float pitchDeg,
                  const float rollDeg,
                  const float flMm,
@@ -352,6 +387,9 @@ void publishPose(const float pitchDeg,
             rrMm);
 }
 
+/**
+ * @brief Initializes module state and configures the selected IMU backend.
+ */
 bool initState(LevelState& state, Level::Source source, bool isInternalRoute, uint8_t i2cAddress)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
@@ -400,6 +438,9 @@ bool initState(LevelState& state, Level::Source source, bool isInternalRoute, ui
     return true;
 }
 
+/**
+ * @brief Executes one periodic processing cycle and updates shared output fields.
+ */
 void processState(LevelState& state)
 {
     Level::Source source = Level::Source::None;
@@ -470,12 +511,18 @@ void processState(LevelState& state)
     publishPose(pitchDeg, rollDeg, flMm, frMm, rlMm, rrMm);
 }
 
+/**
+ * @brief Reports whether the level module state is initialized.
+ */
 bool isInitializedState(const LevelState& state)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
     return state.initialized;
 }
 
+/**
+ * @brief Returns the active acquisition source from module state.
+ */
 Level::Source sourceState(const LevelState& state)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
@@ -486,12 +533,14 @@ Level::Source sourceState(const LevelState& state)
 
 Level LEVEL_MODULE;
 
+/** @brief Initializes the level module using the selected source and bus route. */
 bool Level::init(Source source, bool isInternalRoute, uint8_t i2cAddress)
 {
     return initState(LEVEL_STATE, source, isInternalRoute, i2cAddress);
 }
 
 
+/** @brief Runs time-gated orientation processing and telemetry publication. */
 void Level::process()
 {
     static uint32_t lastProcessMs = 0;
@@ -503,21 +552,25 @@ void Level::process()
     processState(LEVEL_STATE);
 }
 
+/** @brief Returns true when the level module has been successfully initialized. */
 bool Level::isInitialized() const
 {
     return isInitializedState(LEVEL_STATE);
 }
 
+/** @brief Returns the currently active level source. */
 Level::Source Level::source() const
 {
     return sourceState(LEVEL_STATE);
 }
 
+/** @brief Returns a stable text identifier for the active level source. */
 const char* Level::sourceName() const
 {
     return sourceToString(source());
 }
 
+/** @brief Converts a level source enum value to its MQTT/log string token. */
 const char* Level::sourceToString(Source source)
 {
     switch (source) {

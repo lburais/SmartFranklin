@@ -195,7 +195,7 @@ static AsyncWebServer server(80);
  * Page Features:
  *   - Responsive design with card-based layout
  *   - Navigation buttons to configuration sections
- *   - Live data display in <pre> element
+ *   - Live data display in &lt;pre&gt; element
  *   - JavaScript fetch API for real-time updates
  *   - 1-second polling interval for data refresh
  *   - JSON formatting with syntax highlighting
@@ -1333,7 +1333,6 @@ static void sendJson(AsyncWebServerRequest* request, JsonDocument& doc, int stat
  *   - Memory usage: ~20KB for server and route handlers
  *   - CPU overhead: Minimal (asynchronous callbacks)
  * 
- * @return void
  * 
  * @note Call this function after WiFi connection is established.
  *       Server begins accepting connections immediately.

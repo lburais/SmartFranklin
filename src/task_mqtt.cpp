@@ -263,7 +263,6 @@ bool is_local_broker_ready()
  * 
  * @param pv - FreeRTOS task parameter (unused, nullptr)
  * 
- * @return void (task runs indefinitely)
  * 
  * @note This task is essential for MQTT functionality in SmartFranklin.
  *       All MQTT operations depend on this task running continuously.

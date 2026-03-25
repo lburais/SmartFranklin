@@ -1,5 +1,11 @@
-/*
- * SmartFranklin - unified I2C sensors task
+/**
+ * @file task_i2c.cpp
+ * @brief Unified I2C task orchestrating Gaz, Tank, Level, RTC, and GPS modules.
+ *
+ * Detects reachable I2C routes for each supported peripheral, applies PAHub
+ * channel selection when needed, initializes module backends with retries,
+ * and executes periodic processing loops for all enabled sensors.
+ *
  * SPDX-License-Identifier: MIT
  */
 
@@ -18,6 +24,7 @@ namespace {
 
 static constexpr uint32_t I2C_SENSORS_INIT_RETRY_MS = 10000UL;
 
+/** Map detected I2C level sensor type to Level module source enum. */
 Level::Source levelSourceFromLevelType(const sf_i2c::LevelType levelType)
 {
 	switch (levelType) {
@@ -33,6 +40,7 @@ Level::Source levelSourceFromLevelType(const sf_i2c::LevelType levelType)
 	}
 }
 
+/** Select PAHub channel when a device route requires it. */
 bool selectPaHubIfNeeded(const sf_i2c::I2C& i2c, const sf_i2c::Device& device, const char* label)
 {
 	if (!sf_i2c::isPaHubRoute(device.route.mode)) {
@@ -52,6 +60,7 @@ bool selectPaHubIfNeeded(const sf_i2c::I2C& i2c, const sf_i2c::Device& device, c
 	return true;
 }
 
+/** Disable PAHub channel selection after routed transaction. */
 void disablePaHubIfNeeded(const sf_i2c::I2C& i2c, const sf_i2c::Device& device)
 {
 	if (sf_i2c::isPaHubRoute(device.route.mode)) {
@@ -61,6 +70,10 @@ void disablePaHubIfNeeded(const sf_i2c::I2C& i2c, const sf_i2c::Device& device)
 
 }  // namespace
 
+/**
+ * @brief FreeRTOS entrypoint for unified I2C sensor orchestration.
+ * @param pv Unused task parameter.
+ */
 void taskI2c(void *pv)
 {
 	(void)pv;

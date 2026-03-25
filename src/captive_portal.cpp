@@ -120,7 +120,6 @@ static DNSServer dnsServer;
  *   - WiFi.mode() should be set to WIFI_AP or WIFI_AP_STA
  *   - Valid AP IP address must be assigned (typically 192.168.4.1)
  * 
- * @return void
  * 
  * @note This function should be called during system initialization (setup())
  *       when external WiFi connection is unavailable or fails.

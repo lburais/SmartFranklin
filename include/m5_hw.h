@@ -1,4 +1,4 @@
-/*
+/**
  * ============================================================================
  * M5Stack Hardware Abstraction Module - SmartFranklin
  * ============================================================================
@@ -6,87 +6,32 @@
  * File:        m5_hw.h
  * Project:     SmartFranklin IoT Device Controller
  * Description: Header file for M5Stack hardware abstraction layer. Provides
- *              unified interface to M5Stack Core device sensors, buttons,
- *              display, and power management functions.
  * 
  * Author:      Laurent Burais
  * Date:        5 March 2026
  * Version:     1.0
  * 
  * Overview:
- *   The M5 hardware abstraction module provides a clean, unified interface
- *   to M5Stack Core device capabilities. It encapsulates M5Unified library
- *   calls and provides consistent access to battery status, button states,
- *   accelerometer readings, display control, and power management. This
- *   abstraction simplifies hardware access and enables easier testing and
- *   portability.
  * 
  * M5Stack Hardware Integration:
- *   - Core Device: M5Stack Core series (Basic, Gray, Fire, etc.)
- *   - Display: 320x240 TFT LCD with ILI9342C controller
- *   - Buttons: Three physical buttons (A, B, C) with GPIO inputs
- *   - Battery: Built-in LiPo battery with fuel gauge
- *   - IMU: 6-axis MPU6886 accelerometer/gyroscope
- *   - Power: AXP192 power management IC
- *   - Speaker: PWM audio output for beeps and tones
  * 
  * Hardware Status Monitoring:
- *   - Battery Voltage: Real-time voltage measurement
- *   - Battery Percentage: State of charge estimation
- *   - Charging Status: AC adapter connection detection
- *   - Temperature: Device internal temperature
- *   - Button States: A and B button press detection
- *   - Accelerometer: 3-axis acceleration measurements
  * 
  * Display Control:
- *   - Brightness: Backlight level adjustment (0-255)
- *   - Power Management: Display sleep/wake control
- *   - Graphics: Drawing primitives through M5Unified
- *   - Text Rendering: Font and size selection
  * 
  * Power Management:
- *   - Deep Sleep: Ultra-low power sleep mode
- *   - Wake Sources: Timer, button, or GPIO interrupts
- *   - Battery Monitoring: Low voltage warnings
- *   - Power Efficiency: Optimized for battery operation
  * 
  * Abstraction Benefits:
- *   - Unified API: Consistent interface across M5Stack models
- *   - Error Handling: Graceful failure on hardware issues
- *   - Performance: Optimized access patterns
- *   - Maintainability: Centralized hardware interface
- *   - Testing: Mockable interface for unit testing
  * 
  * Integration:
- *   - Data Model: Hardware status updates global DATA structure
- *   - Tasks: Hardware polling in dedicated FreeRTOS tasks
- *   - Display: Brightness control from user interface
- *   - Power: Deep sleep integration with system sleep management
  * 
  * Dependencies:
- *   - Arduino.h: Basic types and utilities
- *   - M5Unified.h: M5Stack unified hardware interface
  * 
  * Limitations:
- *   - M5Stack Specific: Designed for M5Stack Core devices only
- *   - Single Instance: Global HW instance for system-wide access
- *   - Synchronous: Blocking calls for hardware access
- *   - No Caching: Real-time reads on each call
- *   - Limited Error Recovery: Basic error handling
  * 
  * Best Practices:
- *   - Initialize early in setup() before other hardware access
- *   - Poll hardware status regularly but not excessively
- *   - Handle button presses with debouncing logic
- *   - Monitor battery levels for low-power warnings
- *   - Use appropriate brightness levels for power efficiency
  * 
  * Safety Considerations:
- *   - Battery Monitoring: Prevent deep discharge damage
- *   - Temperature: Monitor for overheating conditions
- *   - Button Debouncing: Prevent false trigger from contact bounce
- *   - Sleep Safety: Ensure wake conditions are properly configured
- *   - Display Brightness: Avoid excessive brightness for eye safety
  * 
  * ============================================================================
  * MIT License
@@ -452,16 +397,8 @@ private:
  * and centralized management.
  * 
  * Usage Pattern:
- *   HW.init();              // Initialize hardware
- *   HwStatus status = HW.read();  // Read hardware state
- *   HW.setBrightness(128);  // Set display brightness
- *   HW.deepSleep();         // Enter deep sleep (no return)
  * 
  * Access Control:
- *   - Global Scope: Accessible from any source file
- *   - Single Instance: No multiple hardware interfaces
- *   - Thread Safety: Methods are synchronous (consider mutex if needed)
- *   - Lifetime: Available throughout program execution
  * 
  * @see M5Hardware - Hardware abstraction class
  * @see HwStatus - Hardware status structure

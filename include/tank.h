@@ -1,4 +1,4 @@
-/*
+/**
  * ============================================================================
  * Tank Module Interface - SmartFranklin IoT Device Controller
  * ============================================================================
@@ -6,20 +6,10 @@
  * File:        tank.h
  * Project:     SmartFranklin - ESP32 IoT Water Tank Monitor
  * Description: Public API for the M5Stack Unit Ultrasonic I2C water level
- *              sensor integration. Provides initialization, periodic polling,
- *              distance measurement, and fill-level computation.
  *
  * Hardware:    M5Stack Unit Ultrasonic I2C (RCWL-9600)
- *              - I2C Address: 0x57 (default)
- *              - Measurement Range: 20 mm - 4500 mm
- *              - Resolution: 1 mm
  *
  * Features:
- *   - Automatic I2C route detection (Wire / Ex_I2C / PAHub)
- *   - Distance-to-fill-percentage mapping with calibration
- *   - MQTT publication of distance (mm) and fill level (%)
- *   - Thread-safe state management via mutex
- *   - Measurement validation and clamping
  *
  * ============================================================================
  * MIT License - Copyright (c) 2026 Laurent Burais
@@ -89,7 +79,7 @@ public:
      * @note Should be called periodically (typically every 1000 ms) from
      *       the dedicated sensor task context.
      *
-     * @return void; logs warnings on measurement failures
+    * @note Logs warnings on measurement failures and exits early when data is invalid.
      */
     void process();
 

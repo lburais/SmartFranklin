@@ -1,4 +1,4 @@
-/*
+/**
  * ============================================================================
  * MQTT Interface Module - SmartFranklin
  * ============================================================================
@@ -6,26 +6,14 @@
  * File:        mqtt.h
  * Project:     SmartFranklin IoT Device Controller
  * Description: Public MQTT API used by SmartFranklin runtime modules.
- *              Provides external broker connectivity, publish/subscribe
- *              helpers, and local-broker fallback publication.
  *
  * Author:      Laurent Burais
  * Date:        12 March 2026
  * Version:     1.1
  *
  * Overview:
- *   This header declares the `sf_mqtt` namespace wrapper around the ESP-IDF
- *   MQTT client. It is intentionally compact and task-friendly:
- *   - `init(...)` configures and starts the client,
- *   - `is_connected()` exposes current connection state,
- *   - `publish(...)` sends to external broker when available,
- *   - `publish_local(...)` sends to the embedded local broker path,
- *   - `subscribe(...)` registers topic subscriptions.
  *
  * Integration Notes:
- *   - `publish(...)` can transparently fall back to local broker routing when
- *     the external client is unavailable.
- *   - Message callback execution occurs from MQTT event context.
  *
  * ============================================================================
  * MIT License
@@ -71,22 +59,12 @@ namespace sf_mqtt {
  * Provides topic and payload as std::string parameters.
  * 
  * Callback Signature:
- *   void callback(const std::string &topic, const std::string &payload)
  * 
  * Parameters:
- *   - topic: MQTT topic string where message was received
- *   - payload: Message payload as binary data string
  * 
  * Usage:
- *   - Process incoming sensor data or commands
- *   - Update internal state based on received messages
- *   - Forward messages to other system components
- *   - Log or store received data for analysis
  * 
  * Thread Safety:
- *   - Called from MQTT client task context
- *   - Should be thread-safe if accessing shared resources
- *   - Keep processing lightweight to avoid blocking
  * 
  * @see init() - Function that registers this callback
  */
@@ -216,39 +194,16 @@ struct Config {
  * @return true if initialization successful, false on error
  * 
  * Initialization Process:
- *   1. Validate configuration parameters
- *   2. Create ESP-IDF MQTT client instance
- *   3. Configure connection parameters (URI, auth, TLS)
- *   4. Register message callback for incoming messages
- *   5. Start MQTT client and attempt broker connection
- *   6. Wait for connection establishment or timeout
  * 
  * Configuration Validation:
- *   - URI format and scheme validation
- *   - Required parameter presence checking
- *   - TLS configuration consistency
- *   - Client ID format validation
  * 
  * Error Handling:
- *   - Invalid configuration returns false
- *   - Network errors logged with retry capability
- *   - TLS certificate errors handled gracefully
- *   - Connection timeouts with exponential backoff
  * 
  * Performance:
- *   - Initialization Time: 1-5 seconds (network dependent)
- *   - Memory Usage: MQTT client and buffer allocation
- *   - Network Usage: Initial connection handshake
  * 
  * Usage Notes:
- *   - Call once during system initialization
- *   - Ensure network connectivity before calling
- *   - Callback must be valid for message processing
- *   - Check return value for successful initialization
  * 
  * @note Blocking operation during connection establishment.
- *       Callback function must remain valid during MQTT operation.
- *       Network connectivity required for successful initialization.
  * 
  * @see Config - Configuration structure
  * @see MessageCallback - Callback function type
@@ -266,30 +221,14 @@ bool init(const Config &cfg, MessageCallback cb);
  * @return true if connected to broker, false if disconnected
  * 
  * Connection States:
- *   - Connected: Active connection with broker
- *   - Connecting: In process of establishing connection
- *   - Disconnected: No connection to broker
- *   - Error: Connection failed or lost
  * 
  * Status Sources:
- *   - ESP-IDF MQTT client internal state
- *   - Network connectivity monitoring
- *   - Broker responsiveness (ping/pong)
  * 
  * Usage Patterns:
- *   - Health Monitoring: Periodic status checks
- *   - Reconnection Logic: Trigger reconnect on disconnection
- *   - UI Updates: Display connection status
- *   - Error Handling: Conditional operation based on status
  * 
  * Performance:
- *   - Execution Time: < 1ms
- *   - No Network I/O: Local state check only
- *   - Thread Safe: Can be called from any context
  * 
  * @note Function checks current state, doesn't initiate connections.
- *       Use after init() has been called successfully.
- *       Status may change asynchronously due to network events.
  * 
  * @see init() - Establish initial connection
  * @see publish() - Operations requiring connection
@@ -307,7 +246,6 @@ bool is_connected();
  * @param qos QoS level (0..2)
  * @param retain Retain flag
  * @return true if queued for local broker clients, false if local broker is
- *         not ready yet
  */
 bool publish_local(const std::string &topic,
                    const std::string &payload,
@@ -335,38 +273,18 @@ bool is_local_broker_ready();
  * @return true if message queued successfully, false on error
  * 
  * QoS Levels:
- *   - 0 (At most once): Fire and forget, no delivery guarantee
- *   - 1 (At least once): Acknowledged delivery, may have duplicates
- *   - 2 (Exactly once): Guaranteed single delivery, highest overhead
  * 
  * Retain Behavior:
- *   - false: Message delivered to current subscribers only
- *   - true: Message stored on broker for future subscribers
  * 
  * Topic Format:
- *   - Hierarchical: "smartfranklin/sensor/temperature"
- *   - Wildcard Support: Not applicable for publishing
- *   - Length Limit: Typically < 65535 characters
  * 
  * Error Conditions:
- *   - Not connected: Message not sent, returns false
- *   - Invalid topic: Malformed topic string
- *   - QoS out of range: Invalid QoS value
- *   - Buffer full: Internal queue overflow
  * 
  * Performance:
- *   - Execution Time: < 1ms (queuing only)
- *   - Asynchronous: Actual transmission in background
- *   - Memory Usage: Payload copied to internal buffer
- *   - Network Usage: Depends on payload size and QoS
  * 
  * Usage Examples:
- *   publish("smartfranklin/status", "online", 1, true);
- *   publish("sensor/temperature", "23.5", 0, false);
  * 
  * @note Function queues message for sending, doesn't wait for delivery.
- *       Requires active connection from init().
- *       Large payloads may be fragmented by underlying implementation.
  * 
  * @see subscribe() - Receive messages on topics
  * @see is_connected() - Check connection status
@@ -388,41 +306,18 @@ bool publish(const std::string &topic,
  * @return true if subscription successful, false on error
  * 
  * Topic Patterns:
- *   - Exact Match: "smartfranklin/sensor/temperature"
- *   - Single Level: "smartfranklin/sensor/+" (matches one level)
- *   - Multi Level: "smartfranklin/#" (matches all subtopics)
- *   - Examples: "+", "#", "sensor/+", "building/floor/+/room"
  * 
  * QoS Levels:
- *   - 0: At most once delivery of messages
- *   - 1: At least once delivery with acknowledgments
- *   - 2: Exactly once delivery with highest reliability
  * 
  * Subscription Management:
- *   - Persistent: Subscriptions maintained across reconnections
- *   - Multiple: Multiple subscriptions allowed
- *   - Overlapping: Multiple patterns can match same message
- *   - Unsubscribe: Not implemented (use broker management)
  * 
  * Error Conditions:
- *   - Not connected: Subscription not registered
- *   - Invalid topic: Malformed topic pattern
- *   - QoS out of range: Invalid QoS value
- *   - Broker rejection: Subscription not allowed
  * 
  * Performance:
- *   - Execution Time: < 100ms (network round-trip)
- *   - Memory Usage: Subscription state storage
- *   - Network Usage: SUBSCRIBE packet transmission
  * 
  * Usage Examples:
- *   subscribe("smartfranklin/commands", 1);
- *   subscribe("sensor/#", 0);
- *   subscribe("building/+/temperature", 2);
  * 
  * @note Requires active connection from init().
- *       Wildcard subscriptions increase server processing load.
- *       Messages delivered asynchronously via callback.
  * 
  * @see publish() - Send messages to topics
  * @see init() - Register message callback

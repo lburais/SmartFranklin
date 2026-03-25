@@ -1,5 +1,11 @@
-/*
- * SmartFranklin - tank sensor module implementation
+/**
+ * @file tank.cpp
+ * @brief Tank ultrasonic sensor implementation and fill-level mapping.
+ *
+ * Reads raw distance samples, clamps invalid values, computes tank fill
+ * percentage from installation geometry, updates shared data, and publishes
+ * telemetry topics for monitoring.
+ *
  * SPDX-License-Identifier: MIT
  */
 
@@ -17,16 +23,23 @@
 
 namespace {
 
+/** Register used by the ultrasonic unit to trigger/read distance conversion. */
 constexpr uint8_t TANK_DISTANCE_REGISTER = 0x01;
+/** Sensor conversion latency required between command and readback. */
 constexpr uint32_t TANK_CONVERSION_DELAY_MS = 120U;
 
+/** Minimum supported measurement in millimeters (sensor datasheet bound). */
 constexpr int32_t TANK_DISTANCE_MIN_MM = 20;
+/** Maximum supported measurement in millimeters (sensor datasheet bound). */
 constexpr int32_t TANK_DISTANCE_MAX_MM = 4500;
 
 // Tank mapping defaults: tune these values to match the physical installation.
+/** Distance corresponding to full tank (100%). */
 constexpr int32_t TANK_FULL_DISTANCE_MM = 300;
+/** Distance corresponding to empty tank (0%). */
 constexpr int32_t TANK_EMPTY_DISTANCE_MM = 1500;
 
+/** Clamp sensor distance to supported RCWL-9600 range. */
 int32_t clampDistanceMm(int32_t distanceMm)
 {
     if (distanceMm < TANK_DISTANCE_MIN_MM) {
@@ -38,6 +51,7 @@ int32_t clampDistanceMm(int32_t distanceMm)
     return distanceMm;
 }
 
+/** Convert distance in mm to fill percentage using configured mapping. */
 int32_t distanceToFillPct(const int32_t distanceMm)
 {
     if (distanceMm <= TANK_FULL_DISTANCE_MM) {
@@ -66,10 +80,15 @@ int32_t distanceToFillPct(const int32_t distanceMm)
 }
 
 struct TankState {
+    /** Protects all mutable tank runtime state. */
     mutable std::mutex mutex;
+    /** Set to true once module initialization succeeds. */
     bool initialized = false;
+    /** True when sensor is reached through internal M5 I2C route. */
     bool isInternalRoute = false;
+    /** Effective I2C address used for the ultrasonic sensor. */
     uint8_t i2cAddress = 0x57;
+    /** Last valid measured distance in millimeters. */
     int32_t lastDistanceMm = 0;
 };
 
@@ -79,6 +98,7 @@ TankState TANK_STATE;
 
 Tank TANK_MODULE;
 
+/** Acquire one tank sample while state mutex is held. */
 static bool refreshMeasurementLocked(TankState& state, int32_t& distanceMm)
 {
     uint32_t rawDistance = 0;
@@ -152,6 +172,7 @@ static bool refreshMeasurementLocked(TankState& state, int32_t& distanceMm)
     return true;
 }
 
+/** Initialize tank state and selected route metadata. */
 static bool initState(TankState& state, bool isInternalRoute, uint8_t i2cAddress)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
@@ -164,6 +185,7 @@ static bool initState(TankState& state, bool isInternalRoute, uint8_t i2cAddress
     return true;
 }
 
+/** Publish tank distance and fill percentage to MQTT. */
 static void publishDistance(const int32_t distanceMm, const int32_t fillPct)
 {
     char mmBuf[24] = {0};
@@ -177,6 +199,7 @@ static void publishDistance(const int32_t distanceMm, const int32_t fillPct)
     M5_LOGI("[TANK] Distance: %d mm     Fill level: %d%%", distanceMm, fillPct);
 }
 
+/** Run one full process cycle: measure, convert, persist, publish. */
 static void processState(TankState& state)
 {
     int32_t distanceMm = 0;
@@ -207,22 +230,26 @@ static void processState(TankState& state)
     publishDistance(distanceMm, fillPct);
 }
 
+/** Return current initialization flag from protected state. */
 static bool isInitializedState(const TankState& state)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
     return state.initialized;
 }
 
+/** @brief Initializes the tank module with selected route and address. */
 bool Tank::init(bool isInternalRoute, uint8_t i2cAddress)
 {
     return initState(TANK_STATE, isInternalRoute, i2cAddress);
 }
 
+/** @brief Executes one acquisition cycle and publishes tank telemetry. */
 void Tank::process()
 {
     processState(TANK_STATE);
 }
 
+/** @brief Returns true when tank module initialization has completed. */
 bool Tank::isInitialized() const
 {
     return isInitializedState(TANK_STATE);

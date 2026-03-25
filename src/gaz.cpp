@@ -1,5 +1,10 @@
-/*
- * SmartFranklin - gas sensor module implementation
+/**
+ * @file gaz.cpp
+ * @brief Gas bottle weight acquisition and calibration implementation.
+ *
+ * This module wraps M5 Unit WEIGHT operations, keeps calibration state,
+ * computes gas fill percentage from measured weight, and publishes telemetry.
+ *
  * SPDX-License-Identifier: MIT
  */
 
@@ -23,6 +28,7 @@ namespace {
 constexpr int32_t GAZ_BOTTLE_FULL_G = 6450;
 constexpr int32_t GAZ_BOTTLE_EMPTY_G = 3700;
 
+/** Normalize invalid calibration gaps to a safe default. */
 float sanitizedGap(const float gap)
 {
     if (!std::isfinite(gap) || gap == 0.0f) {
@@ -51,6 +57,7 @@ Gaz GAZ_MODULE;
 
 static void publishCalibrationGap(const float gap);
 
+/** Initialize weight unit and apply persisted calibration. */
 static bool initState(GazState& state, const bool isInternalRoute, const uint8_t i2cAddress)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
@@ -83,6 +90,7 @@ static bool initState(GazState& state, const bool isInternalRoute, const uint8_t
     return true;
 }
 
+/** Publish current calibration gap factor. */
 static void publishCalibrationGap(const float gap)
 {
     char gapBuf[24] = {0};
@@ -90,6 +98,7 @@ static void publishCalibrationGap(const float gap)
     sf_mqtt::publish("smartfranklin/gaz/calibration/gap", gapBuf, 1, true);
 }
 
+/** Acquire one weight sample and derive fill percentage under lock. */
 static bool refreshMeasurementLocked(GazState& state, int32_t& weightG, int32_t& fillPct)
 {
     state.units.update();
@@ -120,6 +129,7 @@ static bool refreshMeasurementLocked(GazState& state, int32_t& weightG, int32_t&
     return true;
 }
 
+/** Publish weight and fill telemetry topics. */
 static void publishWeight(const int32_t weightG, const int32_t fillPct)
 {
     char gBuf[24] = {0};
@@ -133,6 +143,7 @@ static void publishWeight(const int32_t weightG, const int32_t fillPct)
     M5_LOGI("[GAZ] Weight: %d g     Fill level: %d%%", weightG, fillPct);
 }
 
+/** Execute one process cycle for the gas/weight module. */
 static void processState(GazState& state)
 {
     int32_t weightG = 0;
@@ -173,6 +184,7 @@ static void processState(GazState& state)
     publishWeight(weightG, fillPct);
 }
 
+/** Perform tare operation through unit API. */
 static bool tareState(GazState& state)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
@@ -186,6 +198,7 @@ static bool tareState(GazState& state)
     return ok;
 }
 
+/** Apply runtime calibration factor to the sensor. */
 static bool applyCalibrationState(GazState& state, const float gap)
 {
     const float effectiveGap = sanitizedGap(gap);
@@ -202,6 +215,7 @@ static bool applyCalibrationState(GazState& state, const float gap)
     return true;
 }
 
+/** Read one sample for calibration workflow, with fallback to cached value. */
 static float readCalibrationSampleState(GazState& state)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
@@ -218,6 +232,7 @@ static float readCalibrationSampleState(GazState& state)
     return state.lastWeightG;
 }
 
+/** Return initialization status from protected state. */
 static bool isInitializedState(const GazState& state)
 {
     std::lock_guard<std::mutex> lock(state.mutex);

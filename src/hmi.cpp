@@ -290,7 +290,6 @@ void HMI::handleCalibrationButton(bool btnB_rising)
 
 /**
  * @brief Draws the top title band used by all pages.
- * @param title Page title text.
  */
 void HMI::drawTitleBox(const char* title) const
 {

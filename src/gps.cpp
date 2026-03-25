@@ -1,5 +1,11 @@
-/*
- * SmartFranklin - GPS module implementation
+/**
+ * @file gps.cpp
+ * @brief GNSS module implementation for DFRobot Gravity GPS over I2C.
+ *
+ * This unit reads date/time and navigation registers from the GPS device,
+ * validates fix quality, updates shared runtime state, and publishes GPS
+ * telemetry to MQTT topics used by dashboards and external consumers.
+ *
  * SPDX-License-Identifier: MIT
  */
 
@@ -54,6 +60,7 @@ struct GpsState {
 
 GpsState GPS_STATE;
 
+/** Write a single device register through internal or Wire route. */
 bool writeRegister(const GpsState& state, uint8_t reg, uint8_t value)
 {
     if (state.isInternalRoute) {
@@ -70,6 +77,7 @@ bool writeRegister(const GpsState& state, uint8_t reg, uint8_t value)
     return Wire.endTransmission() == 0;
 }
 
+/** Read contiguous registers from GPS through selected bus route. */
 bool readRegisters(const GpsState& state, uint8_t reg, uint8_t* out, size_t len)
 {
     if (out == nullptr || len == 0U) {
@@ -118,12 +126,14 @@ bool readRegisters(const GpsState& state, uint8_t reg, uint8_t* out, size_t len)
     return true;
 }
 
+/** Decode DFRobot fixed-point (2-byte integer + 1-byte hundredth) format. */
 double decodeUnsigned_2_1_100(uint8_t b0, uint8_t b1, uint8_t b2)
 {
     const uint16_t highLow = static_cast<uint16_t>((static_cast<uint16_t>(b0 & 0x7F) << 8) | b1);
     return static_cast<double>(highLow) + (static_cast<double>(b2) / 100.0);
 }
 
+/** Acquire one complete pose/time sample and update locked state fields. */
 bool readPoseAndTimeLocked(GpsState& state)
 {
     uint8_t dateTimeRaw[7] = {0};
@@ -198,6 +208,7 @@ bool readPoseAndTimeLocked(GpsState& state)
     return true;
 }
 
+/** Initialize GPS backend for requested source and route. */
 bool initState(GpsState& state, GPS::Source source, bool isInternalRoute, uint8_t i2cAddress)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
@@ -230,6 +241,7 @@ bool initState(GpsState& state, GPS::Source source, bool isInternalRoute, uint8_
     return true;
 }
 
+/** Publish latest GPS sample to MQTT topics. */
 void publishFix(const GpsState& state, const char* dateBuf, const char* utcBuf)
 {
     char latBuf[24] = {0};
@@ -257,6 +269,7 @@ void publishFix(const GpsState& state, const char* dateBuf, const char* utcBuf)
     sf_mqtt::publish("smartfranklin/gps/utc", utcBuf);
 }
 
+/** Execute one processing cycle: read, validate, persist and publish. */
 void processState(GpsState& state)
 {
     char dateBuf[16] = {0};
@@ -299,12 +312,14 @@ void processState(GpsState& state)
     publishFix(GPS_STATE, dateBuf, utcBuf);
 }
 
+/** Return module initialization flag from protected state. */
 bool isInitializedState(const GpsState& state)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
     return state.initialized;
 }
 
+/** Return current source enum from protected state. */
 GPS::Source sourceState(const GpsState& state)
 {
     std::lock_guard<std::mutex> lock(state.mutex);

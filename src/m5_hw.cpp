@@ -177,7 +177,6 @@ M5Hardware HW;
  *   - Should be called only once during system startup
  *   - Must be called before any HW.read() or other HW calls
  * 
- * @return void
  * 
  * @note Call this function exactly once during setup() phase.
  *       Calling multiple times may cause undefined behavior.
@@ -375,12 +374,10 @@ HwStatus M5Hardware::read()
  *   - Idle timeout: Disable display (set to 0) after 30 seconds inactivity
  *   - User control: Allow menu to adjust brightness preference
  * 
- * @param level - Brightness value (0-255 range)
  *                0 = Display backlight off (dark/invisible)
  *                128 = 50% brightness (default, recommended)
  *                255 = Maximum brightness
  * 
- * @return void
  * 
  * @note This function has immediate effect - brightness changes take effect
  *       within a few milliseconds.
@@ -462,7 +459,6 @@ void M5Hardware::setBrightness(uint8_t level)
  *   - Low battery mode: Battery < 5%, maximize remaining battery
  *   - Scheduled maintenance: Put device to sleep during off-hours
  * 
- * @return void (function does not return - device enters infinite power-down)
  * 
  * @note This is a blocking call that never returns. Ensure all cleanup
  *       (saving state, publishing final values) is completed BEFORE

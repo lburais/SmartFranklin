@@ -224,7 +224,6 @@ static uint32_t lastBeat[NUM_TASKS];
  *   - Memory usage: 36 bytes for timestamp array
  *   - Runtime overhead: Minimal (timestamp updates only)
  * 
- * @return void
  * 
  * @note Call this function during setup() before creating FreeRTOS tasks.
  *       Tasks should call watchdog_beat() immediately after starting.
@@ -320,7 +319,6 @@ void watchdog_init()
  *             Must correspond to assigned task ID from watchdog.h
  *             Invalid IDs are ignored without error
  * 
- * @return void
  * 
  * @note This function is thread-safe and can be called from any task.
  *       Tasks should call this function more frequently than the 10-second timeout.

@@ -140,7 +140,6 @@ static bool detectCaptivePortal()
  *     * -70 to -85 dBm   : Weak signal
  *     * Below -85 dBm    : Very poor signal
  * 
- * @return void
  * 
  * @note Called periodically (every 30 seconds) from main task loop.
  *       MQTT must be initialized before calling this function.
@@ -194,7 +193,6 @@ static void publishWiFiStatus()
  *   - Prints AP startup status (OK/FAIL) to serial console
  *   - Prints STA SSID and connection attempt status
  * 
- * @return void
  * 
  * @note Called once during task initialization. Should be called after
  *       CONFIG has been loaded from persistent storage.
@@ -262,8 +260,6 @@ static void wifiInitialSetup()
  *   - Falls back to AP-only mode if STA connectivity fails
  * 
  * @param pv FreeRTOS task parameter (unused)
- * @return void (infinite loop, never returns)
- * 
  * @note Task priority: 1 (low) on dedicated core for WiFi
  *       Task stack size: 4096 bytes
  */

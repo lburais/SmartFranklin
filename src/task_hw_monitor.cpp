@@ -196,10 +196,8 @@
  *   - Supports automated health checking and alerting
  *   - Complements higher-level abstraction layers
  * 
- * @param pv - FreeRTOS task parameter (unused, nullptr)
- * 
- * @return void (task runs indefinitely)
- * 
+ * @param pv FreeRTOS task parameter (unused, nullptr)
+ *
  * @note Temperature monitoring is currently disabled in the code.
  *       Uncomment the temperature publishing section if sensor is available.
  *       Task provides comprehensive hardware status for monitoring systems.

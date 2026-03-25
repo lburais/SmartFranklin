@@ -186,14 +186,11 @@
  *   - Typical execution: < 1 microsecond
  *   - Suitable for real-time embedded systems
  * 
- * @param data - Pointer to byte buffer containing JBD BMS frame data
  *               Must point to valid memory of at least 'len' bytes
  * 
- * @param len  - Size of frame data buffer in bytes
  *               Minimum required: 13 bytes for valid status frame
  *               Oversized buffers are acceptable (only first 13 used)
  * 
- * @param out  - Reference to JbdFrame structure to receive parsed results
  *               Populated only if function returns true
  *               Structure contents undefined if return value is false
  * 

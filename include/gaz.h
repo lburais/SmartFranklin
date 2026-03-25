@@ -1,4 +1,4 @@
-/*
+/**
  * ============================================================================
  * Gas/Weight Sensor Module Interface - SmartFranklin IoT Device Controller
  * ============================================================================
@@ -6,22 +6,10 @@
  * File:        gaz.h
  * Project:     SmartFranklin - ESP32 IoT Device Controller
  * Description: Public API for M5Stack Weight I2C unit integration supporting
- *              propane/gas bottle weight measurement, calibration control,
- *              and fill-level estimation via weight mapping.
  *
  * Hardware:    M5Stack Unit WEIGHT (I2C)
- *              - I2C Address: 0x26 (default)
- *              - Load Cell: 5 kG max
- *              - Calibration: Gap-based (software + hardware)
  *
  * Features:
- *   - Weight measurement in grams with automatic fill% computation
- *   - Tare (zero-offset) calibration support
- *   - Gap-factor calibration for load cell compensation
- *   - Real-time calibration adjustments during HMI workflow
- *   - MQTT publication of weight (g) and fill level (%)
- *   - Thread-safe state via mutex
- *   - Dual I2C route support (Wire / Ex_I2C / PAHub)
  *
  * ============================================================================
  * MIT License - Copyright (c) 2026 Laurent Burais
@@ -164,7 +152,20 @@ public:
  */
 extern Gaz GAZ_MODULE;
 
+/**
+ * @brief Read one raw calibration sample from the gas/weight module.
+ * @return Current weight sample in grams.
+ */
 float scale_get_raw();
+
+/**
+ * @brief Execute tare operation (zero offset capture).
+ */
 void scale_tare();
+
+/**
+ * @brief Apply calibration factor used by scale conversion workflow.
+ * @param factor Calibration gap/factor to apply.
+ */
 void scale_set_cal_factor(float factor);
 

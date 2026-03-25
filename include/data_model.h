@@ -1,4 +1,4 @@
-/*
+/**
  * ============================================================================
  * Data Model Module - SmartFranklin
  * ============================================================================
@@ -6,81 +6,32 @@
  * File:        data_model.h
  * Project:     SmartFranklin IoT Device Controller
  * Description: Header file defining the global data model structure for
- *              SmartFranklin. Provides thread-safe access to sensor data,
- *              actuator states, and system settings shared across all tasks.
  * 
  * Author:      Laurent Burais
  * Date:        5 March 2026
  * Version:     1.0
  * 
  * Overview:
- *   The data model serves as the central repository for all SmartFranklin
- *   system state information. Sensor readings, actuator statuses, and
- *   configuration parameters are stored in a global structure accessible
- *   throughout the application. Thread-safe access is provided through
- *   a mutex to prevent race conditions in the FreeRTOS multi-tasking environment.
  * 
  * Data Categories:
- *   - Sensors: Weight and GNSS/time measurements
- *   - Power: Battery voltage, current, state of charge
- *   - Actuators: LED and buzzer control states
- *   - Settings: Target charge level and other configurable parameters
- *   - Communication: Last mesh network messages
  * 
  * Thread Safety:
- *   - Mutex Protection: DATA_MUTEX guards all data access
- *   - Lock Scope: Minimal lock duration for performance
- *   - Read/Write Patterns: Separate handling for different access types
- *   - Deadlock Prevention: Consistent lock ordering across tasks
  * 
  * Data Flow:
- *   - Sensor Tasks: Update DATA fields with new measurements
- *   - Control Tasks: Read DATA for decision making
- *   - MQTT Tasks: Publish DATA values to external systems
- *   - Display Tasks: Show DATA values on LCD interface
- *   - Persistence: Critical data saved to configuration store
  * 
  * Update Frequency:
- *   - Sensors: Vary by sensor type (weight: 60s, GNSS configurable)
- *   - Actuators: Immediate on command receipt
- *   - Settings: On configuration changes
- *   - Time: Continuous RTC updates
  * 
  * Memory Management:
- *   - Static Allocation: Fixed-size structure in global memory
- *   - String Handling: Arduino String objects with heap allocation
- *   - Float Precision: Single precision (4 bytes) for sensor data
- *   - Integer Types: Appropriate sizes for range requirements
  * 
  * Data Validation:
- *   - Range Checking: Sensor tasks validate measurements
- *   - Default Values: Sensible defaults for uninitialized data
- *   - Type Safety: Strong typing prevents incorrect assignments
- *   - Bounds Checking: Prevent buffer overflows in strings
  * 
  * Integration Points:
- *   - MQTT Layer: Publishes data model changes
- *   - Display System: Renders data model values
- *   - Command Handler: Updates actuator states
- *   - Configuration Store: Persists settings across reboots
  * 
  * Dependencies:
- *   - Arduino.h: String class and basic types
- *   - mutex: C++11 standard library mutex (ESP32 Arduino core)
  * 
  * Limitations:
- *   - Memory Usage: Global structure consumes RAM continuously
- *   - Single Writer: Assumes single writer per field (no conflicts)
- *   - No History: Current values only (no time-series data)
- *   - No Units: Values stored as raw numbers (interpretation required)
- *   - No Metadata: No timestamps or quality indicators per value
  * 
  * Best Practices:
- *   - Lock Minimally: Hold mutex only during actual data access
- *   - Validate Data: Check sensor readings for reasonableness
- *   - Document Units: Clearly specify units for each field
- *   - Atomic Updates: Update related fields together under lock
- *   - Monitor Usage: Watch for memory pressure from string fields
  * 
  * ============================================================================
  * MIT License
@@ -372,16 +323,8 @@ struct SmartData {
  * access is mandatory using DATA_MUTEX to prevent race conditions.
  * 
  * Access Pattern:
- *   - Reading: Lock DATA_MUTEX, read fields, unlock
- *   - Writing: Lock DATA_MUTEX, update fields, unlock
- *   - Scope: Minimize lock duration for performance
- *   - Consistency: Update related fields atomically
  * 
  * Usage Examples:
- *   - Sensors: DATA.weight_gaz = measurement;
- *   - Actuators: if (DATA.led_state) turn_on_led();
- *   - Display: show_value(DATA.bms_soc);
- *   - MQTT: publish("voltage", String(DATA.bms_voltage));
  * 
  * @see DATA_MUTEX - Thread synchronization primitive
  * @see SmartData - Data structure definition
@@ -396,23 +339,10 @@ extern SmartData DATA;
  * multi-tasking environment. Prevents race conditions and data corruption.
  * 
  * Usage Pattern:
- *   std::lock_guard<std::mutex> lock(DATA_MUTEX);
- *   // Access DATA fields here
- *   DATA.weight_gaz = new_value;
- *   // Lock automatically released
  * 
  * Performance Considerations:
- *   - Lock Contention: Minimize time spent holding lock
- *   - Deadlocks: Avoid nested locks or inconsistent ordering
- *   - Priority: Higher priority tasks may preempt lower ones
- *   - Blocking: Tasks wait for lock if contended
  * 
  * Best Practices:
- *   - Use std::lock_guard for automatic unlock
- *   - Hold lock only during actual data access
- *   - Group related updates under single lock
- *   - Avoid long operations while holding lock
- *   - Document lock requirements in function comments
  * 
  * @see DATA - Global data structure
  * @see std::lock_guard - RAII mutex wrapper
