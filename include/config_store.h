@@ -55,7 +55,7 @@ struct SmartConfig {
     String sta_pass = "05121996190119942106196801071964";
 
     // Gaz calibration and smoothing
-    float gaz_calibration_factor = 1.0f;
+    float gaz_calibration_factor = 36.0f;
     int gaz_weight_average_window = 10;
 
     // Level geometry calibration (millimeters)
