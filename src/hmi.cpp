@@ -228,9 +228,9 @@ void HMI::process()
     btnB_prev_ = btnB_now;
 
 #if defined(ARDUINO_M5STACK_DIAL)
-    // M5 Dial rotary encoder channels are wired on GPIO42 / GPIO0 (active-low).
+    // M5 Dial rotary encoder channels are wired on GPIO42 / GPIO40 (active-low).
     const bool encA_now = (!m5gfx::gpio_in(GPIO_NUM_42)) & 1;
-    const bool encB_now = (!m5gfx::gpio_in(GPIO_NUM_0)) & 1;
+    const bool encB_now = (!m5gfx::gpio_in(GPIO_NUM_40)) & 1;
     const int8_t encoder_state = (encA_now ? 1 : 0) | (encB_now ? 2 : 0);
     const int8_t prev_state = dial_encoder_prev_state_;
     dial_encoder_prev_state_ = encoder_state;
@@ -275,6 +275,9 @@ void HMI::process()
         next_screen = (next_screen + 1) % kScreenCount;
     }
 #endif
+    if (btnA_rising) {
+        next_screen = (next_screen + 1) % kScreenCount;
+    }
 
     // Long touch (>5s) opens calibration page.
     bool anyTouchPressed = false;

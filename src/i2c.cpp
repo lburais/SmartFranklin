@@ -22,7 +22,7 @@
 namespace sf_i2c {
 
 namespace {
-constexpr uint8_t PAHUB_CHANNEL_COUNT = 8;
+constexpr uint8_t PAHUB_CHANNEL_COUNT = 6;
 }
 
 I2C::I2C(const uint32_t clockHz)
@@ -79,6 +79,9 @@ bool I2C::exSelectPaHubChannel(const uint8_t channel) const
 
     const bool writeOk = M5.Ex_I2C.write(static_cast<uint8_t>(1U << channel));
     const bool stopOk = M5.Ex_I2C.stop();
+
+    // M5_LOGI("[I2C] ex channel=%ld selecting write=%d stop=%d", channel, writeOk, stopOk);
+
     return writeOk && stopOk;
 }
 

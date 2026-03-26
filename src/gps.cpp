@@ -267,6 +267,12 @@ void publishFix(const GpsState& state, const char* dateBuf, const char* utcBuf)
     sf_mqtt::publish("smartfranklin/gps/satellites", satsBuf);
     sf_mqtt::publish("smartfranklin/gps/date", dateBuf);
     sf_mqtt::publish("smartfranklin/gps/utc", utcBuf);
+
+    if ( state.hasFix ) {
+        M5_LOGI("[GPS] sat=%s lat=%s lon=%s alt=%s date=%s utc=%s", satsBuf, latBuf, lonBuf, altBuf, dateBuf, utcBuf);
+    } else {
+        M5_LOGI("[GPS] no fix");
+    }
 }
 
 /** Execute one processing cycle: read, validate, persist and publish. */
