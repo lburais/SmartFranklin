@@ -87,7 +87,7 @@ public:
 
 private:
     /** @brief Number of available UI screens. */
-    static constexpr int kScreenCount = 5;
+    static constexpr int kScreenCount = 6;
 
     /**
      * @brief Immutable copy of shared DATA used by one render pass.
@@ -103,6 +103,12 @@ private:
         float bms_voltage = 0.0f;
         float bms_current = 0.0f;
         float bms_soc = 0.0f;
+        float level_pitch_deg = 0.0f;
+        float level_roll_deg = 0.0f;
+        float level_wheel_fl_mm = 0.0f;
+        float level_wheel_fr_mm = 0.0f;
+        float level_wheel_rl_mm = 0.0f;
+        float level_wheel_rr_mm = 0.0f;
         bool gps_has_fix = false;
         uint8_t gps_satellites = 0;
         double gps_latitude_deg = 0.0;
@@ -149,6 +155,9 @@ private:
     /** @brief Draws battery/BMS telemetry screen. */
     void drawBatteryScreen(const DisplaySnapshot& snapshot) const;
 
+    /** @brief Draws level telemetry screen. */
+    void drawLevelScreen(const DisplaySnapshot& snapshot) const;
+
     /** @brief Draws GPS telemetry screen. */
     void drawGpsScreen(const DisplaySnapshot& snapshot) const;
 
@@ -156,7 +165,7 @@ private:
     void drawCalibrationScreen(const DisplaySnapshot& snapshot) const;
 
     /** @brief Active page index in range [0, kScreenCount-1]. */
-    int screen_ = 2;
+    int screen_ = 4;
 
     /** @brief True while two-step calibration flow is in progress. */
     bool calib_in_progress_ = false;

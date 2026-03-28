@@ -184,7 +184,7 @@ bool HMI::init()
 
     lcd.fillScreen(COLOR_CONTENT_BG);
 
-    screen_ = 1;
+    screen_ = 4;
     calib_in_progress_ = false;
     btnA_prev_ = false;
     btnB_prev_ = false;
@@ -293,7 +293,7 @@ void HMI::process()
         if (touch_hold_start_ms_ == 0) {
             touch_hold_start_ms_ = millis();
         } else if ((millis() - touch_hold_start_ms_) >= 5000UL) {
-            next_screen = 4;
+            next_screen = 5;
         }
     } else {
         touch_hold_start_ms_ = 0;
@@ -323,8 +323,9 @@ const char* HMI::currentScreenName() const
     case 1: return "gaz";
     case 2: return "battery";
     case 3: return "gps";
-    case 4: return "calibration";
-    default: return "gaz";
+    case 4: return "level";
+    case 5: return "calibration";
+    default: return "level";
     }
 }
 
@@ -337,7 +338,7 @@ const char* HMI::currentScreenName() const
  */
 void HMI::handleCalibrationButton(bool btnB_rising)
 {
-    if (screen_ != 4 || !btnB_rising) {
+    if (screen_ != 5 || !btnB_rising) {
         return;
     }
 
@@ -405,9 +406,10 @@ void HMI::draw()
     case 1: drawGazScreen(snapshot); break;
     case 2: drawBatteryScreen(snapshot); break;
     case 3: drawGpsScreen(snapshot); break;
-    case 4: drawCalibrationScreen(snapshot); break;
+    case 4: drawLevelScreen(snapshot); break;
+    case 5: drawCalibrationScreen(snapshot); break;
     default:
-        drawGazScreen(snapshot);
+        drawLevelScreen(snapshot);
         break;
     }
 
@@ -437,6 +439,12 @@ void HMI::updateSnapshot(DisplaySnapshot& snapshot)
         snapshot.bms_voltage = DATA.bms_voltage;
         snapshot.bms_current = DATA.bms_current;
         snapshot.bms_soc = DATA.bms_soc;
+        snapshot.level_pitch_deg = DATA.level_pitch_deg;
+        snapshot.level_roll_deg = DATA.level_roll_deg;
+        snapshot.level_wheel_fl_mm = DATA.level_wheel_fl_mm;
+        snapshot.level_wheel_fr_mm = DATA.level_wheel_fr_mm;
+        snapshot.level_wheel_rl_mm = DATA.level_wheel_rl_mm;
+        snapshot.level_wheel_rr_mm = DATA.level_wheel_rr_mm;
         snapshot.gps_has_fix = DATA.gps_has_fix;
         snapshot.gps_satellites = DATA.gps_satellites;
         snapshot.gps_latitude_deg = DATA.gps_latitude_deg;
@@ -562,6 +570,22 @@ void HMI::drawGpsScreen(const DisplaySnapshot& snapshot) const
     lcd.printf("Spd: %.1f kn\n", snapshot.gps_speed_knots);
     lcd.printf("COG: %.1f\n", snapshot.gps_course_deg);
     lcd.printf("UTC: %s %s\n", snapshot.gps_date.c_str(), snapshot.gps_utc.c_str());
+}
+
+/** @brief Draw helper for level telemetry page. */
+void HMI::drawLevelScreen(const DisplaySnapshot& snapshot) const
+{
+    M5GFX& lcd = M5.Display;
+    drawTitleBox("Level");
+    beginContentArea();
+    const float fl_cm = snapshot.level_wheel_fl_mm / 10.0f;
+    const float fr_cm = snapshot.level_wheel_fr_mm / 10.0f;
+    const float rl_cm = snapshot.level_wheel_rl_mm / 10.0f;
+    const float rr_cm = snapshot.level_wheel_rr_mm / 10.0f;
+    lcd.printf("Pitch: %.2f\n", snapshot.level_pitch_deg);
+    lcd.printf("Roll: %.2f\n", snapshot.level_roll_deg);
+    lcd.printf("RL: %.0f cm - FL: %.0f cm\n", rl_cm, fl_cm);
+    lcd.printf("RR: %.0f cm - FR: %.0f cm\n", rr_cm, fr_cm);
 }
 
 /** @brief Draw helper for interactive scale calibration page. */
