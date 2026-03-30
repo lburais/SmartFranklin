@@ -76,7 +76,10 @@ extern TaskHandle_t taskMqttHandle;             // MQTT client+broker communicat
 extern TaskHandle_t taskWeightHandle;           // Weight sensor acquisition
 extern TaskHandle_t taskGazHandle;              // Gaz/weight sensor acquisition
 extern TaskHandle_t taskTankHandle;             // Tank ultrasonic acquisition
-extern TaskHandle_t taskI2cHandle;              // Unified I2C sensor acquisition (GAZ + TANK + IMU + RTC + GPS)
+extern TaskHandle_t taskLevelHandle;            // Level/accelerometer sensor acquisition
+extern TaskHandle_t taskRtcHandle;              // RTC acquisition
+extern TaskHandle_t taskGpsHandle;              // GPS/GNSS acquisition
+extern TaskHandle_t taskI2cHandle;              // Unified I2C sensor acquisition (DEPRECATED - use individual tasks)
 extern TaskHandle_t taskBmsBleHandle;           // BLE battery management system
 extern TaskHandle_t taskHmiHandle;              // HMI/display updates
 
@@ -148,6 +151,37 @@ void taskI2c(void *pv);
  * @note FreeRTOS task entrypoint; does not return during normal runtime.
  */
 void taskTank(void *pv);
+
+/**
+ * @brief Level sensor (accelerometer) acquisition task.
+ *
+ * Initializes and reads internal or external accelerometer (MPU or ADXL345),
+ * derives device tilt/inclination angles, and publishes level measurements
+ * for tank/container visualization.
+ *
+ * @note FreeRTOS task entrypoint; does not return during normal runtime.
+ */
+void taskLevel(void *pv);
+
+/**
+ * @brief Real-time clock (RTC) acquisition task.
+ *
+ * Initializes internal or external RTC, reads current date/time,
+ * handles clock synchronization, and manages time-based operations.
+ *
+ * @note FreeRTOS task entrypoint; does not return during normal runtime.
+ */
+void taskRtc(void *pv);
+
+/**
+ * @brief GPS/GNSS acquisition task.
+ *
+ * Communicates with DFRobot Gravity GNSS receiver via I2C, reads
+ * location and time data, and publishes GPS metrics.
+ *
+ * @note FreeRTOS task entrypoint; does not return during normal runtime.
+ */
+void taskGps(void *pv);
 
 /**
  * @brief BLE battery management system (BMS) monitoring task.

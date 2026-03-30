@@ -71,9 +71,12 @@
 TaskHandle_t taskWiFiHandle             = nullptr;  // WiFi connectivity management
 TaskHandle_t taskMqttHandle             = nullptr;  // MQTT client+broker communication
 TaskHandle_t taskWeightHandle           = nullptr;  // Weight sensor reading
-//TaskHandle_t taskGazHandle              = nullptr;  // Gaz/weight sensor reading
+TaskHandle_t taskGazHandle              = nullptr;  // Gaz/weight sensor reading
 TaskHandle_t taskTankHandle             = nullptr;  // Tank ultrasonic reading
-TaskHandle_t taskI2cHandle       = nullptr;  // Unified I2C sensors (GAZ + TANK)
+TaskHandle_t taskLevelHandle            = nullptr;  // Level/accelerometer sensor reading
+TaskHandle_t taskRtcHandle              = nullptr;  // RTC reading
+TaskHandle_t taskGpsHandle              = nullptr;  // GPS/GNSS reading
+TaskHandle_t taskI2cHandle              = nullptr;  // Legacy unified I2C sensors (DEPRECATED)
 TaskHandle_t taskBmsBleHandle           = nullptr;  // BLE battery management system
 TaskHandle_t taskHmiHandle              = nullptr;  // HMI/display task
 
@@ -217,7 +220,11 @@ void setup() {
     #endif
 
     #ifndef DISABLE_I2C_SENSORS
-    xTaskCreatePinnedToCore(taskI2c,       "I2C_SENS", 4096, nullptr, 2, &taskI2cHandle, 1);
+    xTaskCreatePinnedToCore(taskGaz,              "I2C_GAZ",      4096, nullptr, 2, &taskGazHandle,       1);
+    xTaskCreatePinnedToCore(taskTank,             "I2C_TANK",     4096, nullptr, 2, &taskTankHandle,      1);
+    xTaskCreatePinnedToCore(taskLevel,            "I2C_LEVEL",    4096, nullptr, 2, &taskLevelHandle,     1);
+    xTaskCreatePinnedToCore(taskRtc,              "I2C_RTC",      4096, nullptr, 2, &taskRtcHandle,       1);
+    xTaskCreatePinnedToCore(taskGps,              "I2C_GPS",      4096, nullptr, 2, &taskGpsHandle,       1);
     #endif
 
     #ifndef DISABLE_BMS_BLE
