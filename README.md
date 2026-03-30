@@ -5,10 +5,11 @@
 [![Board](https://img.shields.io/badge/board-M5Dial-1f6feb)](https://docs.m5stack.com/en/core/m5dial)
 [![Board](https://img.shields.io/badge/board-M5StickC%20Plus2-1f6feb)](https://docs.m5stack.com/en/core/m5stickc_plus2)
 [![Board](https://img.shields.io/badge/board-M5NanoC6-1f6feb)](https://docs.m5stack.com/en/core/m5stack_nanoc6)
+[![Board](https://img.shields.io/badge/board-M5Station%20BAT-1f6feb)](https://docs.m5stack.com/en/core/station-bat)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-2ea44f?logo=github)](https://lburais.github.io/SmartFranklin/)
 
-SmartFranklin is an ESP32 IoT controller for M5StickC Plus2, M5Dial, and M5NanoC6 built around concurrent execution blocks: a lightweight `loop()` plus dedicated FreeRTOS tasks.
+SmartFranklin is an ESP32 IoT controller for M5StickC Plus2, M5Dial, M5NanoC6, and M5Station BAT built around concurrent execution blocks: a lightweight `loop()` plus dedicated FreeRTOS tasks.
 
 ## What It Does
 
@@ -69,6 +70,7 @@ Boot-time task creation is capability-gated: selected tasks are created only whe
 - [M5StickC Plus2](https://docs.m5stack.com/en/core/m5stickc_plus2)
 - [M5Dial](https://docs.m5stack.com/en/core/m5dial)
 - [M5NanoC6](https://docs.m5stack.com/en/core/m5stack_nanoc6)
+- [M5Station BAT](https://docs.m5stack.com/en/core/station-bat)
 
 ## Project Layout
 
