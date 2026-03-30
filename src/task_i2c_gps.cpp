@@ -3,14 +3,15 @@
 
 #include "config_store.h"
 #include "gps.h"
-#include "task_i2c_shared.h"
+#include "i2c.h"
 
 void taskGps(void* pv)
 {
     (void)pv;
     M5_LOGI("[GPS] Task started");
 
-    sf_task_i2c::initializeI2cShared();
+    sf_i2c::I2C i2c{};
+    i2c.beginPortA();
 
     bool initialized = false;
     uint32_t nextInitAttemptMs = 0;
@@ -26,7 +27,7 @@ void taskGps(void* pv)
     };
 
     auto scheduleRetry = [](uint32_t& nextAttemptMs, uint32_t nowMs) {
-        nextAttemptMs = nowMs + sf_task_i2c::kInitRetryMs;
+        nextAttemptMs = nowMs + sf_i2c::kInitRetryMs;
     };
 
     for (;;) {
@@ -34,42 +35,29 @@ void taskGps(void* pv)
 
 #ifndef DISABLE_GPS
         if (!initialized && isRetryDue(nowMs, nextInitAttemptMs)) {
-            if (xSemaphoreTake(sf_task_i2c::g_i2cMutex, pdMS_TO_TICKS(100))) {
-                if (!sf_task_i2c::g_i2c.detectRoute(device.address, device.route)) {
-                    M5_LOGW("[GPS] Route detection failed");
-                    sf_task_i2c::g_i2c.publishConfiguration(device);
-                    initialized = false;
-                    scheduleRetry(nextInitAttemptMs, nowMs);
-                } else {
-                    sf_task_i2c::g_i2c.publishConfiguration(device);
-                    bool channelSelected = sf_task_i2c::selectPaHubIfNeeded(sf_task_i2c::g_i2c, device, "GPS");
-                    if (channelSelected) {
-                        initialized = GPS_MODULE.init(GPS::Source::ExternalDfrobotGravity,
-                                                      sf_i2c::isInternalRoute(device.route.mode),
-                                                      device.address);
-                        sf_task_i2c::disablePaHubIfNeeded(sf_task_i2c::g_i2c, device);
-                        if (!initialized) {
-                            scheduleRetry(nextInitAttemptMs, nowMs);
-                        }
-                    } else {
-                        initialized = false;
-                        scheduleRetry(nextInitAttemptMs, nowMs);
-                    }
-                }
-                xSemaphoreGive(sf_task_i2c::g_i2cMutex);
-
+            if (!sf_i2c::resolveRouteFromConfiguredPort(CONFIG.gps_i2c_port, device.route, "GPS") ||
+                !i2c.deviceExistsOnRoute(device.address, device.route)) {
+                initialized = false;
+                scheduleRetry(nextInitAttemptMs, nowMs);
+            } else {
+                i2c.beginRoute(device.route);
+                i2c.publishConfiguration(device);
+                initialized = GPS_MODULE.init(GPS::Source::ExternalDfrobotGravity,
+                                              sf_i2c::isInternalRoute(device.route.mode),
+                                              device.address);
                 if (!initialized) {
-                    M5_LOGW("[GPS] Init failed");
+                    scheduleRetry(nextInitAttemptMs, nowMs);
                 }
+            }
+
+            if (!initialized) {
+                M5_LOGW("[GPS] Init failed");
             }
         }
 
-        if (initialized && xSemaphoreTake(sf_task_i2c::g_i2cMutex, pdMS_TO_TICKS(100))) {
-            if (sf_task_i2c::selectPaHubIfNeeded(sf_task_i2c::g_i2c, device, "GPS")) {
-                GPS_MODULE.process();
-                sf_task_i2c::disablePaHubIfNeeded(sf_task_i2c::g_i2c, device);
-            }
-            xSemaphoreGive(sf_task_i2c::g_i2cMutex);
+        if (initialized) {
+            i2c.beginRoute(device.route);
+            GPS_MODULE.process();
         }
 #endif
 

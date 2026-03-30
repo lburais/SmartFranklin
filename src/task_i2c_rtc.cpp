@@ -2,15 +2,16 @@
 #include <M5Unified.h>
 
 #include "config_store.h"
+#include "i2c.h"
 #include "rtc.h"
-#include "task_i2c_shared.h"
 
 void taskRtc(void* pv)
 {
     (void)pv;
     M5_LOGI("[RTC] Task started");
 
-    sf_task_i2c::initializeI2cShared();
+    sf_i2c::I2C i2c{};
+    i2c.beginPortA();
 
     bool initialized = false;
     uint32_t nextInitAttemptMs = 0;
@@ -18,7 +19,6 @@ void taskRtc(void* pv)
     sf_i2c::Device internalRtcDevice{};
     internalRtcDevice.route = sf_i2c::Route{};
     internalRtcDevice.route.mode = sf_i2c::RouteMode::Internal;
-    internalRtcDevice.route.paHubChannel = -1;
     internalRtcDevice.address = 0x51;
     internalRtcDevice.tag = "rtc";
     internalRtcDevice.deviceName = "M5 internal RTC";
@@ -40,7 +40,7 @@ void taskRtc(void* pv)
     };
 
     auto scheduleRetry = [](uint32_t& nextAttemptMs, uint32_t nowMs) {
-        nextAttemptMs = nowMs + sf_task_i2c::kInitRetryMs;
+        nextAttemptMs = nowMs + sf_i2c::kInitRetryMs;
     };
 
     for (;;) {
@@ -48,47 +48,45 @@ void taskRtc(void* pv)
 
 #ifndef DISABLE_RTC
         if (!initialized && isRetryDue(nowMs, nextInitAttemptMs)) {
-            if (xSemaphoreTake(sf_task_i2c::g_i2cMutex, pdMS_TO_TICKS(100))) {
-                if (RTC_MODULE.init(RTC::Source::InternalRtc, true, internalRtcDevice.address)) {
-                    initialized = true;
-                    activeRtcDevice = internalRtcDevice;
-                } else if (sf_task_i2c::g_i2c.detectRoute(externalRtcDevice.address, externalRtcDevice.route)) {
-                    bool channelSelected = sf_task_i2c::selectPaHubIfNeeded(sf_task_i2c::g_i2c, externalRtcDevice, "RTC");
-                    if (channelSelected) {
-                        const bool isInternalRoute = sf_i2c::isInternalRoute(externalRtcDevice.route.mode);
-                        initialized = RTC_MODULE.init(RTC::Source::ExternalM5StackRtcUnit,
-                                                      isInternalRoute,
-                                                      externalRtcDevice.address);
-                        if (!initialized) {
-                            initialized = RTC_MODULE.init(RTC::Source::ExternalSeeedPcd85063tp,
-                                                          isInternalRoute,
-                                                          externalRtcDevice.address);
-                        }
-                        sf_task_i2c::disablePaHubIfNeeded(sf_task_i2c::g_i2c, externalRtcDevice);
-                        if (initialized) {
-                            activeRtcDevice = externalRtcDevice;
-                        }
-                    }
-                }
-
+            if (!sf_i2c::resolveRouteFromConfiguredPort(CONFIG.rtc_i2c_port, externalRtcDevice.route, "RTC")) {
+                initialized = false;
+                scheduleRetry(nextInitAttemptMs, nowMs);
+            } else if (externalRtcDevice.route.mode == sf_i2c::RouteMode::Internal &&
+                       RTC_MODULE.init(RTC::Source::InternalRtc, true, internalRtcDevice.address)) {
+                initialized = true;
+                activeRtcDevice = internalRtcDevice;
+            } else if (!i2c.deviceExistsOnRoute(externalRtcDevice.address, externalRtcDevice.route)) {
+                initialized = false;
+                scheduleRetry(nextInitAttemptMs, nowMs);
+            } else {
+                i2c.beginRoute(externalRtcDevice.route);
+                const bool isInternalRoute = sf_i2c::isInternalRoute(externalRtcDevice.route.mode);
+                initialized = RTC_MODULE.init(RTC::Source::ExternalM5StackRtcUnit,
+                                              isInternalRoute,
+                                              externalRtcDevice.address);
                 if (!initialized) {
-                    M5_LOGW("[RTC] Init failed");
-                    scheduleRetry(nextInitAttemptMs, nowMs);
-                } else {
-                    sf_task_i2c::g_i2c.publishConfiguration(activeRtcDevice);
+                    initialized = RTC_MODULE.init(RTC::Source::ExternalSeeedPcd85063tp,
+                                                  isInternalRoute,
+                                                  externalRtcDevice.address);
                 }
-                xSemaphoreGive(sf_task_i2c::g_i2cMutex);
+                if (initialized) {
+                    activeRtcDevice = externalRtcDevice;
+                }
+            }
+
+            if (!initialized) {
+                M5_LOGW("[RTC] Init failed");
+                scheduleRetry(nextInitAttemptMs, nowMs);
+            } else {
+                i2c.publishConfiguration(activeRtcDevice);
             }
         }
 
         if (initialized && activeRtcDevice.route.mode == sf_i2c::RouteMode::Internal) {
             RTC_MODULE.process();
-        } else if (initialized && xSemaphoreTake(sf_task_i2c::g_i2cMutex, pdMS_TO_TICKS(100))) {
-            if (sf_task_i2c::selectPaHubIfNeeded(sf_task_i2c::g_i2c, activeRtcDevice, "RTC")) {
-                RTC_MODULE.process();
-                sf_task_i2c::disablePaHubIfNeeded(sf_task_i2c::g_i2c, activeRtcDevice);
-            }
-            xSemaphoreGive(sf_task_i2c::g_i2cMutex);
+        } else if (initialized) {
+            i2c.beginRoute(activeRtcDevice.route);
+            RTC_MODULE.process();
         }
 #endif
 

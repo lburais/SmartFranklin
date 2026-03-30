@@ -74,7 +74,7 @@
 namespace {
 
 /** @brief Display rotation used for M5StickC Plus2 visual orientation. */
-static constexpr uint8_t DISPLAY_ROTATION = 3;
+static constexpr uint8_t DISPLAY_ROTATION = 1;
 
 /** @brief Full backlight brightness value (0..255). */
 static constexpr uint8_t DISPLAY_BRIGHTNESS = 255;

@@ -1,9 +1,9 @@
 /**
  * @file i2c.h
- * @brief I2C route discovery and PAHub-aware device binding helpers.
+ * @brief I2C route discovery and direct bus binding helpers.
  *
- * SmartFranklin uses this module to probe both internal and Wire buses,
- * optionally through PAHub channels, and publish resulting route metadata.
+ * SmartFranklin uses this module to probe internal and Wire buses and
+ * publish resulting route metadata.
  *
  * SPDX-License-Identifier: MIT
  */
@@ -22,12 +22,20 @@ enum class RouteMode : uint8_t {
     Unset = 0,
     /** Internal M5 I2C bus. */
     Internal,
-    /** Internal M5 I2C bus routed through PAHub. */
-    InternalPaHub,
     /** Primary Wire bus. */
     Wire,
-    /** Primary Wire bus routed through PAHub. */
-    WirePaHub,
+};
+
+/**
+ * @brief Physical external connector used when route mode is Wire.
+ */
+enum class ExternalPort : uint8_t {
+    PortA1 = 0,
+    PortA2,
+    PortB1,
+    PortB2,
+    PortC1,
+    PortC2,
 };
 
 /**
@@ -50,8 +58,8 @@ enum class LevelType : uint8_t {
 struct Route {
     /** Selected route mode. */
     RouteMode mode = RouteMode::Unset;
-    /** PAHub channel index when mode is a PAHub route, otherwise -1. */
-    int8_t paHubChannel = -1;
+    /** Selected external connector for Wire mode. */
+    ExternalPort externalPort = ExternalPort::PortA1;
 };
 
 /**
@@ -85,7 +93,7 @@ struct Device {
 };
 
 /**
- * @brief Route detection and PAHub channel control helper.
+ * @brief Route detection helper.
  */
 class I2C {
 
@@ -102,6 +110,18 @@ class I2C {
     void beginPortA() const;
 
     /**
+     * @brief Initialize Wire bus on a specific external connector.
+     * @param port External connector to use.
+     */
+    void beginExternalPort(ExternalPort port) const;
+
+    /**
+     * @brief Initialize bus for a resolved route.
+     * @param route Route to activate.
+     */
+    void beginRoute(const Route& route) const;
+
+    /**
      * @brief Detect a reachable route for a given device address.
      * @param deviceAddress Target I2C address.
      * @param route Output resolved route data.
@@ -110,18 +130,12 @@ class I2C {
     bool detectRoute(uint8_t deviceAddress, Route& route) const;
 
     /**
-     * @brief Select PAHub channel for a specific routed bus.
-     * @param mode Route mode that uses PAHub.
-     * @param channel PAHub channel index.
-     * @return True on successful channel selection.
+     * @brief Check if a device is reachable on a specific configured route.
+     * @param deviceAddress Target I2C address.
+     * @param mode Configured route mode.
+     * @return True when address is reachable on the selected route.
      */
-    bool selectPaHubChannel(RouteMode mode, uint8_t channel) const;
-
-    /**
-     * @brief Disable all PAHub channel selections for a routed bus.
-     * @param mode Route mode that uses PAHub.
-     */
-    void disablePaHubChannels(RouteMode mode) const;
+    bool deviceExistsOnRoute(uint8_t deviceAddress, const Route& route) const;
 
     /**
      * @brief Publish detected configuration metadata for one device.
@@ -135,19 +149,12 @@ private:
     /** @brief Check address presence on internal Ex bus. */
     bool exDeviceExists(uint8_t address) const;
 
-    /** @brief Select PAHub channel via Wire bus. */
-    bool wireSelectPaHubChannel(uint8_t channel) const;
-    /** @brief Disable PAHub channel selection on Wire bus. */
-    void wireDisablePaHubChannels() const;
-
-    /** @brief Select PAHub channel via internal Ex bus. */
-    bool exSelectPaHubChannel(uint8_t channel) const;
-    /** @brief Disable PAHub channel selection on internal Ex bus. */
-    void exDisablePaHubChannels() const;
-
     /** Configured I2C clock frequency in Hz. */
     uint32_t m_clockHz;
 };
+
+constexpr uint32_t kInitRetryMs = 10000UL;
+bool resolveRouteFromConfiguredPort(const String& configuredPort, Route& route, const char* label);
 
 /**
  * @brief Check whether route uses internal M5 path.
@@ -156,15 +163,9 @@ private:
  */
 bool isInternalRoute(RouteMode mode);
 
-/**
- * @brief Check whether route is PAHub-based.
- * @param mode Route mode to inspect.
- * @return True for PAHub routes.
- */
-bool isPaHubRoute(RouteMode mode);
-
 /** @brief Convert route mode to stable text value. */
 const char* routeModeToString(RouteMode mode);
+const char* externalPortToString(ExternalPort port);
 /** @brief Convert level type to stable text value. */
 const char* levelTypeToString(LevelType type);
 /** @brief Convert chip kind to stable text value. */

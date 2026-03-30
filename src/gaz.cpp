@@ -29,7 +29,6 @@ namespace {
 constexpr int32_t GAZ_BOTTLE_FULL_G = 6450;
 constexpr int32_t GAZ_BOTTLE_EMPTY_G = 3700;
 constexpr float CALIBRATION_GAP_EPSILON = 1e-6f;
-constexpr uint8_t PAHUB_ADDRESS = 0x70;
 constexpr size_t GAZ_AVG_WINDOW_MIN = 1U;
 constexpr size_t GAZ_AVG_WINDOW_MAX = 64U;
 
@@ -50,7 +49,6 @@ struct GazState {
     bool initialized = false;
     uint8_t i2cAddress = 0x26;
     sf_i2c::RouteMode routeMode = sf_i2c::RouteMode::Unset;
-    int8_t paHubChannel = -1;
     float lastCalibrationGap = 1.0f;
     int32_t lastWeightG = 0;
     int32_t lastFillPct = 0;
@@ -61,32 +59,6 @@ struct GazState {
 };
 
 GazState GAZ_STATE;
-
-bool selectPaHubChannelLocked(const GazState& state)
-{
-    if (!sf_i2c::isPaHubRoute(state.routeMode)) {
-        return true;
-    }
-
-    if (state.paHubChannel < 0 || state.paHubChannel > 7) {
-        M5_LOGW("[GAZ] invalid PAHub channel %d", state.paHubChannel);
-        return false;
-    }
-
-    const uint8_t mask = static_cast<uint8_t>(1U << static_cast<uint8_t>(state.paHubChannel));
-
-    if (state.routeMode == sf_i2c::RouteMode::InternalPaHub) {
-        if (!M5.Ex_I2C.start(PAHUB_ADDRESS, false, Wire.getClock())) {
-            return false;
-        }
-        const bool ok = M5.Ex_I2C.write(mask) && M5.Ex_I2C.stop();
-        return ok;
-    }
-
-    Wire.beginTransmission(PAHUB_ADDRESS);
-    Wire.write(mask);
-    return Wire.endTransmission() == 0;
-}
 
 size_t sanitizedAveragingWindow()
 {
@@ -127,25 +99,6 @@ int32_t pushAndAverageWeightLocked(GazState& state, const int32_t rawWeightG)
     return static_cast<int32_t>(sum / static_cast<int64_t>(state.recentCount));
 }
 
-void disablePaHubChannelLocked(const GazState& state)
-{
-    if (!sf_i2c::isPaHubRoute(state.routeMode)) {
-        return;
-    }
-
-    if (state.routeMode == sf_i2c::RouteMode::InternalPaHub) {
-        if (M5.Ex_I2C.start(PAHUB_ADDRESS, false, Wire.getClock())) {
-            M5.Ex_I2C.write(0x00);
-            M5.Ex_I2C.stop();
-        }
-        return;
-    }
-
-    Wire.beginTransmission(PAHUB_ADDRESS);
-    Wire.write(0x00);
-    Wire.endTransmission();
-}
-
 }  // namespace
 
 Gaz GAZ_MODULE;
@@ -156,19 +109,11 @@ static void publishCalibrationGap(const float gap);
 static bool initState(GazState& state,
                       const bool isInternalRoute,
                       const uint8_t i2cAddress,
-                      const sf_i2c::RouteMode routeMode,
-                      const int8_t paHubChannel)
+                      const sf_i2c::RouteMode routeMode)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
     state.i2cAddress = i2cAddress;
     state.routeMode = routeMode;
-    state.paHubChannel = paHubChannel;
-
-    if (!selectPaHubChannelLocked(state)) {
-        M5_LOGW("[GAZ] failed to select PAHub channel during init");
-        state.initialized = false;
-        return false;
-    }
 
     state.units = m5::unit::UnitUnified{};
 
@@ -180,7 +125,6 @@ static bool initState(GazState& state,
 
     if (!state.initialized) {
         state.initialized = false;
-        disablePaHubChannelLocked(state);
         M5_LOGW("[GAZ] Weight I2C unit was not detected on supported Wire paths");
         return false;
     }
@@ -191,7 +135,6 @@ static bool initState(GazState& state,
     }
     state.lastCalibrationGap = effectiveGap;
     publishCalibrationGap(effectiveGap);
-    disablePaHubChannelLocked(state);
 
     M5_LOGI("[GAZ] Weight I2C initialization complete");
     M5_LOGI("[GAZ] address: 0x%02X", state.i2cAddress);
@@ -210,20 +153,14 @@ static void publishCalibrationGap(const float gap)
 /** Acquire one weight sample and derive fill percentage under lock. */
 static bool refreshMeasurementLocked(GazState& state, int32_t& weightG, int32_t& fillPct)
 {
-    if (!selectPaHubChannelLocked(state)) {
-        return false;
-    }
-
     state.units.update();
 
     if (!state.unit.updated()) {
-        disablePaHubChannelLocked(state);
         return false;
     }
 
     const float rawWeight = state.unit.weight();
     if (!std::isfinite(rawWeight)) {
-        disablePaHubChannelLocked(state);
         M5_LOGW("[GAZ] non-finite weight sample ignored");
         return false;
     }
@@ -242,8 +179,6 @@ static bool refreshMeasurementLocked(GazState& state, int32_t& weightG, int32_t&
     }
 
     state.lastFillPct = fillPct;
-    disablePaHubChannelLocked(state);
-
     return true;
 }
 
@@ -310,12 +245,7 @@ static bool tareState(GazState& state)
         return false;
     }
 
-    if (!selectPaHubChannelLocked(state)) {
-        return false;
-    }
-
     const bool ok = state.unit.resetOffset();
-    disablePaHubChannelLocked(state);
     if (ok) {
         state.lastWeightG = 0;
     }
@@ -332,15 +262,9 @@ static bool applyCalibrationState(GazState& state, const float gap)
         return false;
     }
 
-    if (!selectPaHubChannelLocked(state)) {
-        return false;
-    }
-
     if (!state.unit.writeGap(effectiveGap)) {
-        disablePaHubChannelLocked(state);
         return false;
     }
-    disablePaHubChannelLocked(state);
     state.lastCalibrationGap = effectiveGap;
     publishCalibrationGap(effectiveGap);
     return true;
@@ -371,11 +295,7 @@ static bool readCalibrationGapState(GazState& state, float& gap)
         return false;
     }
 
-    if (!selectPaHubChannelLocked(state)) {
-        return false;
-    }
     const bool ok = state.unit.readGap(gap);
-    disablePaHubChannelLocked(state);
     return ok;
 }
 
@@ -387,11 +307,7 @@ static bool readRawAdcState(GazState& state, int32_t& rawAdc)
         return false;
     }
 
-    if (!selectPaHubChannelLocked(state)) {
-        return false;
-    }
     const bool ok = state.unit.readRawADC(rawAdc);
-    disablePaHubChannelLocked(state);
     return ok;
 }
 
@@ -404,10 +320,9 @@ static bool isInitializedState(const GazState& state)
 
 bool Gaz::init(bool isInternalRoute,
                uint8_t i2cAddress,
-               sf_i2c::RouteMode routeMode,
-               int8_t paHubChannel)
+               sf_i2c::RouteMode routeMode)
 {
-    return initState(GAZ_STATE, isInternalRoute, i2cAddress, routeMode, paHubChannel);
+    return initState(GAZ_STATE, isInternalRoute, i2cAddress, routeMode);
 }
 
 void Gaz::process()

@@ -3,14 +3,15 @@
 
 #include "config_store.h"
 #include "gaz.h"
-#include "task_i2c_shared.h"
+#include "i2c.h"
 
 void taskGaz(void* pv)
 {
     (void)pv;
     M5_LOGI("[GAZ] Task started");
 
-    sf_task_i2c::initializeI2cShared();
+    sf_i2c::I2C i2c{};
+    i2c.beginPortA();
 
     bool initialized = false;
     uint32_t nextInitAttemptMs = 0;
@@ -26,7 +27,7 @@ void taskGaz(void* pv)
     };
 
     auto scheduleRetry = [](uint32_t& nextAttemptMs, uint32_t nowMs) {
-        nextAttemptMs = nowMs + sf_task_i2c::kInitRetryMs;
+        nextAttemptMs = nowMs + sf_i2c::kInitRetryMs;
     };
 
     for (;;) {
@@ -34,31 +35,29 @@ void taskGaz(void* pv)
 
 #ifndef DISABLE_GAZ
         if (!initialized && isRetryDue(nowMs, nextInitAttemptMs)) {
-            if (xSemaphoreTake(sf_task_i2c::g_i2cMutex, pdMS_TO_TICKS(100))) {
-                if (!sf_task_i2c::g_i2c.detectRoute(device.address, device.route)) {
-                    M5_LOGW("[GAZ] Route detection failed");
-                    sf_task_i2c::g_i2c.publishConfiguration(device);
-                    initialized = false;
-                    scheduleRetry(nextInitAttemptMs, nowMs);
-                } else {
-                    sf_task_i2c::g_i2c.publishConfiguration(device);
-                    initialized = GAZ_MODULE.init(sf_i2c::isInternalRoute(device.route.mode),
-                                                  device.address,
-                                                  device.route.mode,
-                                                  device.route.paHubChannel);
-                    if (!initialized) {
-                        scheduleRetry(nextInitAttemptMs, nowMs);
-                    }
-                }
-                xSemaphoreGive(sf_task_i2c::g_i2cMutex);
+            if (!sf_i2c::resolveRouteFromConfiguredPort(CONFIG.gaz_i2c_port, device.route, "GAZ") ||
+                !i2c.deviceExistsOnRoute(device.address, device.route)) {
+                initialized = false;
+                scheduleRetry(nextInitAttemptMs, nowMs);
+            } else {
+                i2c.beginRoute(device.route);
+                i2c.publishConfiguration(device);
+                initialized = GAZ_MODULE.init(sf_i2c::isInternalRoute(device.route.mode),
+                                              device.address,
+                                              device.route.mode);
 
                 if (!initialized) {
-                    M5_LOGW("[GAZ] Init failed");
+                    scheduleRetry(nextInitAttemptMs, nowMs);
                 }
+            }
+
+            if (!initialized) {
+                M5_LOGW("[GAZ] Init failed");
             }
         }
 
         if (initialized) {
+            i2c.beginRoute(device.route);
             GAZ_MODULE.process();
         }
 #endif

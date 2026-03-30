@@ -1,9 +1,9 @@
 /**
  * @file i2c.cpp
- * @brief I2C route probing and PAHub channel control implementation.
+ * @brief I2C route probing and direct bus configuration implementation.
  *
- * This module detects whether peripherals are reachable over internal I2C,
- * Wire, or PAHub-routed buses and publishes resolved wiring metadata.
+ * This module detects whether peripherals are reachable over internal I2C
+ * and Wire buses and publishes resolved wiring metadata.
  *
  * SPDX-License-Identifier: MIT
  */
@@ -17,13 +17,7 @@
 
 #include "mqtt.h"
 
-#define PAHUB_ADDRESS       0x70
-
 namespace sf_i2c {
-
-namespace {
-constexpr uint8_t PAHUB_CHANNEL_COUNT = 6;
-}
 
 I2C::I2C(const uint32_t clockHz)
     : m_clockHz(clockHz)
@@ -32,13 +26,60 @@ I2C::I2C(const uint32_t clockHz)
 
 void I2C::beginPortA() const
 {
-    int8_t sda = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_a_sda));
-    int8_t scl = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_a_scl));
+    beginExternalPort(ExternalPort::PortA1);
+}
+
+void I2C::beginExternalPort(const ExternalPort port) const
+{
+    int8_t sda = -1;
+    int8_t scl = -1;
+
+    switch (port) {
+    case ExternalPort::PortA1:
+    case ExternalPort::PortA2:
+        sda = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_a_sda));
+        scl = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_a_scl));
+        break;
+    case ExternalPort::PortB1:
+        sda = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_b_out));
+        scl = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_b_in));
+        break;
+    case ExternalPort::PortB2:
+        sda = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_b2_pin2));
+        scl = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_b2_pin1));
+        break;
+    case ExternalPort::PortC1:
+        sda = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_c_txd));
+        scl = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_c_rxd));
+        break;
+    case ExternalPort::PortC2:
+        sda = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_c2_pin2));
+        scl = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_c2_pin1));
+        break;
+    default:
+        break;
+    }
+
+    if (sda < 0 || scl < 0) {
+        return;
+    }
 
     Wire.end();
     Wire.begin(sda, scl, m_clockHz);
     Wire.setPins(sda, scl);
     M5.Ex_I2C.begin();
+}
+
+void I2C::beginRoute(const Route& route) const
+{
+    if (route.mode == RouteMode::Wire) {
+        beginExternalPort(route.externalPort);
+        return;
+    }
+
+    if (route.mode == RouteMode::Internal) {
+        M5.Ex_I2C.begin();
+    }
 }
 
 /** Probe one address on Wire. */
@@ -54,52 +95,9 @@ bool I2C::exDeviceExists(const uint8_t address) const
     return M5.Ex_I2C.scanID(address, m_clockHz);
 }
 
-/** Select PAHub channel through Wire bus. */
-bool I2C::wireSelectPaHubChannel(const uint8_t channel) const
-{
-    Wire.beginTransmission(PAHUB_ADDRESS);
-    Wire.write(static_cast<uint8_t>(1U << channel));
-    return Wire.endTransmission() == 0;
-}
-
-/** Disable all PAHub channels through Wire bus. */
-void I2C::wireDisablePaHubChannels() const
-{
-    Wire.beginTransmission(PAHUB_ADDRESS);
-    Wire.write(static_cast<uint8_t>(0x00));
-    Wire.endTransmission();
-}
-
-/** Select PAHub channel through Ex_I2C bus. */
-bool I2C::exSelectPaHubChannel(const uint8_t channel) const
-{
-    if (!M5.Ex_I2C.start(PAHUB_ADDRESS, false, m_clockHz)) {
-        return false;
-    }
-
-    const bool writeOk = M5.Ex_I2C.write(static_cast<uint8_t>(1U << channel));
-    const bool stopOk = M5.Ex_I2C.stop();
-
-    // M5_LOGI("[I2C] ex channel=%ld selecting write=%d stop=%d", channel, writeOk, stopOk);
-
-    return writeOk && stopOk;
-}
-
-/** Disable all PAHub channels through Ex_I2C bus. */
-void I2C::exDisablePaHubChannels() const
-{
-    if (!M5.Ex_I2C.start(PAHUB_ADDRESS, false, m_clockHz)) {
-        return;
-    }
-
-    M5.Ex_I2C.write(static_cast<uint8_t>(0x00));
-    M5.Ex_I2C.stop();
-}
-
 bool I2C::detectRoute(const uint8_t deviceAddress, Route& route) const
 {
     route.mode = RouteMode::Unset;
-    route.paHubChannel = -1;
 
     if (exDeviceExists(deviceAddress)) {
         route.mode = RouteMode::Internal;
@@ -111,75 +109,36 @@ bool I2C::detectRoute(const uint8_t deviceAddress, Route& route) const
         return true;
     }
 
-    if (wireDeviceExists(PAHUB_ADDRESS)) {
-        for (uint8_t channel = 0; channel < PAHUB_CHANNEL_COUNT; ++channel) {
-            if (!wireSelectPaHubChannel(channel)) {
-                continue;
-            }
-
-            if (wireDeviceExists(deviceAddress)) {
-                wireDisablePaHubChannels();
-                route.mode = RouteMode::WirePaHub;
-                route.paHubChannel = static_cast<int8_t>(channel);
-                return true;
-            }
-        }
-        wireDisablePaHubChannels();
-    }
-
-    if (exDeviceExists(PAHUB_ADDRESS)) {
-        for (uint8_t channel = 0; channel < PAHUB_CHANNEL_COUNT; ++channel) {
-            if (!exSelectPaHubChannel(channel)) {
-                continue;
-            }
-
-            if (exDeviceExists(deviceAddress)) {
-                exDisablePaHubChannels();
-                route.mode = RouteMode::InternalPaHub;
-                route.paHubChannel = static_cast<int8_t>(channel);
-                return true;
-            }
-        }
-        exDisablePaHubChannels();
-    }
-
     return false;
 }
 
-bool I2C::selectPaHubChannel(const RouteMode mode, const uint8_t channel) const
+bool I2C::deviceExistsOnRoute(const uint8_t deviceAddress, const Route& route) const
 {
-    if (mode == RouteMode::InternalPaHub) {
-        return exSelectPaHubChannel(channel);
+    if (route.mode == RouteMode::Internal) {
+        return exDeviceExists(deviceAddress);
     }
-
-    return wireSelectPaHubChannel(channel);
-}
-
-void I2C::disablePaHubChannels(const RouteMode mode) const
-{
-    if (mode == RouteMode::InternalPaHub) {
-        exDisablePaHubChannels();
-        return;
+    if (route.mode == RouteMode::Wire) {
+        beginExternalPort(route.externalPort);
+        return wireDeviceExists(deviceAddress);
     }
-
-    wireDisablePaHubChannels();
+    return false;
 }
 
 void I2C::publishConfiguration(const Device& device) const {
-    char pahubChannelBuf[12] = {0};
     char addressBuf[8] = {0};
+    char portBuf[16] = {0};
     const char* tag = device.tag ? device.tag : "unknown";
     char topicBuf[64] = {0};
 
-    snprintf(pahubChannelBuf, sizeof(pahubChannelBuf), "%d", device.route.paHubChannel);
     snprintf(addressBuf, sizeof(addressBuf), "0x%02X", device.address);
+    snprintf(portBuf, sizeof(portBuf), "%s", externalPortToString(device.route.externalPort));
 
     snprintf(topicBuf, sizeof(topicBuf), "smartfranklin/system/i2c/%s/mode", tag);
     sf_mqtt::publish(topicBuf, routeModeToString(device.route.mode), 1, true);
-    snprintf(topicBuf, sizeof(topicBuf), "smartfranklin/system/i2c/%s/pahub_channel", tag);
-    sf_mqtt::publish(topicBuf, pahubChannelBuf, 1, true);
     snprintf(topicBuf, sizeof(topicBuf), "smartfranklin/system/i2c/%s/address", tag);
     sf_mqtt::publish(topicBuf, addressBuf, 1, true);
+    snprintf(topicBuf, sizeof(topicBuf), "smartfranklin/system/i2c/%s/port", tag);
+    sf_mqtt::publish(topicBuf, portBuf, 1, true);
     snprintf(topicBuf, sizeof(topicBuf), "smartfranklin/system/i2c/%s/device_name", tag);
     sf_mqtt::publish(topicBuf, device.deviceName, 1, true);
     if (std::strcmp(tag, "level") == 0) {
@@ -194,12 +153,62 @@ void I2C::publishConfiguration(const Device& device) const {
 
 bool isInternalRoute(const RouteMode mode)
 {
-    return mode == RouteMode::Internal || mode == RouteMode::InternalPaHub;
+    return mode == RouteMode::Internal;
 }
 
-bool isPaHubRoute(const RouteMode mode)
+bool resolveRouteFromConfiguredPort(const String& configuredPort, Route& route, const char* label)
 {
-    return mode == RouteMode::WirePaHub || mode == RouteMode::InternalPaHub;
+    String port = configuredPort;
+    port.trim();
+    port.toUpperCase();
+
+    if (port.isEmpty() || port == "WIRE" || port == "PORTA") {
+        route.mode = RouteMode::Wire;
+        route.externalPort = ExternalPort::PortA1;
+        return true;
+    }
+
+    if (port == "INTERNAL" || port == "EX") {
+        route.mode = RouteMode::Internal;
+        route.externalPort = ExternalPort::PortA1;
+        return true;
+    }
+
+    if (port == "A1") {
+        route.mode = RouteMode::Wire;
+        route.externalPort = ExternalPort::PortA1;
+        return true;
+    }
+    if (port == "A2") {
+        route.mode = RouteMode::Wire;
+        route.externalPort = ExternalPort::PortA2;
+        return true;
+    }
+    if (port == "B1" || port == "PORTB") {
+        route.mode = RouteMode::Wire;
+        route.externalPort = ExternalPort::PortB1;
+        return true;
+    }
+    if (port == "B2") {
+        route.mode = RouteMode::Wire;
+        route.externalPort = ExternalPort::PortB2;
+        return true;
+    }
+    if (port == "C1") {
+        route.mode = RouteMode::Wire;
+        route.externalPort = ExternalPort::PortC1;
+        return true;
+    }
+    if (port == "C2") {
+        route.mode = RouteMode::Wire;
+        route.externalPort = ExternalPort::PortC2;
+        return true;
+    }
+
+    M5_LOGW("[%s] invalid configured I2C port '%s' (valid: INTERNAL, EX, A1, A2, B1, B2, C1, C2)",
+            label,
+            configuredPort.c_str());
+    return false;
 }
 
 const char* routeModeToString(const RouteMode mode)
@@ -207,15 +216,31 @@ const char* routeModeToString(const RouteMode mode)
     switch (mode) {
     case RouteMode::Internal:
         return "internal";
-    case RouteMode::InternalPaHub:
-        return "internal_pahub";
     case RouteMode::Wire:
         return "wire";
-    case RouteMode::WirePaHub:
-        return "wire_pahub";
     case RouteMode::Unset:
     default:
         return "unset";
+    }
+}
+
+const char* externalPortToString(const ExternalPort port)
+{
+    switch (port) {
+    case ExternalPort::PortA1:
+        return "a1";
+    case ExternalPort::PortA2:
+        return "a2";
+    case ExternalPort::PortB1:
+        return "b1";
+    case ExternalPort::PortB2:
+        return "b2";
+    case ExternalPort::PortC1:
+        return "c1";
+    case ExternalPort::PortC2:
+        return "c2";
+    default:
+        return "a1";
     }
 }
 

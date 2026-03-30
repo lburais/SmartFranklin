@@ -69,13 +69,11 @@ public:
      * @brief Initialize the weight sensor on the detected I2C route.
      *
      * Discovers and configures the M5Stack Weight I2C unit on either
-     * the M5 internal I2C (Ex_I2C) or the primary Wire interface,
-     * with optional PAHub channel routing.
+    * the M5 internal I2C (Ex_I2C) or the primary Wire interface.
      *
      * @param iSInternalRoute Use M5 internal I2C (Ex_I2C) if true; Wire if false
      * @param i2cAddress The I2C address of the sensor (typically 0x26)
-     * @param routeMode Full resolved route mode (internal/wire with or without PAHub)
-     * @param paHubChannel PAHub channel index when route uses PAHub, otherwise -1
+    * @param routeMode Full resolved route mode (internal/wire)
      *
      * @return true if sensor is detected and initialized; false otherwise
      *
@@ -83,8 +81,7 @@ public:
      */
     bool init(bool iSInternalRoute,
               uint8_t i2cAddress,
-              sf_i2c::RouteMode routeMode = sf_i2c::RouteMode::Unset,
-              int8_t paHubChannel = -1);
+              sf_i2c::RouteMode routeMode = sf_i2c::RouteMode::Unset);
 
     /**
      * @brief Execute one complete weight measurement and publication cycle.
