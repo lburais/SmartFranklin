@@ -76,8 +76,7 @@ TaskHandle_t taskTankHandle             = nullptr;  // Tank ultrasonic reading
 TaskHandle_t taskLevelHandle            = nullptr;  // Level/accelerometer sensor reading
 TaskHandle_t taskRtcHandle              = nullptr;  // RTC reading
 TaskHandle_t taskGpsHandle              = nullptr;  // GPS/GNSS reading
-TaskHandle_t taskI2cHandle              = nullptr;  // Legacy unified I2C sensors (DEPRECATED)
-TaskHandle_t taskBmsBleHandle           = nullptr;  // BLE battery management system
+TaskHandle_t taskBatteryHandle          = nullptr;  // BLE battery management system
 TaskHandle_t taskHmiHandle              = nullptr;  // HMI/display task
 
 static constexpr uint8_t DISPLAY_UI_ROTATION = 3;
@@ -148,14 +147,8 @@ void setup() {
     // Configure M5Stack with board-appropriate internal peripherals
     auto cfg = M5.config();
     cfg.output_power = true;   // Enable 5V output power for peripheral devices
-
-#if defined(ARDUINO_M5STACK_DIAL)
-    cfg.internal_imu = false;
-    cfg.internal_rtc = true;
-#else
     cfg.internal_imu = true;
     cfg.internal_rtc = true;
-#endif
 
     M5.begin(cfg);
 
@@ -219,24 +212,36 @@ void setup() {
     xTaskCreatePinnedToCore(taskHmi,              "HMI",      8192, nullptr, 3,  &taskHmiHandle,            1);
     #endif
 
-    #ifndef DISABLE_I2C_SENSORS
-    xTaskCreatePinnedToCore(taskGaz,              "I2C_GAZ",      4096, nullptr, 2, &taskGazHandle,       1);
-    xTaskCreatePinnedToCore(taskTank,             "I2C_TANK",     4096, nullptr, 2, &taskTankHandle,      1);
-    xTaskCreatePinnedToCore(taskLevel,            "I2C_LEVEL",    4096, nullptr, 2, &taskLevelHandle,     1);
-    xTaskCreatePinnedToCore(taskRtc,              "I2C_RTC",      4096, nullptr, 2, &taskRtcHandle,       1);
-    xTaskCreatePinnedToCore(taskGps,              "I2C_GPS",      4096, nullptr, 2, &taskGpsHandle,       1);
+    #ifndef DISABLE_GAZ
+    xTaskCreatePinnedToCore(taskGaz,              "GAZ",      4096, nullptr, 2, &taskGazHandle,       1);
     #endif
 
-    #ifndef DISABLE_BMS_BLE
-    xTaskCreatePinnedToCore(taskBmsBle,           "BMS_BLE",  8192, nullptr, 2,  &taskBmsBleHandle,          0);
+    #ifndef DISABLE_TANK
+    xTaskCreatePinnedToCore(taskTank,             "TANK",     4096, nullptr, 2, &taskTankHandle,      1);
+    #endif
+
+    #ifndef DISABLE_LEVEL
+    xTaskCreatePinnedToCore(taskLevel,            "LEVEL",    4096, nullptr, 2, &taskLevelHandle,     1);
+    #endif
+
+    #ifndef DISABLE_RTC
+    xTaskCreatePinnedToCore(taskRtc,              "RTC",      4096, nullptr, 2, &taskRtcHandle,       1);
+    #endif
+
+    #ifndef DISABLE_GPS
+    xTaskCreatePinnedToCore(taskGps,              "GPS",      4096, nullptr, 2, &taskGpsHandle,       1);
+    #endif
+
+    #ifndef DISABLE_BATTERY
+    xTaskCreatePinnedToCore(taskBattery,          "BATERY",   8192, nullptr, 2, &taskBatteryHandle,   0);
     #endif
 
     #ifndef DISABLE_HW_MONITOR
-    xTaskCreatePinnedToCore(taskHwMonitor,        "HW_MON",   4096, nullptr, 1,  nullptr,                    0);
+    xTaskCreatePinnedToCore(taskHwMonitor,        "HW_MON",   4096, nullptr, 1, nullptr,              0);
     #endif
 
     #ifndef DISABLE_WATCHDOG
-    xTaskCreatePinnedToCore(taskWatchdog,         "WATCHDOG", 2048, nullptr, 3,  nullptr,                    0);
+    xTaskCreatePinnedToCore(taskWatchdog,         "WATCHDOG", 2048, nullptr, 3, nullptr,              0);
     #endif
 
     M5_LOGI("SmartFranklin setup complete.");

@@ -249,10 +249,6 @@ const char* levelTypeToString(const LevelType type)
     switch (type) {
     case LevelType::InternalM5:
         return "internal_m5";
-    case LevelType::ExternalMpuUnit:
-        return "external_mpu_unit";
-    case LevelType::ExternalAdxl345:
-        return "external_adxl345";
     case LevelType::None:
     default:
         return "none";

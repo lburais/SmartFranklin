@@ -2,8 +2,8 @@
  * @file level.cpp
  * @brief Implements inclinometer acquisition, vehicle pose estimation, and corner height projection.
  * @details
- * This module reads acceleration vectors from either the integrated M5 IMU or supported external
- * sensors, converts them to pitch/roll angles, applies configurable zero offsets, projects the
+ * This module reads acceleration vectors from the integrated M5 IMU,
+ * converts them to pitch/roll angles, applies configurable zero offsets, projects the
  * resulting plane onto the four wheel points, updates shared telemetry state, and publishes the
  * measurements through MQTT.
  */
@@ -11,7 +11,6 @@
 #include "level.h"
 
 #include <M5Unified.h>
-#include <Wire.h>
 
 #include <cmath>
 #include <cstdio>
@@ -20,27 +19,15 @@
 
 #include "config_store.h"
 #include "data_model.h"
+#include "i2c.h"
 #include "mqtt.h"
 
 namespace {
-
-constexpr uint8_t MPU6050_REG_PWR_MGMT_1 = 0x6B;
-constexpr uint8_t MPU6050_REG_ACCEL_CONFIG = 0x1C;
-constexpr uint8_t MPU6050_REG_ACCEL_XOUT_H = 0x3B;
-constexpr float MPU6050_ACCEL_LSB_PER_G = 16384.0f;
-
-constexpr uint8_t ADXL345_REG_DEVID = 0x00;
-constexpr uint8_t ADXL345_REG_POWER_CTL = 0x2D;
-constexpr uint8_t ADXL345_REG_DATA_FORMAT = 0x31;
-constexpr uint8_t ADXL345_REG_DATAX0 = 0x32;
-constexpr uint8_t ADXL345_DEVICE_ID = 0xE5;
-constexpr float ADXL345_G_PER_LSB = 0.0039f;
 
 constexpr float PI_F = 3.14159265358979323846f;
 constexpr float RAD_TO_DEG_F = 57.2957795f;
 
 constexpr uint32_t PROCESS_PERIOD_MS = 10000; // Change as needed
-
 
 struct GeometryConfig {
     float wheelbaseMm = 2200.0f;
@@ -53,10 +40,6 @@ struct LevelState {
     mutable std::mutex mutex;
 
     bool initialized = false;
-    Level::Source source = Level::Source::None;
-
-    bool isInternalRoute = false;
-    uint8_t i2cAddress = 0x00;
 
     float lastPitchDeg = 0.0f;
     float lastRollDeg = 0.0f;
@@ -67,6 +50,41 @@ struct LevelState {
 };
 
 LevelState LEVEL_STATE;
+
+/**
+ * @brief Reads one acceleration sample in g units from the configured source.
+ */
+bool readAccelSampleLocked(const LevelState& state, float& ax, float& ay, float& az)
+{
+    ax = 0.0f;
+    ay = 0.0f;
+    az = 0.0f;
+
+    if (state.initialized) {
+
+        // update() refreshes internal sensor data before reading current sample.
+        M5.Imu.update();
+        if (!M5.Imu.getAccel(&ax, &ay, &az)) {
+            // Retry once after explicit IMU re-init to recover transient failures.
+            if (!M5.Imu.begin()) {
+                return false;
+            }
+            M5.Imu.update();
+            if (!M5.Imu.getAccel(&ax, &ay, &az)) {
+                return false;
+            }
+        }
+
+        if (!std::isfinite(ax) || !std::isfinite(ay) || !std::isfinite(az)) {
+            return false;
+        }
+
+        return true;
+    } else {
+        return false;
+    }
+
+}
 
 float sanitizePositive(const float value, const float fallback, const float minValue, const float maxValue)
 {
@@ -100,210 +118,6 @@ GeometryConfig geometryFromConfig()
     g.offsetYmm = sanitizeFinite(CONFIG.level_offset_y_mm, -120.0f, -5000.0f, 5000.0f);
 
     return g;
-}
-
-/**
- * @brief Writes a single register to the selected IMU over the active route.
- */
-bool writeRegister(const LevelState& state, uint8_t reg, uint8_t value)
-{
-    if (state.isInternalRoute) {
-        if (!M5.Ex_I2C.start(state.i2cAddress, false, Wire.getClock())) {
-            return false;
-        }
-        const bool ok = M5.Ex_I2C.write(reg) && M5.Ex_I2C.write(value) && M5.Ex_I2C.stop();
-        return ok;
-    }
-
-    Wire.beginTransmission(state.i2cAddress);
-    Wire.write(reg);
-    Wire.write(value);
-    return Wire.endTransmission() == 0;
-}
-
-/**
- * @brief Reads a contiguous register window from the selected IMU.
- */
-bool readRegisters(const LevelState& state, uint8_t reg, uint8_t* out, size_t len)
-{
-    if (out == nullptr || len == 0) {
-        return false;
-    }
-
-    if (state.isInternalRoute) {
-        if (!M5.Ex_I2C.start(state.i2cAddress, false, Wire.getClock())) {
-            return false;
-        }
-
-        if (!M5.Ex_I2C.write(reg) || !M5.Ex_I2C.stop()) {
-            return false;
-        }
-
-        if (!M5.Ex_I2C.start(state.i2cAddress, true, Wire.getClock())) {
-            return false;
-        }
-
-        for (size_t i = 0; i < len; ++i) {
-            const bool lastNack = (i + 1U == len);
-            if (!M5.Ex_I2C.read(&out[i], 1U, lastNack)) {
-                M5.Ex_I2C.stop();
-                return false;
-            }
-        }
-
-        return M5.Ex_I2C.stop();
-    }
-
-    Wire.beginTransmission(state.i2cAddress);
-    Wire.write(reg);
-    if (Wire.endTransmission(false) != 0) {
-        return false;
-    }
-
-    const size_t readCount = Wire.requestFrom(state.i2cAddress, static_cast<uint8_t>(len));
-    if (readCount < len) {
-        return false;
-    }
-
-    for (size_t i = 0; i < len; ++i) {
-        out[i] = static_cast<uint8_t>(Wire.read());
-    }
-
-    return true;
-}
-
-/**
- * @brief Initializes an MPU6050-compatible accelerometer for +-2g full-scale mode.
- */
-bool initMpu6050(LevelState& state)
-{
-    if (!writeRegister(state, MPU6050_REG_PWR_MGMT_1, 0x00)) {
-        return false;
-    }
-
-    if (!writeRegister(state, MPU6050_REG_ACCEL_CONFIG, 0x00)) {
-        return false;
-    }
-
-    return true;
-}
-
-/**
- * @brief Initializes an ADXL345 accelerometer in full-resolution measurement mode.
- */
-bool initAdxl345(LevelState& state)
-{
-    uint8_t devid = 0;
-    if (!readRegisters(state, ADXL345_REG_DEVID, &devid, 1U)) {
-        return false;
-    }
-
-    if (devid != ADXL345_DEVICE_ID) {
-        return false;
-    }
-
-    // Full-resolution, +-2g range.
-    if (!writeRegister(state, ADXL345_REG_DATA_FORMAT, 0x08)) {
-        return false;
-    }
-
-    // Measurement mode.
-    if (!writeRegister(state, ADXL345_REG_POWER_CTL, 0x08)) {
-        return false;
-    }
-
-    return true;
-}
-
-/**
- * @brief Ensures the internal M5 IMU backend is active and readable.
- */
-bool ensureInternalImuReady()
-{
-    if (M5.Imu.isEnabled() && M5.Imu.getType() != m5::imu_t::imu_none) {
-        return true;
-    }
-
-    // Fallback: force IMU re-bind in case board boot init skipped or raced.
-    if (!M5.Imu.begin()) {
-        return false;
-    }
-
-    return M5.Imu.isEnabled() && M5.Imu.getType() != m5::imu_t::imu_none;
-}
-
-/**
- * @brief Reads one acceleration sample in g units from the configured source.
- */
-bool readAccelSampleLocked(const LevelState& state, float& ax, float& ay, float& az)
-{
-    ax = 0.0f;
-    ay = 0.0f;
-    az = 0.0f;
-
-    switch (state.source) {
-    case Level::Source::InternalM5: {
-        if (!ensureInternalImuReady()) {
-            return false;
-        }
-
-        // update() refreshes internal sensor data before reading current sample.
-        M5.Imu.update();
-        if (!M5.Imu.getAccel(&ax, &ay, &az)) {
-            // Retry once after explicit IMU re-init to recover transient failures.
-            if (!M5.Imu.begin()) {
-                return false;
-            }
-            M5.Imu.update();
-            if (!M5.Imu.getAccel(&ax, &ay, &az)) {
-                return false;
-            }
-        }
-
-        if (!std::isfinite(ax) || !std::isfinite(ay) || !std::isfinite(az)) {
-            return false;
-        }
-
-        return true;
-    }
-
-    case Level::Source::ExternalMpuUnit: {
-        uint8_t raw[6] = {0};
-        if (!readRegisters(state, MPU6050_REG_ACCEL_XOUT_H, raw, sizeof(raw))) {
-            return false;
-        }
-
-        const int16_t xRaw = static_cast<int16_t>((static_cast<uint16_t>(raw[0]) << 8) | raw[1]);
-        const int16_t yRaw = static_cast<int16_t>((static_cast<uint16_t>(raw[2]) << 8) | raw[3]);
-        const int16_t zRaw = static_cast<int16_t>((static_cast<uint16_t>(raw[4]) << 8) | raw[5]);
-
-        ax = static_cast<float>(xRaw) / MPU6050_ACCEL_LSB_PER_G;
-        ay = static_cast<float>(yRaw) / MPU6050_ACCEL_LSB_PER_G;
-        az = static_cast<float>(zRaw) / MPU6050_ACCEL_LSB_PER_G;
-        return true;
-    }
-
-    case Level::Source::ExternalAdxl345: {
-        uint8_t raw[6] = {0};
-        if (!readRegisters(state, ADXL345_REG_DATAX0, raw, sizeof(raw))) {
-            return false;
-        }
-
-        // ADXL345 outputs little-endian 16-bit signed values.
-        const int16_t xRaw = static_cast<int16_t>((static_cast<uint16_t>(raw[1]) << 8) | raw[0]);
-        const int16_t yRaw = static_cast<int16_t>((static_cast<uint16_t>(raw[3]) << 8) | raw[2]);
-        const int16_t zRaw = static_cast<int16_t>((static_cast<uint16_t>(raw[5]) << 8) | raw[4]);
-
-        ax = static_cast<float>(xRaw) * ADXL345_G_PER_LSB;
-        ay = static_cast<float>(yRaw) * ADXL345_G_PER_LSB;
-        az = static_cast<float>(zRaw) * ADXL345_G_PER_LSB;
-        return true;
-    }
-
-    case Level::Source::None:
-    default:
-        return false;
-    }
 }
 
 /**
@@ -390,52 +204,33 @@ void publishPose(const float pitchDeg,
 /**
  * @brief Initializes module state and configures the selected IMU backend.
  */
-bool initState(LevelState& state, Level::Source source, bool isInternalRoute, uint8_t i2cAddress)
+bool initState(LevelState& state)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
 
-    state.source = Level::Source::None;
     state.initialized = false;
-    state.isInternalRoute = isInternalRoute;
-    state.i2cAddress = i2cAddress;
 
-    switch (source) {
-    case Level::Source::InternalM5:
-        // Internal IMU: use M5 API fallback init before declaring unavailable.
-        if (!ensureInternalImuReady()) {
+    bool ensureInternalImuReady = (M5.Imu.isEnabled() && M5.Imu.getType() != m5::imu_t::imu_none);
+
+    if ( !ensureInternalImuReady ) {
+        // Fallback: force IMU re-bind in case board boot init skipped or raced.
+
+        if (!M5.Imu.begin()) {
             return false;
         }
-        state.source = source;
-        state.initialized = true;
-        break;
 
-    case Level::Source::ExternalMpuUnit:
-        if (!initMpu6050(state)) {
-            return false;
-        }
-        state.source = source;
-        state.initialized = true;
-        break;
+        ensureInternalImuReady =  M5.Imu.isEnabled() && M5.Imu.getType() != m5::imu_t::imu_none;
 
-    case Level::Source::ExternalAdxl345:
-        if (!initAdxl345(state)) {
-            return false;
-        }
-        state.source = source;
-        state.initialized = true;
-        break;
-
-    case Level::Source::None:
-    default:
-        return false;
     }
 
-    M5_LOGI("[LEVEL] initialized source:%s address:0x%02X route:%s",
-            Level::sourceToString(state.source),
-            state.i2cAddress,
-            state.isInternalRoute ? "internal" : "wire");
+    if ( ensureInternalImuReady ) {
+        state.initialized = true;
+        M5_LOGI("[LEVEL] initialized");
+    } else {
+        M5_LOGE("[LEVEL] unable to initialize");
+    }
 
-    return true;
+    return ensureInternalImuReady;
 }
 
 /**
@@ -443,7 +238,6 @@ bool initState(LevelState& state, Level::Source source, bool isInternalRoute, ui
  */
 void processState(LevelState& state)
 {
-    Level::Source source = Level::Source::None;
     const GeometryConfig geometry = geometryFromConfig();
     float ax = 0.0f;
     float ay = 0.0f;
@@ -461,8 +255,6 @@ void processState(LevelState& state)
         if (!state.initialized) {
             return;
         }
-
-        source = state.source;
 
         if (!readAccelSampleLocked(state, ax, ay, az)) {
             M5_LOGW("[LEVEL] sample read failed");
@@ -520,23 +312,21 @@ bool isInitializedState(const LevelState& state)
     return state.initialized;
 }
 
-/**
- * @brief Returns the active acquisition source from module state.
- */
-Level::Source sourceState(const LevelState& state)
-{
-    std::lock_guard<std::mutex> lock(state.mutex);
-    return state.source;
-}
-
 }  // namespace
 
-Level LEVEL_MODULE;
+Level LEVEL_TASK;
+
+/** @brief Returns true when the level module has been successfully initialized. */
+bool Level::isInitialized() const
+{
+    return isInitializedState(LEVEL_STATE);
+}
+
 
 /** @brief Initializes the level module using the selected source and bus route. */
-bool Level::init(Source source, bool isInternalRoute, uint8_t i2cAddress)
+bool Level::init()
 {
-    return initState(LEVEL_STATE, source, isInternalRoute, i2cAddress);
+    return initState(LEVEL_STATE);
 }
 
 
@@ -552,36 +342,48 @@ void Level::process()
     processState(LEVEL_STATE);
 }
 
-/** @brief Returns true when the level module has been successfully initialized. */
-bool Level::isInitialized() const
+/**
+ * @brief FreeRTOS task for level (accelerometer) acquisition and processing.
+ *
+ * Initializes the internal M5 IMU, reads acceleration samples periodically,
+ * computes pitch/roll angles, and publishes measurements to MQTT.
+ */
+void taskLevel(void* pv)
 {
-    return isInitializedState(LEVEL_STATE);
-}
+    (void)pv;
+    M5_LOGI("[LEVEL] Task started");
 
-/** @brief Returns the currently active level source. */
-Level::Source Level::source() const
-{
-    return sourceState(LEVEL_STATE);
-}
+    bool initialized = false;
+    uint32_t nextInitAttemptMs = 0;
 
-/** @brief Returns a stable text identifier for the active level source. */
-const char* Level::sourceName() const
-{
-    return sourceToString(source());
-}
+    auto isRetryDue = [](uint32_t nowMs, uint32_t nextAttemptMs) {
+        return static_cast<int32_t>(nowMs - nextAttemptMs) >= 0;
+    };
 
-/** @brief Converts a level source enum value to its MQTT/log string token. */
-const char* Level::sourceToString(Source source)
-{
-    switch (source) {
-    case Source::InternalM5:
-        return "internal_m5";
-    case Source::ExternalMpuUnit:
-        return "external_m5unit_imu";
-    case Source::ExternalAdxl345:
-        return "external_adxl345";
-    case Source::None:
-    default:
-        return "none";
+    auto scheduleRetry = [](uint32_t& nextAttemptMs, uint32_t nowMs) {
+        nextAttemptMs = nowMs + sf_i2c::kInitRetryMs;
+    };
+
+    for (;;) {
+        const uint32_t nowMs = millis();
+
+        if (!initialized && isRetryDue(nowMs, nextInitAttemptMs)) {
+            // Initialize internal M5 IMU
+            initialized = LEVEL_TASK.init();
+
+            if (!initialized) {
+                M5_LOGW("[LEVEL] Init failed");
+                scheduleRetry(nextInitAttemptMs, nowMs);
+            } else {
+                M5_LOGI("[LEVEL] Initialized with internal M5 IMU");
+            }
+        }
+
+        if (initialized) {
+            LEVEL_TASK.process();
+        }
+
+        const int loopMs = (CONFIG.task_i2c_loop_ms > 0) ? CONFIG.task_i2c_loop_ms : 1000;
+        vTaskDelay(pdMS_TO_TICKS(loopMs));
     }
 }

@@ -39,17 +39,13 @@ enum class ExternalPort : uint8_t {
 };
 
 /**
- * @brief Supported external level sensor categories.
+ * @brief Supported level sensor categories.
  */
 enum class LevelType : uint8_t {
     /** No level sensor type declared. */
     None = 0,
     /** Internal M5 IMU type. */
     InternalM5,
-    /** External MPU-style level source. */
-    ExternalMpuUnit,
-    /** External ADXL345 level source. */
-    ExternalAdxl345,
 };
 
 /**

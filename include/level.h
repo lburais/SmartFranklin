@@ -15,27 +15,10 @@
 class Level {
 public:
     /**
-     * @brief Supported IMU sources.
-     */
-    enum class Source : uint8_t {
-        /** No active source. */
-        None = 0,
-        /** Internal M5 IMU (board integrated). */
-        InternalM5,
-        /** External MPU6050-compatible M5 unit. */
-        ExternalMpuUnit,
-        /** External ADXL345 sensor source. */
-        ExternalAdxl345,
-    };
-
-    /**
      * @brief Initialize level computation backend.
-     * @param source Selected IMU source implementation.
-     * @param isInternalRoute True for internal route, false for Wire route.
-     * @param i2cAddress I2C address for external IMU devices.
      * @return True on successful initialization.
      */
-    bool init(Source source, bool isInternalRoute, uint8_t i2cAddress);
+    bool init();
 
     /**
      * @brief Execute one periodic level processing cycle.
@@ -51,25 +34,8 @@ public:
      */
     bool isInitialized() const;
 
-    /**
-     * @brief Get active source enum value.
-     * @return Current source.
-     */
-    Source source() const;
 
-    /**
-     * @brief Get active source as text.
-     * @return Pointer to static source label.
-     */
-    const char* sourceName() const;
-
-    /**
-     * @brief Convert source enum to stable string representation.
-     * @param source Source enum value.
-     * @return Source text identifier.
-     */
-    static const char* sourceToString(Source source);
 };
 
 /** Global singleton instance used by runtime tasks and APIs. */
-extern Level LEVEL_MODULE;
+extern Level LEVEL_TASK;
