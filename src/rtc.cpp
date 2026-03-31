@@ -16,7 +16,7 @@
 
 #include "config_store.h"
 #include "data_model.h"
-
+#include "i2c.h"
 #include "mqtt.h"
 
 bool RTC::isSystemTimeValid(const time_t t)

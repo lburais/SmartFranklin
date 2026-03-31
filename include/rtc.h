@@ -77,6 +77,8 @@ private:
     // ---- instance methods (need member state) ----
     bool readDateTime(DateTime& out);
     bool writeDateTime(const DateTime& dt);
+    bool syncSystemFromRtcHardware();
+    bool syncRtcHardwareFromSystem();
 
     // ---- member state ----
     mutable std::mutex m_mutex;
