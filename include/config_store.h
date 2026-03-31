@@ -40,6 +40,8 @@
 
 #include <Arduino.h>
 
+#include "ports.h"
+
 /**
  * @brief Persistent SmartFranklin configuration model.
  *
@@ -57,13 +59,31 @@ struct SmartConfig {
     // Gaz calibration and smoothing
     float gaz_calibration_factor = 36.0f;
     int gaz_weight_average_window = 10;
-    String gaz_i2c_port = "A1";
 
-    String tank_i2c_port = "A2";
+    // Port metadata by configured port
+    String port_internal_type = sf_ports::toString(sf_ports::PortType::I2C);
+    String port_internal_sensor = sf_ports::toString(sf_ports::PortSensor::Internal);
+    String port_internal_device_name = "M5 Internal I2C";
+    String port_a1_type = sf_ports::toString(sf_ports::PortType::I2C);
+    String port_a1_sensor = sf_ports::toString(sf_ports::PortSensor::Gaz);
+    String port_a1_device_name = "M5Stack Weight I2C Unit";
+    String port_a2_type = sf_ports::toString(sf_ports::PortType::I2C);
+    String port_a2_sensor = sf_ports::toString(sf_ports::PortSensor::Tank);
+    String port_a2_device_name = "M5Stack Unit Ultrasonic I2C (RCWL-9600)";
+    String port_b1_type = sf_ports::toString(sf_ports::PortType::I2C);
+    String port_b1_sensor = sf_ports::toString(sf_ports::PortSensor::Gps);
+    String port_b1_device_name = "DFRobot Gravity GNSS (DFR1103)";
+    String port_b2_type = sf_ports::toString(sf_ports::PortType::Unused);
+    String port_b2_sensor = sf_ports::toString(sf_ports::PortSensor::None);
+    String port_b2_device_name = "";
+    String port_c1_type = sf_ports::toString(sf_ports::PortType::Unused);
+    String port_c1_sensor = sf_ports::toString(sf_ports::PortSensor::None);
+    String port_c1_device_name = "";
+    String port_c2_type = sf_ports::toString(sf_ports::PortType::Unused);
+    String port_c2_sensor = sf_ports::toString(sf_ports::PortSensor::None);
+    String port_c2_device_name = "";
     
     String rtc_timezone = "Europe/Paris";
-    
-    String gps_i2c_port = "B1";
 
     // Level geometry calibration (millimeters)
     // Renault Trafic III L2H1

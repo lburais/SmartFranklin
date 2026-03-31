@@ -2,7 +2,7 @@
  * @file gaz.h
  * @brief Mesure du poids de bouteille de gaz : acquisition capteur poids I2C, calibration, publication MQTT.
  *
- * Le port I2C utilise est defini dans CONFIG (gaz_i2c_port, defaut "A1").
+ * Le port I2C utilise est resolu depuis CONFIG via le port dont le capteur est "gaz".
  * Aucune source externe ni RouteMode n'est expose dans l'API publique.
  *
  * SPDX-License-Identifier: MIT
@@ -16,8 +16,6 @@
 
 #include <array>
 #include <mutex>
-
-#include "i2c.h"
 
 class Gaz {
 public:
@@ -53,14 +51,10 @@ private:
 
     mutable std::mutex m_mutex;
 
-    sf_i2c::I2C   m_i2c;
-    sf_i2c::Route m_route;
-
     m5::unit::UnitUnified    m_units;
     m5::unit::UnitWeightI2C  m_unit;
 
     bool    m_initialized        = false;
-    bool    m_busReady           = false;
     float   m_lastCalibrationGap = 1.0f;
     int32_t m_lastWeightG        = 0;
     int32_t m_lastFillPct        = 0;

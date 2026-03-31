@@ -2,7 +2,7 @@
  * @file gaz.cpp
  * @brief Poids bouteille gaz : acquisition capteur poids I2C, calibration, publication MQTT.
  * @details
- * Ce module gere le capteur M5Stack Weight I2C connecte sur le port defini dans CONFIG (gaz_i2c_port, defaut "A1").
+ * Ce module gere le capteur M5Stack Weight I2C connecte sur le port dont CONFIG.port_*_sensor vaut "gaz".
  * Il effectue les mesures periodiques, calcule le taux de remplissage, applique la calibration
  * et publie les donnees via MQTT.
  */
@@ -138,7 +138,6 @@ bool Gaz::init()
     std::lock_guard<std::mutex> lock(m_mutex);
 
     m_initialized        = false;
-    m_busReady           = false;
     m_recentCount        = 0;
     m_recentHead         = 0;
     m_recentWindow       = 0;
@@ -146,32 +145,21 @@ bool Gaz::init()
     m_lastFillPct        = 0;
     m_lastCalibrationGap = 1.0f;
 
-    sf_i2c::Device device{};
-    device.address    = kI2CAddress;
-    device.tag        = "gaz";
-    device.deviceName = "M5Stack Weight I2C Unit";
-
-    if (!sf_i2c::resolveRouteFromConfiguredPort(CONFIG.gaz_i2c_port, m_route, "GAZ")) {
-        M5_LOGW("[GAZ] cannot resolve port '%s'", CONFIG.gaz_i2c_port.c_str());
+    const String configuredPort = i2cConfiguredPortForSensor(sf_ports::PortSensor::Gaz, "GAZ");
+    if (!i2cBeginConfiguredPort(configuredPort, "GAZ")) {
         return false;
     }
 
-    device.route = m_route;
-    if (!m_busReady) {
-        m_i2c.beginRoute(m_route);
-        m_busReady = true;
-    }
-
-    if (!m_i2c.deviceExistsOnRoute(device.address, m_route)) {
+    if (!i2cDeviceExistsOnConfiguredPort(kI2CAddress, configuredPort, "GAZ")) {
         M5_LOGW("[GAZ] sensor not found on port '%s' (0x%02X)",
-                CONFIG.gaz_i2c_port.c_str(), kI2CAddress);
+                configuredPort.c_str(), kI2CAddress);
         return false;
     }
 
-    m_i2c.publishConfiguration(device);
+    i2cPublishConfiguration("gaz", configuredPort, kI2CAddress);
 
     m_units = m5::unit::UnitUnified{};
-    const bool ok = sf_i2c::isInternalRoute(m_route.mode)
+    const bool ok = i2cIsConfiguredPortInternal(configuredPort)
                     ? (m_units.add(m_unit, M5.Ex_I2C) && m_units.begin())
                     : (m_units.add(m_unit, Wire)       && m_units.begin());
 
@@ -189,7 +177,7 @@ bool Gaz::init()
 
     m_initialized = true;
     M5_LOGI("[GAZ] initialized on port '%s' (0x%02X)",
-            CONFIG.gaz_i2c_port.c_str(), kI2CAddress);
+            configuredPort.c_str(), kI2CAddress);
     return true;
 }
 
@@ -408,7 +396,7 @@ void taskGaz(void* pv)
     };
 
     auto scheduleRetry = [](uint32_t& nextAttemptMs, uint32_t nowMs) {
-        nextAttemptMs = nowMs + sf_i2c::kInitRetryMs;
+        nextAttemptMs = nowMs + kI2cInitRetryMs;
     };
 
     for (;;) {

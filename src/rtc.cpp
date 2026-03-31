@@ -387,7 +387,7 @@ void taskRtc(void* pv)
     };
 
     auto scheduleRetry = [](uint32_t& nextAttemptMs, uint32_t nowMs) {
-        nextAttemptMs = nowMs + sf_i2c::kInitRetryMs;
+        nextAttemptMs = nowMs + kI2cInitRetryMs;
     };
 
     for (;;) {

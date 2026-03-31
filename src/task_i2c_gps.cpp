@@ -10,24 +10,19 @@ void taskGps(void* pv)
     (void)pv;
     M5_LOGI("[GPS] Task started");
 
-    sf_i2c::I2C i2c{};
-    i2c.beginPortA();
+    i2cBeginPortA();
 
     bool initialized = false;
     uint32_t nextInitAttemptMs = 0;
 
-    sf_i2c::Device device{};
-    device.route = sf_i2c::Route{};
-    device.address = 0x66;
-    device.tag = "gps";
-    device.deviceName = "DFRobot Gravity GNSS (DFR1103)";
+    constexpr uint8_t deviceAddress = 0x66;
 
     auto isRetryDue = [](uint32_t nowMs, uint32_t nextAttemptMs) {
         return static_cast<int32_t>(nowMs - nextAttemptMs) >= 0;
     };
 
     auto scheduleRetry = [](uint32_t& nextAttemptMs, uint32_t nowMs) {
-        nextAttemptMs = nowMs + sf_i2c::kInitRetryMs;
+        nextAttemptMs = nowMs + kI2cInitRetryMs;
     };
 
     for (;;) {
@@ -35,16 +30,16 @@ void taskGps(void* pv)
 
 #ifndef DISABLE_GPS
         if (!initialized && isRetryDue(nowMs, nextInitAttemptMs)) {
-            if (!sf_i2c::resolveRouteFromConfiguredPort(CONFIG.gps_i2c_port, device.route, "GPS") ||
-                !i2c.deviceExistsOnRoute(device.address, device.route)) {
+            const String configuredPort = i2cConfiguredPortForSensor(sf_ports::PortSensor::Gps, "GPS");
+            if (!i2cBeginConfiguredPort(configuredPort, "GPS") ||
+                !i2cDeviceExistsOnConfiguredPort(deviceAddress, configuredPort, "GPS")) {
                 initialized = false;
                 scheduleRetry(nextInitAttemptMs, nowMs);
             } else {
-                i2c.beginRoute(device.route);
-                i2c.publishConfiguration(device);
+                i2cPublishConfiguration("gps", configuredPort, deviceAddress);
                 initialized = GPS_MODULE.init(GPS::Source::ExternalDfrobotGravity,
-                                              sf_i2c::isInternalRoute(device.route.mode),
-                                              device.address);
+                                              i2cIsConfiguredPortInternal(configuredPort),
+                                              deviceAddress);
                 if (!initialized) {
                     scheduleRetry(nextInitAttemptMs, nowMs);
                 }
@@ -56,7 +51,8 @@ void taskGps(void* pv)
         }
 
         if (initialized) {
-            i2c.beginRoute(device.route);
+            const String configuredPort = i2cConfiguredPortForSensor(sf_ports::PortSensor::Gps, "GPS");
+            i2cBeginConfiguredPort(configuredPort, "GPS");
             GPS_MODULE.process();
         }
 #endif

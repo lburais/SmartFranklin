@@ -88,6 +88,28 @@
 #include <M5Unified.h>
 #include <SPIFFS.h>
 
+namespace {
+
+String canonicalPortType(const String& raw, const String& fallback)
+{
+    const sf_ports::PortType parsed = sf_ports::portTypeFromString(raw);
+    if (parsed == sf_ports::PortType::Unknown) {
+        return fallback;
+    }
+    return String(sf_ports::toString(parsed));
+}
+
+String canonicalPortSensor(const String& raw, const String& fallback)
+{
+    const sf_ports::PortSensor parsed = sf_ports::portSensorFromString(raw);
+    if (parsed == sf_ports::PortSensor::Unknown) {
+        return fallback;
+    }
+    return String(sf_ports::toString(parsed));
+}
+
+}  // namespace
+
 // ============================================================================
 // Global Configuration Object
 // ============================================================================
@@ -201,13 +223,101 @@ bool config_load()
                                     doc["scale_cal_factor"] |
                                     defaultCONFIG.gaz_calibration_factor;
     CONFIG.gaz_weight_average_window = doc["gaz_weight_average_window"] | defaultCONFIG.gaz_weight_average_window;
-    CONFIG.gaz_i2c_port = doc["gaz_i2c_port"] | defaultCONFIG.gaz_i2c_port;
 
-    CONFIG.tank_i2c_port = doc["tank_i2c_port"] | defaultCONFIG.tank_i2c_port;
+    CONFIG.port_internal_type = doc["port_internal_type"] |
+                                doc["i2c_internal_bus_type"] |
+                                doc["i2c_internal_type"] |
+                                defaultCONFIG.port_internal_type;
+    CONFIG.port_internal_sensor = doc["port_internal_sensor"] |
+                                  doc["i2c_internal_sensor"] |
+                                  doc["i2c_internal_type"] |
+                                  defaultCONFIG.port_internal_sensor;
+    CONFIG.port_internal_device_name = doc["port_internal_device_name"] |
+                                       doc["i2c_internal_device_name"] |
+                                       defaultCONFIG.port_internal_device_name;
+
+    CONFIG.port_a1_type = doc["port_a1_type"] |
+                          doc["i2c_a1_bus_type"] |
+                          String("I2C");
+    CONFIG.port_a1_sensor = doc["port_a1_sensor"] |
+                            doc["i2c_a1_sensor"] |
+                            doc["i2c_a1_type"] |
+                            defaultCONFIG.port_a1_sensor;
+    CONFIG.port_a1_device_name = doc["port_a1_device_name"] |
+                                 doc["i2c_a1_device_name"] |
+                                 defaultCONFIG.port_a1_device_name;
+
+    CONFIG.port_a2_type = doc["port_a2_type"] |
+                          doc["i2c_a2_bus_type"] |
+                          String("I2C");
+    CONFIG.port_a2_sensor = doc["port_a2_sensor"] |
+                            doc["i2c_a2_sensor"] |
+                            doc["i2c_a2_type"] |
+                            defaultCONFIG.port_a2_sensor;
+    CONFIG.port_a2_device_name = doc["port_a2_device_name"] |
+                                 doc["i2c_a2_device_name"] |
+                                 defaultCONFIG.port_a2_device_name;
+
+    CONFIG.port_b1_type = doc["port_b1_type"] |
+                          doc["i2c_b1_bus_type"] |
+                          String("I2C");
+    CONFIG.port_b1_sensor = doc["port_b1_sensor"] |
+                            doc["i2c_b1_sensor"] |
+                            doc["i2c_b1_type"] |
+                            defaultCONFIG.port_b1_sensor;
+    CONFIG.port_b1_device_name = doc["port_b1_device_name"] |
+                                 doc["i2c_b1_device_name"] |
+                                 defaultCONFIG.port_b1_device_name;
+
+    CONFIG.port_b2_type = doc["port_b2_type"] |
+                          doc["i2c_b2_bus_type"] |
+                          defaultCONFIG.port_b2_type;
+    CONFIG.port_b2_sensor = doc["port_b2_sensor"] |
+                            doc["i2c_b2_sensor"] |
+                            doc["i2c_b2_type"] |
+                            defaultCONFIG.port_b2_sensor;
+    CONFIG.port_b2_device_name = doc["port_b2_device_name"] |
+                                 doc["i2c_b2_device_name"] |
+                                 defaultCONFIG.port_b2_device_name;
+
+    CONFIG.port_c1_type = doc["port_c1_type"] |
+                          doc["i2c_c1_bus_type"] |
+                          defaultCONFIG.port_c1_type;
+    CONFIG.port_c1_sensor = doc["port_c1_sensor"] |
+                            doc["i2c_c1_sensor"] |
+                            doc["i2c_c1_type"] |
+                            defaultCONFIG.port_c1_sensor;
+    CONFIG.port_c1_device_name = doc["port_c1_device_name"] |
+                                 doc["i2c_c1_device_name"] |
+                                 defaultCONFIG.port_c1_device_name;
+
+    CONFIG.port_c2_type = doc["port_c2_type"] |
+                          doc["i2c_c2_bus_type"] |
+                          defaultCONFIG.port_c2_type;
+    CONFIG.port_c2_sensor = doc["port_c2_sensor"] |
+                            doc["i2c_c2_sensor"] |
+                            doc["i2c_c2_type"] |
+                            defaultCONFIG.port_c2_sensor;
+    CONFIG.port_c2_device_name = doc["port_c2_device_name"] |
+                                 doc["i2c_c2_device_name"] |
+                                 defaultCONFIG.port_c2_device_name;
+
+    CONFIG.port_internal_type = canonicalPortType(CONFIG.port_internal_type, defaultCONFIG.port_internal_type);
+    CONFIG.port_internal_sensor = canonicalPortSensor(CONFIG.port_internal_sensor, defaultCONFIG.port_internal_sensor);
+    CONFIG.port_a1_type = canonicalPortType(CONFIG.port_a1_type, defaultCONFIG.port_a1_type);
+    CONFIG.port_a1_sensor = canonicalPortSensor(CONFIG.port_a1_sensor, defaultCONFIG.port_a1_sensor);
+    CONFIG.port_a2_type = canonicalPortType(CONFIG.port_a2_type, defaultCONFIG.port_a2_type);
+    CONFIG.port_a2_sensor = canonicalPortSensor(CONFIG.port_a2_sensor, defaultCONFIG.port_a2_sensor);
+    CONFIG.port_b1_type = canonicalPortType(CONFIG.port_b1_type, defaultCONFIG.port_b1_type);
+    CONFIG.port_b1_sensor = canonicalPortSensor(CONFIG.port_b1_sensor, defaultCONFIG.port_b1_sensor);
+    CONFIG.port_b2_type = canonicalPortType(CONFIG.port_b2_type, defaultCONFIG.port_b2_type);
+    CONFIG.port_b2_sensor = canonicalPortSensor(CONFIG.port_b2_sensor, defaultCONFIG.port_b2_sensor);
+    CONFIG.port_c1_type = canonicalPortType(CONFIG.port_c1_type, defaultCONFIG.port_c1_type);
+    CONFIG.port_c1_sensor = canonicalPortSensor(CONFIG.port_c1_sensor, defaultCONFIG.port_c1_sensor);
+    CONFIG.port_c2_type = canonicalPortType(CONFIG.port_c2_type, defaultCONFIG.port_c2_type);
+    CONFIG.port_c2_sensor = canonicalPortSensor(CONFIG.port_c2_sensor, defaultCONFIG.port_c2_sensor);
 
     CONFIG.rtc_timezone = doc["rtc_timezone"] | defaultCONFIG.rtc_timezone;
-
-    CONFIG.gps_i2c_port = doc["gps_i2c_port"] | defaultCONFIG.gps_i2c_port;
     
     CONFIG.level_wheelbase_mm = doc["level_wheelbase_mm"] | defaultCONFIG.level_wheelbase_mm;
     CONFIG.level_track_width_mm = doc["level_track_width_mm"] | defaultCONFIG.level_track_width_mm;
@@ -293,10 +403,28 @@ bool config_save()
     doc["sta_pass"] = CONFIG.sta_pass;                      // External network password
     doc["gaz_calibration_factor"] = CONFIG.gaz_calibration_factor;      // Weight sensor calibration
     doc["gaz_weight_average_window"] = CONFIG.gaz_weight_average_window; // Gaz smoothing window
-    doc["gaz_i2c_port"] = CONFIG.gaz_i2c_port;                          // Gaz I2C port selection (e.g. A1)
-    doc["tank_i2c_port"] = CONFIG.tank_i2c_port;
+    doc["port_internal_type"] = CONFIG.port_internal_type;
+    doc["port_internal_sensor"] = CONFIG.port_internal_sensor;
+    doc["port_internal_device_name"] = CONFIG.port_internal_device_name;
+    doc["port_a1_type"] = CONFIG.port_a1_type;
+    doc["port_a1_sensor"] = CONFIG.port_a1_sensor;
+    doc["port_a1_device_name"] = CONFIG.port_a1_device_name;
+    doc["port_a2_type"] = CONFIG.port_a2_type;
+    doc["port_a2_sensor"] = CONFIG.port_a2_sensor;
+    doc["port_a2_device_name"] = CONFIG.port_a2_device_name;
+    doc["port_b1_type"] = CONFIG.port_b1_type;
+    doc["port_b1_sensor"] = CONFIG.port_b1_sensor;
+    doc["port_b1_device_name"] = CONFIG.port_b1_device_name;
+    doc["port_b2_type"] = CONFIG.port_b2_type;
+    doc["port_b2_sensor"] = CONFIG.port_b2_sensor;
+    doc["port_b2_device_name"] = CONFIG.port_b2_device_name;
+    doc["port_c1_type"] = CONFIG.port_c1_type;
+    doc["port_c1_sensor"] = CONFIG.port_c1_sensor;
+    doc["port_c1_device_name"] = CONFIG.port_c1_device_name;
+    doc["port_c2_type"] = CONFIG.port_c2_type;
+    doc["port_c2_sensor"] = CONFIG.port_c2_sensor;
+    doc["port_c2_device_name"] = CONFIG.port_c2_device_name;
     doc["rtc_timezone"] = CONFIG.rtc_timezone;
-    doc["gps_i2c_port"] = CONFIG.gps_i2c_port;
     doc["level_wheelbase_mm"] = CONFIG.level_wheelbase_mm;
     doc["level_track_width_mm"] = CONFIG.level_track_width_mm;
     doc["level_offset_x_mm"] = CONFIG.level_offset_x_mm;
