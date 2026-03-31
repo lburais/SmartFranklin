@@ -9,7 +9,7 @@ public:
     void process();
     bool isInitialized() const;
 
-    /** Capture the current raw pitch/roll as the zero-level offsets and persist them. */
+    /** Capture les offsets zéro actuels d'assiette/inclinaison et les persiste (capteur IMU interne uniquement). */
     bool calibrate();
 
 private:
@@ -53,5 +53,5 @@ private:
     float m_lastWheelRrMm = 0.0f;
 };
 
-/** Global singleton instance used by runtime tasks and APIs. */
+/** Instance globale utilisée par les tâches runtime et APIs. */
 extern Level LEVEL_TASK;

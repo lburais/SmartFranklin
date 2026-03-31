@@ -1,6 +1,6 @@
 /**
  * @file rtc.cpp
- * @brief Implements internal RTC handling, NTP/system synchronization, and MQTT publication.
+ * @brief Implémente la gestion de l'horloge temps réel interne (RTC), la synchronisation NTP/système, et la publication MQTT.
  */
 
 #include "rtc.h"
@@ -16,7 +16,7 @@
 
 #include "config_store.h"
 #include "data_model.h"
-#include "i2c.h"
+
 #include "mqtt.h"
 
 bool RTC::isSystemTimeValid(const time_t t)

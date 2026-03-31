@@ -1,11 +1,10 @@
 /**
  * @file level.cpp
- * @brief Implements inclinometer acquisition, vehicle pose estimation, and corner height projection.
+ * @brief Inclinomètre : acquisition IMU interne, estimation de la pose véhicule, projection hauteurs roues, publication MQTT.
  * @details
- * This module reads acceleration vectors from the integrated M5 IMU,
- * converts them to pitch/roll angles, applies configurable zero offsets, projects the
- * resulting plane onto the four wheel points, updates shared telemetry state, and publishes the
- * measurements through MQTT.
+ * Ce module lit les vecteurs d'accélération du capteur IMU interne du M5Stack,
+ * convertit en angles pitch/roll, applique les offsets zéro configurables, projette le plan sur les quatre roues,
+ * met à jour la télémétrie partagée et publie les mesures via MQTT.
  */
 
 #include "level.h"

@@ -202,10 +202,11 @@ bool config_load()
                                     defaultCONFIG.gaz_calibration_factor;
     CONFIG.gaz_weight_average_window = doc["gaz_weight_average_window"] | defaultCONFIG.gaz_weight_average_window;
     CONFIG.gaz_i2c_port = doc["gaz_i2c_port"] | defaultCONFIG.gaz_i2c_port;
+
     CONFIG.tank_i2c_port = doc["tank_i2c_port"] | defaultCONFIG.tank_i2c_port;
-    CONFIG.level_i2c_port = doc["level_i2c_port"] | defaultCONFIG.level_i2c_port;
-    CONFIG.rtc_i2c_port = doc["rtc_i2c_port"] | defaultCONFIG.rtc_i2c_port;
+
     CONFIG.rtc_timezone = doc["rtc_timezone"] | defaultCONFIG.rtc_timezone;
+
     CONFIG.gps_i2c_port = doc["gps_i2c_port"] | defaultCONFIG.gps_i2c_port;
     
     CONFIG.level_wheelbase_mm = doc["level_wheelbase_mm"] | defaultCONFIG.level_wheelbase_mm;
@@ -218,10 +219,6 @@ bool config_load()
     CONFIG.admin_user = doc["admin_user"] | defaultCONFIG.admin_user;
     CONFIG.admin_pass = doc["admin_pass"] | defaultCONFIG.admin_pass;
 
-    // const bool hasMqttPort = !doc["mqtt_port"].isNull();
-    // const bool hasLegacyExtMqttPort = !doc["ext_mqtt_port"].isNull();
-
-    // CONFIG.mqtt_port = doc["mqtt_port"] | defaultCONFIG.mqtt_port;
 
     CONFIG.task_wifi_loop_ms = doc["task_wifi_loop_ms"] | defaultCONFIG.task_wifi_loop_ms;
     CONFIG.task_mqtt_loop_ms = doc["task_mqtt_loop_ms"] | defaultCONFIG.task_mqtt_loop_ms;
@@ -232,15 +229,6 @@ bool config_load()
     CONFIG.task_bms_ble_connected_loop_ms = doc["task_bms_ble_connected_loop_ms"] | defaultCONFIG.task_bms_ble_connected_loop_ms;
     CONFIG.task_bms_ble_retry_loop_ms = doc["task_bms_ble_retry_loop_ms"] | defaultCONFIG.task_bms_ble_retry_loop_ms;
     CONFIG.task_watchdog_loop_ms = doc["task_watchdog_loop_ms"] | defaultCONFIG.task_watchdog_loop_ms;
-
-    // if (!hasMqttPort && hasLegacyExtMqttPort) {
-    //     M5_LOGW("[CONFIG] Deprecated key 'ext_mqtt_port' detected and ignored; using mqtt_port=%d", CONFIG.mqtt_port);
-    //     if (config_save()) {
-    //         M5_LOGI("[CONFIG] config.json migrated to mqtt_port-only format");
-    //     } else {
-    //         M5_LOGW("[CONFIG] failed to persist mqtt_port-only migration");
-    //     }
-    // }
 
     return true;
 }
@@ -307,8 +295,6 @@ bool config_save()
     doc["gaz_weight_average_window"] = CONFIG.gaz_weight_average_window; // Gaz smoothing window
     doc["gaz_i2c_port"] = CONFIG.gaz_i2c_port;                          // Gaz I2C port selection (e.g. A1)
     doc["tank_i2c_port"] = CONFIG.tank_i2c_port;
-    doc["level_i2c_port"] = CONFIG.level_i2c_port;
-    doc["rtc_i2c_port"] = CONFIG.rtc_i2c_port;
     doc["rtc_timezone"] = CONFIG.rtc_timezone;
     doc["gps_i2c_port"] = CONFIG.gps_i2c_port;
     doc["level_wheelbase_mm"] = CONFIG.level_wheelbase_mm;

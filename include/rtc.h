@@ -1,9 +1,9 @@
 /**
  * @file rtc.h
- * @brief Public interface for real-time clock acquisition and synchronization.
+ * @brief Interface publique pour l'horloge temps réel interne (RTC) : acquisition, synchronisation NTP, publication MQTT.
  *
- * This module exposes RTC source selection and periodic processing hooks used
- * by telemetry and UI layers to maintain valid date/time state.
+ * Ce module gère uniquement l'horloge interne du M5Stack (plus aucune gestion de source RTC externe).
+ * Il fournit la synchronisation NTP, la gestion de fuseau horaire, et la publication des données via MQTT.
  *
  * SPDX-License-Identifier: MIT
  */
@@ -48,7 +48,7 @@ private:
         int second = 0;
     };
 
-    /** Time synchronization origin. */
+    /** Origine de synchronisation temporelle (NTP ou RTC interne uniquement). */
     enum class SyncSource : uint8_t { None = 0, Ntp, Rtc };
 
     // ---- constants ----
@@ -77,8 +77,6 @@ private:
     // ---- instance methods (need member state) ----
     bool readDateTime(DateTime& out);
     bool writeDateTime(const DateTime& dt);
-    bool syncSystemFromRtcHardware();
-    bool syncRtcHardwareFromSystem();
 
     // ---- member state ----
     mutable std::mutex m_mutex;
@@ -89,5 +87,5 @@ private:
     SyncSource m_lastSyncSource = SyncSource::None;
 };
 
-/** Global singleton instance used by system tasks. */
+/** Instance globale utilisée par les tâches système. */
 extern RTC RTC_TASK;
