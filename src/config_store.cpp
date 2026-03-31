@@ -205,6 +205,7 @@ bool config_load()
     CONFIG.tank_i2c_port = doc["tank_i2c_port"] | defaultCONFIG.tank_i2c_port;
     CONFIG.level_i2c_port = doc["level_i2c_port"] | defaultCONFIG.level_i2c_port;
     CONFIG.rtc_i2c_port = doc["rtc_i2c_port"] | defaultCONFIG.rtc_i2c_port;
+    CONFIG.rtc_timezone = doc["rtc_timezone"] | defaultCONFIG.rtc_timezone;
     CONFIG.gps_i2c_port = doc["gps_i2c_port"] | defaultCONFIG.gps_i2c_port;
     
     CONFIG.level_wheelbase_mm = doc["level_wheelbase_mm"] | defaultCONFIG.level_wheelbase_mm;
@@ -308,6 +309,7 @@ bool config_save()
     doc["tank_i2c_port"] = CONFIG.tank_i2c_port;
     doc["level_i2c_port"] = CONFIG.level_i2c_port;
     doc["rtc_i2c_port"] = CONFIG.rtc_i2c_port;
+    doc["rtc_timezone"] = CONFIG.rtc_timezone;
     doc["gps_i2c_port"] = CONFIG.gps_i2c_port;
     doc["level_wheelbase_mm"] = CONFIG.level_wheelbase_mm;
     doc["level_track_width_mm"] = CONFIG.level_track_width_mm;

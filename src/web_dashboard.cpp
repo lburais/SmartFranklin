@@ -725,6 +725,7 @@ const fields = [
     { key: 'level_offset_y_mm', label: 'Level Offset Y mm', type: 'number', step: '1' },
     { key: 'level_zero_pitch_deg', label: 'Level Zero Pitch deg', type: 'number', step: '0.01' },
     { key: 'level_zero_roll_deg', label: 'Level Zero Roll deg', type: 'number', step: '0.01' },
+    { key: 'rtc_timezone', label: 'RTC Timezone', type: 'text' },
     { key: 'task_wifi_loop_ms', label: 'Task WiFi Loop ms', type: 'number', step: '1' },
     { key: 'task_mqtt_loop_ms', label: 'Task MQTT Loop ms', type: 'number', step: '1' },
     { key: 'task_i2c_loop_ms', label: 'Task I2C Loop ms', type: 'number', step: '1' },
@@ -1324,6 +1325,7 @@ static void fillConfigJson(JsonVariant doc)
     doc["level_offset_y_mm"] = CONFIG.level_offset_y_mm;
     doc["level_zero_pitch_deg"] = CONFIG.level_zero_pitch_deg;
     doc["level_zero_roll_deg"] = CONFIG.level_zero_roll_deg;
+    doc["rtc_timezone"] = CONFIG.rtc_timezone;
 
     doc["imu_wheelbase_mm"] = CONFIG.level_wheelbase_mm;
     doc["imu_track_width_mm"] = CONFIG.level_track_width_mm;
@@ -1452,6 +1454,7 @@ static bool applyConfigFromRequest(AsyncWebServerRequest* request, String& error
         !applyFloat("level_offset_y_mm", updated.level_offset_y_mm) ||
         !applyFloat("level_zero_pitch_deg", updated.level_zero_pitch_deg) ||
         !applyFloat("level_zero_roll_deg", updated.level_zero_roll_deg) ||
+        !applyString("rtc_timezone", updated.rtc_timezone) ||
         !applyString("admin_user", updated.admin_user) ||
         !applyString("admin_pass", updated.admin_pass) ||
         !applyInt("mqtt_port", updated.mqtt_port) ||
@@ -1490,6 +1493,12 @@ static bool applyConfigFromRequest(AsyncWebServerRequest* request, String& error
         updated.level_zero_pitch_deg < -90.0f || updated.level_zero_pitch_deg > 90.0f ||
         updated.level_zero_roll_deg < -90.0f || updated.level_zero_roll_deg > 90.0f) {
         errorKey = "level_zero";
+        return false;
+    }
+
+    updated.rtc_timezone.trim();
+    if (updated.rtc_timezone.isEmpty()) {
+        errorKey = "rtc_timezone";
         return false;
     }
 

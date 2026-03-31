@@ -100,8 +100,8 @@ void Level::publishLevel(const float pitchDeg,
     sf_mqtt::publish("smartfranklin/level/wheel/rl_mm", rlBuf);
     sf_mqtt::publish("smartfranklin/level/wheel/rr_mm", rrBuf);
 
-    M5_LOGI("[LEVEL] pitch:%.3f roll:%.3f wheel_mm FL:%.2f FR:%.2f RL:%.2f RR:%.2f",
-            pitchDeg, rollDeg, flMm, frMm, rlMm, rrMm);
+    M5_LOGI("[LEVEL] pitch:%.0f° roll:%.0f° FL:%.0fcm FR:%.0fcm RL:%.0fcm RR:%.0fcm",
+            pitchDeg, rollDeg, flMm/10, frMm/10, rlMm/10, rrMm/10);
 }
 
 Level LEVEL_TASK;

@@ -11,31 +11,17 @@
 #pragma once
 
 #include <Arduino.h>
+#include <cstdint>
+#include <ctime>
+#include <mutex>
 
 class RTC {
 public:
     /**
-     * @brief Supported RTC sources.
-     */
-    enum class Source : uint8_t {
-        /** No RTC source selected. */
-        None = 0,
-        /** Internal RTC available on supported M5 boards. */
-        InternalRtc,
-        /** External M5Stack RTC unit. */
-        ExternalM5StackRtcUnit,
-        /** External Seeed PCD85063TP-compatible RTC source. */
-        ExternalSeeedPcd85063tp,
-    };
-
-    /**
-     * @brief Initialize RTC backend and selected source.
-     * @param source Selected RTC source implementation.
-     * @param isInternalRoute True for internal route, false for Wire.
-     * @param i2cAddress I2C address for external RTC devices.
+     * @brief Initialize internal M5 RTC backend.
      * @return True when initialization succeeds.
      */
-    bool init(Source source, bool isInternalRoute, uint8_t i2cAddress);
+    bool init();
 
     /**
      * @brief Execute one periodic RTC refresh cycle.
@@ -51,25 +37,57 @@ public:
      */
     bool isInitialized() const;
 
-    /**
-     * @brief Get active RTC source enum.
-     * @return Current source.
-     */
-    Source source() const;
+private:
+    /** Normalized date-time tuple. */
+    struct DateTime {
+        int year   = 0;
+        int month  = 0;
+        int day    = 0;
+        int hour   = 0;
+        int minute = 0;
+        int second = 0;
+    };
 
-    /**
-     * @brief Get active source label.
-     * @return Human-readable source name.
-     */
-    const char* sourceName() const;
+    /** Time synchronization origin. */
+    enum class SyncSource : uint8_t { None = 0, Ntp, Rtc };
 
-    /**
-     * @brief Convert source enum to stable text identifier.
-     * @param source Source enum value.
-     * @return Static source name string.
-     */
-    static const char* sourceToString(Source source);
+    // ---- constants ----
+    static constexpr uint32_t kProcessPeriodMs = 5000UL;
+    static constexpr uint32_t kPublishPeriodMs = 30000UL;
+    static constexpr uint32_t kWritePeriodMs   = 60000UL;
+    static constexpr uint32_t kNtpTimeoutMs    = 1500UL;
+    static constexpr time_t   kMinValidEpoch   = 1704067200; // 2024-01-01T00:00:00Z
+
+    // ---- pure static utilities ----
+    static bool    isSystemTimeValid(time_t t);
+    static bool    datetimeToEpoch(const DateTime& dt, time_t& outEpoch);
+    static bool    epochToDateTime(time_t epoch, DateTime& out);
+    static bool    epochToLocalIso(time_t epoch, char* out, size_t outLen);
+    static void    formatIsoUtc(const DateTime& dt, char* out, size_t outLen);
+    static bool    readDateTimeFromInternalApi(DateTime& out);
+    static bool    writeDateTimeToInternalApi(const DateTime& dt);
+    static const char* syncSourceToString(SyncSource src);
+    static String  timezoneConfigValue();
+    static String  timezoneToTzString(const String& value);
+    static void    publishTimezone();
+    static void    publishSyncSource(SyncSource src);
+    static void    publishRtcTime(const DateTime& dt);
+    static bool    syncSystemFromNtp();
+
+    // ---- instance methods (need member state) ----
+    bool readDateTime(DateTime& out);
+    bool writeDateTime(const DateTime& dt);
+    bool syncSystemFromRtcHardware();
+    bool syncRtcHardwareFromSystem();
+
+    // ---- member state ----
+    mutable std::mutex m_mutex;
+    bool m_initialized = false;
+    uint32_t m_lastProcessMs = 0;
+    uint32_t m_lastPublishMs = 0;
+    uint32_t m_lastRtcWriteMs = 0;
+    SyncSource m_lastSyncSource = SyncSource::None;
 };
 
 /** Global singleton instance used by system tasks. */
-extern RTC RTC_MODULE;
+extern RTC RTC_TASK;

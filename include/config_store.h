@@ -61,6 +61,7 @@ struct SmartConfig {
     String tank_i2c_port = "A2";
     String level_i2c_port = "INTERNAL";
     String rtc_i2c_port = "INTERNAL";
+    String rtc_timezone = "Europe/Paris";
     String gps_i2c_port = "B1";
 
     // Level geometry calibration (millimeters)
