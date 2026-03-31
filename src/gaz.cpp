@@ -1,11 +1,10 @@
 /**
  * @file gaz.cpp
- * @brief Gas bottle weight acquisition and calibration implementation.
- *
- * This module wraps M5 Unit WEIGHT operations, keeps calibration state,
- * computes gas fill percentage from measured weight, and publishes telemetry.
- *
- * SPDX-License-Identifier: MIT
+ * @brief Poids bouteille gaz : acquisition capteur poids I2C, calibration, publication MQTT.
+ * @details
+ * Ce module gere le capteur M5Stack Weight I2C connecte sur le port defini dans CONFIG (gaz_i2c_port, defaut "A1").
+ * Il effectue les mesures periodiques, calcule le taux de remplissage, applique la calibration
+ * et publie les donnees via MQTT.
  */
 
 #include "gaz.h"
@@ -22,18 +21,14 @@
 
 #include "config_store.h"
 #include "data_model.h"
+#include "i2c.h"
 #include "mqtt.h"
 
-namespace {
+Gaz GAZ_TASK;
 
-constexpr int32_t GAZ_BOTTLE_FULL_G = 6450;
-constexpr int32_t GAZ_BOTTLE_EMPTY_G = 3700;
-constexpr float CALIBRATION_GAP_EPSILON = 1e-6f;
-constexpr size_t GAZ_AVG_WINDOW_MIN = 1U;
-constexpr size_t GAZ_AVG_WINDOW_MAX = 64U;
+// ---- static utilities ----
 
-/** Normalize invalid calibration gaps to a safe default. */
-float sanitizedGap(const float gap)
+float Gaz::sanitizedGap(const float gap)
 {
     if (!std::isfinite(gap) || gap == 0.0f) {
         return 1.0f;
@@ -41,149 +36,23 @@ float sanitizedGap(const float gap)
     return gap;
 }
 
-struct GazState {
-    mutable std::mutex mutex;
-    m5::unit::UnitUnified units;
-    m5::unit::UnitWeightI2C unit;
-
-    bool initialized = false;
-    uint8_t i2cAddress = 0x26;
-    sf_i2c::RouteMode routeMode = sf_i2c::RouteMode::Unset;
-    float lastCalibrationGap = 1.0f;
-    int32_t lastWeightG = 0;
-    int32_t lastFillPct = 0;
-    std::array<int32_t, GAZ_AVG_WINDOW_MAX> recentWeights{};
-    size_t recentCount = 0;
-    size_t recentHead = 0;
-    size_t recentWindow = 0;
-};
-
-GazState GAZ_STATE;
-
-size_t sanitizedAveragingWindow()
+int32_t Gaz::computeFillPct(const int32_t weightG)
 {
-    const int configured = CONFIG.gaz_weight_average_window;
-    if (configured < static_cast<int>(GAZ_AVG_WINDOW_MIN)) {
-        return GAZ_AVG_WINDOW_MIN;
-    }
-    if (configured > static_cast<int>(GAZ_AVG_WINDOW_MAX)) {
-        return GAZ_AVG_WINDOW_MAX;
-    }
-    return static_cast<size_t>(configured);
+    if (weightG <= kBottleEmptyG) { return 0; }
+    if (weightG >= kBottleFullG)  { return 100; }
+    return static_cast<int32_t>(100.0f *
+        static_cast<float>(weightG - kBottleEmptyG) /
+        static_cast<float>(kBottleFullG - kBottleEmptyG));
 }
 
-int32_t pushAndAverageWeightLocked(GazState& state, const int32_t rawWeightG)
+void Gaz::publishCalibrationGap(const float gap)
 {
-    const size_t window = sanitizedAveragingWindow();
-
-    if (state.recentWindow != window) {
-        state.recentWindow = window;
-        state.recentCount = 0;
-        state.recentHead = 0;
-    }
-
-    if (state.recentCount > window) {
-        state.recentCount = window;
-    }
-
-    state.recentWeights[state.recentHead] = rawWeightG;
-    state.recentHead = (state.recentHead + 1U) % window;
-    if (state.recentCount < window) {
-        ++state.recentCount;
-    }
-
-    int64_t sum = 0;
-    for (size_t i = 0; i < state.recentCount; ++i) {
-        sum += static_cast<int64_t>(state.recentWeights[i]);
-    }
-    return static_cast<int32_t>(sum / static_cast<int64_t>(state.recentCount));
+    char buf[24] = {0};
+    snprintf(buf, sizeof(buf), "%.6f", gap);
+    sf_mqtt::publish("smartfranklin/gaz/calibration/gap", buf, 1, true);
 }
 
-}  // namespace
-
-Gaz GAZ_MODULE;
-
-static void publishCalibrationGap(const float gap);
-
-/** Initialize weight unit and apply persisted calibration. */
-static bool initState(GazState& state,
-                      const bool isInternalRoute,
-                      const uint8_t i2cAddress,
-                      const sf_i2c::RouteMode routeMode)
-{
-    std::lock_guard<std::mutex> lock(state.mutex);
-    state.i2cAddress = i2cAddress;
-    state.routeMode = routeMode;
-
-    state.units = m5::unit::UnitUnified{};
-
-    if (isInternalRoute) {
-        state.initialized = state.units.add(state.unit, M5.Ex_I2C) && state.units.begin();
-    } else {
-        state.initialized = state.units.add(state.unit, Wire) && state.units.begin();
-    }
-
-    if (!state.initialized) {
-        state.initialized = false;
-        M5_LOGW("[GAZ] Weight I2C unit was not detected on supported Wire paths");
-        return false;
-    }
-
-    const float effectiveGap = sanitizedGap(CONFIG.gaz_calibration_factor);
-    if (!state.unit.writeGap(effectiveGap)) {
-        M5_LOGW("[GAZ] failed to apply calibration gap %.6f during init", effectiveGap);
-    }
-    state.lastCalibrationGap = effectiveGap;
-    publishCalibrationGap(effectiveGap);
-
-    M5_LOGI("[GAZ] Weight I2C initialization complete");
-    M5_LOGI("[GAZ] address: 0x%02X", state.i2cAddress);
-    M5_LOGI("%s", state.units.debugInfo().c_str());
-    return true;
-}
-
-/** Publish current calibration gap factor. */
-static void publishCalibrationGap(const float gap)
-{
-    char gapBuf[24] = {0};
-    snprintf(gapBuf, sizeof(gapBuf), "%.6f", gap);
-    sf_mqtt::publish("smartfranklin/gaz/calibration/gap", gapBuf, 1, true);
-}
-
-/** Acquire one weight sample and derive fill percentage under lock. */
-static bool refreshMeasurementLocked(GazState& state, int32_t& weightG, int32_t& fillPct)
-{
-    state.units.update();
-
-    if (!state.unit.updated()) {
-        return false;
-    }
-
-    const float rawWeight = state.unit.weight();
-    if (!std::isfinite(rawWeight)) {
-        M5_LOGW("[GAZ] non-finite weight sample ignored");
-        return false;
-    }
-
-    const int32_t rawWeightG = static_cast<int32_t>(lroundf(rawWeight));
-    weightG = pushAndAverageWeightLocked(state, rawWeightG);
-    state.lastWeightG = weightG;
-
-    fillPct = 0;
-    if (weightG <= GAZ_BOTTLE_EMPTY_G) {
-        fillPct = 0;
-    } else if (weightG >= GAZ_BOTTLE_FULL_G) {
-        fillPct = 100;
-    } else {
-        fillPct = 100 * (static_cast<float>(weightG - GAZ_BOTTLE_EMPTY_G) / (GAZ_BOTTLE_FULL_G - GAZ_BOTTLE_EMPTY_G));
-    }
-
-    state.lastFillPct = fillPct;
-    return true;
-}
-
-/** Publish weight and fill telemetry topics. */
-static void publishWeight(const int32_t weightG, const int32_t fillPct)
+void Gaz::publishWeight(const int32_t weightG, const int32_t fillPct)
 {
     char gBuf[24] = {0};
     snprintf(gBuf, sizeof(gBuf), "%d", weightG);
@@ -193,235 +62,371 @@ static void publishWeight(const int32_t weightG, const int32_t fillPct)
     snprintf(pctBuf, sizeof(pctBuf), "%d", fillPct);
     sf_mqtt::publish("smartfranklin/gaz/fill", pctBuf, 1, true);
 
-    M5_LOGI("[GAZ] Weight: %d g     Fill level: %d%%", weightG, fillPct);
+    M5_LOGI("[GAZ] Weight: %d g     Fill: %d%%", weightG, fillPct);
 }
 
-/** Execute one process cycle for the gas/weight module. */
-static void processState(GazState& state)
+// ---- instance methods ----
+
+size_t Gaz::sanitizedAveragingWindow() const
 {
-    int32_t weightG = 0;
-    int32_t fillPct = 0;
-    float desiredGap = 1.0f;
-    bool hasMeasurement = false;
+    const int configured = CONFIG.gaz_weight_average_window;
+    if (configured < static_cast<int>(kAvgWindowMin)) { return kAvgWindowMin; }
+    if (configured > static_cast<int>(kAvgWindowMax)) { return kAvgWindowMax; }
+    return static_cast<size_t>(configured);
+}
+
+int32_t Gaz::pushAndAverage(const int32_t rawWeightG)
+{
+    const size_t window = sanitizedAveragingWindow();
+
+    if (m_recentWindow != window) {
+        m_recentWindow = window;
+        m_recentCount  = 0;
+        m_recentHead   = 0;
+    }
+
+    if (m_recentCount > window) {
+        m_recentCount = window;
+    }
+
+    m_recentWeights[m_recentHead] = rawWeightG;
+    m_recentHead = (m_recentHead + 1U) % window;
+    if (m_recentCount < window) {
+        ++m_recentCount;
+    }
+
+    int64_t sum = 0;
+    for (size_t i = 0; i < m_recentCount; ++i) {
+        sum += static_cast<int64_t>(m_recentWeights[i]);
+    }
+    return static_cast<int32_t>(sum / static_cast<int64_t>(m_recentCount));
+}
+
+bool Gaz::refreshMeasurement(int32_t& weightG, int32_t& fillPct)
+{
+    m_units.update();
+
+    if (!m_unit.updated()) {
+        return false;
+    }
+
+    const float rawWeight = m_unit.weight();
+    if (!std::isfinite(rawWeight)) {
+        M5_LOGW("[GAZ] non-finite weight sample ignored");
+        return false;
+    }
+
+    const int32_t rawWeightG = static_cast<int32_t>(lroundf(rawWeight));
+    weightG = pushAndAverage(rawWeightG);
+    m_lastWeightG = weightG;
+
+    fillPct = computeFillPct(weightG);
+    m_lastFillPct = fillPct;
+    return true;
+}
+
+// ---- public interface ----
+
+bool Gaz::isInitialized() const
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_initialized;
+}
+
+bool Gaz::init()
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    m_initialized        = false;
+    m_busReady           = false;
+    m_recentCount        = 0;
+    m_recentHead         = 0;
+    m_recentWindow       = 0;
+    m_lastWeightG        = 0;
+    m_lastFillPct        = 0;
+    m_lastCalibrationGap = 1.0f;
+
+    sf_i2c::Device device{};
+    device.address    = kI2CAddress;
+    device.tag        = "gaz";
+    device.deviceName = "M5Stack Weight I2C Unit";
+
+    if (!sf_i2c::resolveRouteFromConfiguredPort(CONFIG.gaz_i2c_port, m_route, "GAZ")) {
+        M5_LOGW("[GAZ] cannot resolve port '%s'", CONFIG.gaz_i2c_port.c_str());
+        return false;
+    }
+
+    device.route = m_route;
+    if (!m_busReady) {
+        m_i2c.beginRoute(m_route);
+        m_busReady = true;
+    }
+
+    if (!m_i2c.deviceExistsOnRoute(device.address, m_route)) {
+        M5_LOGW("[GAZ] sensor not found on port '%s' (0x%02X)",
+                CONFIG.gaz_i2c_port.c_str(), kI2CAddress);
+        return false;
+    }
+
+    m_i2c.publishConfiguration(device);
+
+    m_units = m5::unit::UnitUnified{};
+    const bool ok = sf_i2c::isInternalRoute(m_route.mode)
+                    ? (m_units.add(m_unit, M5.Ex_I2C) && m_units.begin())
+                    : (m_units.add(m_unit, Wire)       && m_units.begin());
+
+    if (!ok) {
+        M5_LOGW("[GAZ] Weight I2C unit not detected");
+        return false;
+    }
+
+    const float effectiveGap = sanitizedGap(CONFIG.gaz_calibration_factor);
+    if (!m_unit.writeGap(effectiveGap)) {
+        M5_LOGW("[GAZ] failed to apply calibration gap %.6f during init", effectiveGap);
+    }
+    m_lastCalibrationGap = effectiveGap;
+    publishCalibrationGap(effectiveGap);
+
+    m_initialized = true;
+    M5_LOGI("[GAZ] initialized on port '%s' (0x%02X)",
+            CONFIG.gaz_i2c_port.c_str(), kI2CAddress);
+    return true;
+}
+
+bool Gaz::calibrate()
+{
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        if (!m_initialized) {
+            M5_LOGW("[GAZ] calibrate called before init");
+            return false;
+        }
+
+        if (!m_unit.resetOffset()) {
+            M5_LOGW("[GAZ] tare (resetOffset) failed during calibrate");
+            return false;
+        }
+        m_lastWeightG = 0;
+
+        const float defaultGap = 1.0f;
+        if (!m_unit.writeGap(defaultGap)) {
+            M5_LOGW("[GAZ] failed to reset calibration gap during calibrate");
+            return false;
+        }
+        m_lastCalibrationGap          = defaultGap;
+        CONFIG.gaz_calibration_factor = defaultGap;
+        config_save();
+
+        publishCalibrationGap(defaultGap);
+        M5_LOGI("[GAZ] calibrated: tare done, gap reset to %.1f", defaultGap);
+    }
 
     {
-        std::lock_guard<std::mutex> lock(state.mutex);
-        if (!state.initialized) {
+        std::lock_guard<std::mutex> lock(DATA_MUTEX);
+        DATA.weight_gaz = 0;
+        DATA.fill_gaz   = 0;
+    }
+
+    return true;
+}
+
+void Gaz::process()
+{
+    int32_t weightG        = 0;
+    int32_t fillPct        = 0;
+    bool    hasMeasurement = false;
+
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (!m_initialized) {
             return;
         }
 
-        desiredGap = sanitizedGap(CONFIG.gaz_calibration_factor);
-        if (fabsf(desiredGap - state.lastCalibrationGap) > CALIBRATION_GAP_EPSILON) {
-            if (state.unit.writeGap(desiredGap)) {
-                state.lastCalibrationGap = desiredGap;
+        const float desiredGap = sanitizedGap(CONFIG.gaz_calibration_factor);
+        if (fabsf(desiredGap - m_lastCalibrationGap) > kGapEpsilon) {
+            if (m_unit.writeGap(desiredGap)) {
+                m_lastCalibrationGap = desiredGap;
                 publishCalibrationGap(desiredGap);
             } else {
                 M5_LOGW("[GAZ] failed to refresh calibration gap %.6f", desiredGap);
             }
         }
 
-        hasMeasurement = refreshMeasurementLocked(state, weightG, fillPct);
+        hasMeasurement = refreshMeasurement(weightG, fillPct);
     }
 
     if (!hasMeasurement) {
-        M5_LOGW("[GAZ] No measurement");
+        M5_LOGD("[GAZ] no new measurement");
         return;
     }
 
     {
         std::lock_guard<std::mutex> lock(DATA_MUTEX);
         DATA.weight_gaz = weightG;
-        DATA.fill_gaz = fillPct;
+        DATA.fill_gaz   = fillPct;
     }
 
     publishWeight(weightG, fillPct);
 }
 
-/** Perform tare operation through unit API. */
-static bool tareState(GazState& state)
-{
-    std::lock_guard<std::mutex> lock(state.mutex);
-    if (!state.initialized) {
-        return false;
-    }
-
-    const bool ok = state.unit.resetOffset();
-    if (ok) {
-        state.lastWeightG = 0;
-    }
-    return ok;
-}
-
-/** Apply runtime calibration factor to the sensor. */
-static bool applyCalibrationState(GazState& state, const float gap)
-{
-    const float effectiveGap = sanitizedGap(gap);
-
-    std::lock_guard<std::mutex> lock(state.mutex);
-    if (!state.initialized) {
-        return false;
-    }
-
-    if (!state.unit.writeGap(effectiveGap)) {
-        return false;
-    }
-    state.lastCalibrationGap = effectiveGap;
-    publishCalibrationGap(effectiveGap);
-    return true;
-}
-
-/** Read one sample for calibration workflow, with fallback to cached value. */
-static float readCalibrationSampleState(GazState& state)
-{
-    std::lock_guard<std::mutex> lock(state.mutex);
-    if (!state.initialized) {
-        return 0.0f;
-    }
-
-    int32_t weightG = 0;
-    int32_t fillPct = 0;
-    if (refreshMeasurementLocked(state, weightG, fillPct)) {
-        return weightG;
-    }
-
-    return state.lastWeightG;
-}
-
-/** Read current calibration gap directly from sensor firmware. */
-static bool readCalibrationGapState(GazState& state, float& gap)
-{
-    std::lock_guard<std::mutex> lock(state.mutex);
-    if (!state.initialized) {
-        return false;
-    }
-
-    const bool ok = state.unit.readGap(gap);
-    return ok;
-}
-
-/** Read raw ADC count directly from sensor firmware. */
-static bool readRawAdcState(GazState& state, int32_t& rawAdc)
-{
-    std::lock_guard<std::mutex> lock(state.mutex);
-    if (!state.initialized) {
-        return false;
-    }
-
-    const bool ok = state.unit.readRawADC(rawAdc);
-    return ok;
-}
-
-/** Return initialization status from protected state. */
-static bool isInitializedState(const GazState& state)
-{
-    std::lock_guard<std::mutex> lock(state.mutex);
-    return state.initialized;
-}
-
-bool Gaz::init(bool isInternalRoute,
-               uint8_t i2cAddress,
-               sf_i2c::RouteMode routeMode)
-{
-    return initState(GAZ_STATE, isInternalRoute, i2cAddress, routeMode);
-}
-
-void Gaz::process()
-{
-    processState(GAZ_STATE);
-}
-
 bool Gaz::tare()
 {
-    return tareState(GAZ_STATE);
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (!m_initialized) {
+        return false;
+    }
+    const bool ok = m_unit.resetOffset();
+    if (ok) {
+        m_lastWeightG = 0;
+    }
+    return ok;
 }
 
 bool Gaz::applyCalibration(const float gap)
 {
-    return applyCalibrationState(GAZ_STATE, gap);
+    const float effectiveGap = sanitizedGap(gap);
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (!m_initialized) {
+        return false;
+    }
+    if (!m_unit.writeGap(effectiveGap)) {
+        return false;
+    }
+    m_lastCalibrationGap = effectiveGap;
+    publishCalibrationGap(effectiveGap);
+    return true;
 }
 
 float Gaz::readCalibrationSample()
 {
-    return readCalibrationSampleState(GAZ_STATE);
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (!m_initialized) {
+        return 0.0f;
+    }
+    int32_t weightG = 0;
+    int32_t fillPct = 0;
+    if (refreshMeasurement(weightG, fillPct)) {
+        return static_cast<float>(weightG);
+    }
+    return static_cast<float>(m_lastWeightG);
 }
 
 bool Gaz::readCalibrationGap(float& gap)
 {
-    return readCalibrationGapState(GAZ_STATE, gap);
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (!m_initialized) {
+        return false;
+    }
+    return m_unit.readGap(gap);
 }
 
 bool Gaz::readRawAdc(int32_t& rawAdc)
 {
-    return readRawAdcState(GAZ_STATE, rawAdc);
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (!m_initialized) {
+        return false;
+    }
+    return m_unit.readRawADC(rawAdc);
 }
 
-bool Gaz::isInitialized() const
-{
-    return isInitializedState(GAZ_STATE);
-}
+// ---- free functions for web_dashboard calibration API ----
 
 float scale_get_raw()
 {
-    return GAZ_MODULE.readCalibrationSample();
+    return GAZ_TASK.readCalibrationSample();
 }
 
 bool scale_tare()
 {
-    if (!GAZ_MODULE.isInitialized()) {
+    if (!GAZ_TASK.isInitialized()) {
         return false;
     }
-
-    if (!GAZ_MODULE.tare()) {
+    if (!GAZ_TASK.tare()) {
         return false;
     }
-
-    // Keep runtime configuration aligned with tare baseline so process() does not
-    // immediately restore an old factor on the next cycle.
     CONFIG.gaz_calibration_factor = 1.0f;
-    if (!GAZ_MODULE.applyCalibration(CONFIG.gaz_calibration_factor)) {
+    if (!GAZ_TASK.applyCalibration(CONFIG.gaz_calibration_factor)) {
         return false;
     }
-
     {
         std::lock_guard<std::mutex> lock(DATA_MUTEX);
         DATA.weight_gaz = 0;
-        DATA.fill_gaz = 0;
+        DATA.fill_gaz   = 0;
     }
-
     return true;
 }
 
 bool scale_set_cal_factor(float factor)
 {
-    if (!GAZ_MODULE.isInitialized()) {
+    if (!GAZ_TASK.isInitialized()) {
         return false;
     }
-
-    if (GAZ_MODULE.applyCalibration(factor)) {
+    if (GAZ_TASK.applyCalibration(factor)) {
         float appliedGap = factor;
-        if (GAZ_MODULE.readCalibrationGap(appliedGap) && std::isfinite(appliedGap) && std::fabs(appliedGap) > 1e-6f) {
+        if (GAZ_TASK.readCalibrationGap(appliedGap) &&
+            std::isfinite(appliedGap) &&
+            std::fabs(appliedGap) > 1e-6f)
+        {
             CONFIG.gaz_calibration_factor = appliedGap;
         } else {
             CONFIG.gaz_calibration_factor = factor;
         }
         return true;
     }
-
     return false;
 }
 
 bool scale_get_cal_factor(float& gap)
 {
-    if (!GAZ_MODULE.isInitialized()) {
+    if (!GAZ_TASK.isInitialized()) {
         return false;
     }
-    return GAZ_MODULE.readCalibrationGap(gap);
+    return GAZ_TASK.readCalibrationGap(gap);
 }
 
 bool scale_get_raw_adc(int32_t& rawAdc)
 {
-    if (!GAZ_MODULE.isInitialized()) {
+    if (!GAZ_TASK.isInitialized()) {
         return false;
     }
-    return GAZ_MODULE.readRawAdc(rawAdc);
+    return GAZ_TASK.readRawAdc(rawAdc);
+}
+
+// ---- FreeRTOS task ----
+
+void taskGaz(void* pv)
+{
+    (void)pv;
+    M5_LOGI("[GAZ] Task started");
+
+    bool     initialized       = false;
+    uint32_t nextInitAttemptMs = 0;
+
+    auto isRetryDue = [](uint32_t nowMs, uint32_t nextAttemptMs) {
+        return static_cast<int32_t>(nowMs - nextAttemptMs) >= 0;
+    };
+
+    auto scheduleRetry = [](uint32_t& nextAttemptMs, uint32_t nowMs) {
+        nextAttemptMs = nowMs + sf_i2c::kInitRetryMs;
+    };
+
+    for (;;) {
+        const uint32_t nowMs = millis();
+
+        if (!initialized && isRetryDue(nowMs, nextInitAttemptMs)) {
+            initialized = GAZ_TASK.init();
+            if (!initialized) {
+                M5_LOGW("[GAZ] Init failed");
+                scheduleRetry(nextInitAttemptMs, nowMs);
+            }
+        }
+
+        if (initialized) {
+            GAZ_TASK.process();
+        }
+
+        const int loopMs = (CONFIG.task_i2c_loop_ms > 0) ? CONFIG.task_i2c_loop_ms : 1000;
+        vTaskDelay(pdMS_TO_TICKS(loopMs));
+    }
 }
