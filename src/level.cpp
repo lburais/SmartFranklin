@@ -155,19 +155,7 @@ bool Level::init()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    const sf_ports::PortDefinition* levelPortDef = sf_ports::findPortById(sf_ports::PortId::Internal);
-    const sf_ports::PortType configuredType = sf_ports::portTypeFromString(
-        sf_ports::configuredPortType(CONFIG, sf_ports::PortId::Internal));
-    const sf_ports::PortSensor configuredSensor = sf_ports::portSensorFromString(
-        sf_ports::configuredPortSensor(CONFIG, sf_ports::PortId::Internal));
-
     m_initialized = false;
-
-    if (configuredType != sf_ports::PortType::I2C || configuredSensor != sf_ports::PortSensor::Internal) {
-        M5_LOGW("[LEVEL] internal port metadata is type='%s' sensor='%s' but internal IMU is still used",
-                sf_ports::configuredPortType(CONFIG, sf_ports::PortId::Internal).c_str(),
-                sf_ports::configuredPortSensor(CONFIG, sf_ports::PortId::Internal).c_str());
-    }
 
     bool imuReady = M5.Imu.isEnabled() && M5.Imu.getType() != m5::imu_t::imu_none;
     if (!imuReady) {
@@ -179,8 +167,7 @@ bool Level::init()
 
     if (imuReady) {
         m_initialized = true;
-        M5_LOGI("[LEVEL] initialized on port '%s'",
-                (levelPortDef != nullptr) ? levelPortDef->normalizedName : "internal");
+        M5_LOGI("[LEVEL] initialized on internal port");
     } else {
         M5_LOGE("[LEVEL] unable to initialize");
     }
