@@ -146,18 +146,16 @@ bool Gaz::init()
     m_lastFillPct        = 0;
     m_lastCalibrationGap = 1.0f;
 
-    const String configuredPort = i2cConfiguredPortForSensor(sf_ports::PortSensor::Gaz, "GAZ");
-    if (!i2cBeginConfiguredPort(configuredPort, "GAZ")) {
+    if (!i2cBeginConfiguredPort(sf_ports::PortSensor::Gaz)) {
         return false;
     }
 
-    if (!i2cDeviceExistsOnConfiguredPort(kI2CAddress, configuredPort, "GAZ")) {
-        M5_LOGW("[GAZ] sensor not found on port '%s' (0x%02X)",
-                configuredPort.c_str(), kI2CAddress);
+    if (!i2cDeviceExistsOnConfiguredPort(sf_ports::PortSensor::Gaz, kI2CAddress)) {
+        M5_LOGW("[GAZ] sensor (0x%02X) not found", kI2CAddress);
         return false;
     }
 
-    i2cPublishConfiguration("gaz", configuredPort, kI2CAddress);
+    i2cPublishConfiguration(sf_ports::PortSensor::Gaz, kI2CAddress);
 
     m_units = m5::unit::UnitUnified{};
     const bool ok = m_units.add(m_unit, Wire) && m_units.begin();
@@ -175,8 +173,7 @@ bool Gaz::init()
     publishCalibrationGap(effectiveGap);
 
     m_initialized = true;
-    M5_LOGI("[GAZ] initialized on port '%s' (0x%02X)",
-            configuredPort.c_str(), kI2CAddress);
+    M5_LOGI("[GAZ] (0x%02X) initialized", kI2CAddress);
     return true;
 }
 
@@ -403,8 +400,7 @@ void taskGaz(void* pv)
 
         if (!initialized && isRetryDue(nowMs, nextInitAttemptMs)) {
             initialized = GAZ_TASK.init();
-            const String configuredPort = i2cConfiguredPortForSensor(sf_ports::PortSensor::Gaz, "GAZ");
-            hmiSetPortLedStatus(configuredPort, initialized, false);
+            hmiSetPortLedStatus(sf_ports::PortSensor::Gaz, initialized, false);
             if (!initialized) {
                 M5_LOGW("[GAZ] Init failed");
                 scheduleRetry(nextInitAttemptMs, nowMs);

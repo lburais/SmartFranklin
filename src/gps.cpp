@@ -181,12 +181,6 @@ bool initState(GpsState& state, GPS::Source source, const String& configuredPort
 {
     std::lock_guard<std::mutex> lock(state.mutex);
 
-    const sf_ports::PortDefinition* def = sf_ports::findPortByName(configuredPort);
-    if (def == nullptr) {
-        M5_LOGW("[GPS] invalid configured port '%s'", configuredPort.c_str());
-        return false;
-    }
-
     state.initialized = false;
     state.source = GPS::Source::None;
     state.i2cAddress = i2cAddress;
@@ -209,7 +203,7 @@ bool initState(GpsState& state, GPS::Source source, const String& configuredPort
     M5_LOGI("[GPS] initialized source:%s address:0x%02X port:%s",
             GPS::sourceToString(state.source),
             state.i2cAddress,
-            def->normalizedName);
+            sf_ports::toString(sf_ports::findPortBySensor(sf_ports::PortSensor::Gps)->Name));
 
     return true;
 }

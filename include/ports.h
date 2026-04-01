@@ -12,23 +12,26 @@
 #include <cstddef>
 #include <cstdint>
 
-struct SmartConfig;
+//struct SmartConfig;
 
 namespace sf_ports {
 
-enum class PortId : uint8_t {
+enum class PortName : uint8_t {
     PortA1 = 0,
     PortA2,
     PortB1,
     PortB2,
     PortC1,
     PortC2,
+    Internal,
+    Bluetooth,
     Unknown,
 };
 
 enum class PortType : uint8_t {
     I2C = 0,
     UART,
+    BLE,
     Unused,
     Unknown,
 };
@@ -41,39 +44,31 @@ enum class PortSensor : uint8_t {
     Lte,
     Lora,
     Lin,
+    Imu,
+    Rtc,
+    Ina,
+    Axp,
+    Bat,
+    Obd,
     Unknown,
 };
 
 struct PortDefinition {
-    PortId id;
-    const char* normalizedName;
-    PortType defaultType;
-    PortSensor defaultSensor;
-    const char* defaultDeviceName;
+    PortName Name;
+    PortType Type;
+    PortSensor Sensor;
+    const char* DeviceName;
 };
 
 const PortDefinition* allPortDefinitions(size_t& count);
-const PortDefinition* findPortById(PortId id);
-const PortDefinition* findPortByName(const String& configuredPort);
+const PortDefinition* findPortBySensor(PortSensor sensor);
 
-String normalizePortName(const String& configuredPort);
+PortName getPortName(PortSensor sensor);
+PortType getPortType(PortSensor sensor);
+String getPortDeviceName(PortSensor sensor);
 
-String defaultPortType(PortId id);
-String defaultPortSensor(PortId id);
-String defaultPortDeviceName(PortId id);
-
-const String& configuredPortType(const SmartConfig& config, PortId id);
-const String& configuredPortSensor(const SmartConfig& config, PortId id);
-const String& configuredPortDeviceName(const SmartConfig& config, PortId id);
-
-void setConfiguredPortType(SmartConfig& config, PortId id, const String& value);
-void setConfiguredPortSensor(SmartConfig& config, PortId id, const String& value);
-void setConfiguredPortDeviceName(SmartConfig& config, PortId id, const String& value);
-
+const char* toString(PortName name);
 const char* toString(PortType type);
-PortType portTypeFromString(const String& value);
-
 const char* toString(PortSensor sensor);
-PortSensor portSensorFromString(const String& value);
 
 }  // namespace sf_ports

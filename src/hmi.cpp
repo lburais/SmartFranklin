@@ -151,16 +151,16 @@ constexpr size_t kBoardLedPin = 4;
 std::mutex g_hmiLedMutex;
 bool g_hmiLedConfigured = false;
 
-size_t ledIndexForPortId(const sf_ports::PortId id)
+size_t ledIndexForPortName(const sf_ports::PortName name)
 {
-    switch (id) {
-    case sf_ports::PortId::PortA1: return 0;
-    case sf_ports::PortId::PortA2: return 1;
-    case sf_ports::PortId::PortB1: return 2;
-    case sf_ports::PortId::PortB2: return 6;
-    case sf_ports::PortId::PortC1: return 5;
-    case sf_ports::PortId::PortC2: return 4;
-    default: return 3;
+    switch (name) {
+    case sf_ports::PortName::PortA1: return 0;
+    case sf_ports::PortName::PortA2: return 1;
+    case sf_ports::PortName::PortB1: return 2;
+    case sf_ports::PortName::PortB2: return 6;
+    case sf_ports::PortName::PortC1: return 5;
+    case sf_ports::PortName::PortC2: return 4;
+    default: return -1;
     }
 }
 
@@ -181,25 +181,25 @@ bool initBoardLeds()
     return g_hmiLedConfigured;
 }
 
-void setPortLedInitResultLocked(const String& configuredPort, const bool initialized)
+void setPortLedInitResultLocked(const sf_ports::PortSensor sensor, const bool initialized)
 {
     if (!initBoardLeds()) {
         return;
     }
 
-    const sf_ports::PortDefinition* def = sf_ports::findPortByName(configuredPort);
-    if (def == nullptr) {
+    sf_ports::PortName portName = sf_ports::getPortName(sensor);
+    const size_t index = ledIndexForPortName(portName);
+    if (index == -1) {
         return;
     }
 
-    const size_t index = ledIndexForPortId(def->id);
     if (!initialized) {
         strip.setPixelColor(index, strip.Color(255, 0, 0));
         strip.show();
         return;
     }
 
-    const sf_ports::PortType type = sf_ports::portTypeFromString(sf_ports::configuredPortType(CONFIG, def->id));
+    const sf_ports::PortType type = sf_ports::getPortType(sensor);
     if (type == sf_ports::PortType::I2C) {
         strip.setPixelColor(index, strip.Color(0, 255, 0));
     } else {
@@ -222,10 +222,10 @@ void hmiSetAllBoardLedsWhite()
     strip.show();
 }
 
-void hmiSetPortLedStatus(const String& configuredPort, const bool initialized, const bool error)
+void hmiSetPortLedStatus(const sf_ports::PortSensor sensor, const bool initialized, const bool error)
 {
     std::lock_guard<std::mutex> lock(g_hmiLedMutex);
-    setPortLedInitResultLocked(configuredPort, initialized);
+    setPortLedInitResultLocked(sensor, initialized);
 }
 
 /**

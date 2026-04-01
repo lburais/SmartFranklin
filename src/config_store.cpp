@@ -88,63 +88,6 @@
 #include <M5Unified.h>
 #include <SPIFFS.h>
 
-namespace {
-
-String portTypeConfigKey(const sf_ports::PortDefinition& def)
-{
-    return String("port_") + def.normalizedName + "_type";
-}
-
-String portSensorConfigKey(const sf_ports::PortDefinition& def)
-{
-    return String("port_") + def.normalizedName + "_sensor";
-}
-
-String portDeviceNameConfigKey(const sf_ports::PortDefinition& def)
-{
-    return String("port_") + def.normalizedName + "_device_name";
-}
-
-String legacyBusTypeConfigKey(const sf_ports::PortDefinition& def)
-{
-    return String("i2c_") + def.normalizedName + "_bus_type";
-}
-
-String legacySensorConfigKey(const sf_ports::PortDefinition& def)
-{
-    return String("i2c_") + def.normalizedName + "_sensor";
-}
-
-String legacyTypeConfigKey(const sf_ports::PortDefinition& def)
-{
-    return String("i2c_") + def.normalizedName + "_type";
-}
-
-String legacyDeviceNameConfigKey(const sf_ports::PortDefinition& def)
-{
-    return String("i2c_") + def.normalizedName + "_device_name";
-}
-
-String canonicalPortType(const String& raw, const String& fallback)
-{
-    const sf_ports::PortType parsed = sf_ports::portTypeFromString(raw);
-    if (parsed == sf_ports::PortType::Unknown) {
-        return fallback;
-    }
-    return String(sf_ports::toString(parsed));
-}
-
-String canonicalPortSensor(const String& raw, const String& fallback)
-{
-    const sf_ports::PortSensor parsed = sf_ports::portSensorFromString(raw);
-    if (parsed == sf_ports::PortSensor::Unknown) {
-        return fallback;
-    }
-    return String(sf_ports::toString(parsed));
-}
-
-}  // namespace
-
 // ============================================================================
 // Global Configuration Object
 // ============================================================================
@@ -259,40 +202,6 @@ bool config_load()
                                     defaultCONFIG.gaz_calibration_factor;
     CONFIG.gaz_weight_average_window = doc["gaz_weight_average_window"] | defaultCONFIG.gaz_weight_average_window;
 
-    size_t portCount = 0;
-    const sf_ports::PortDefinition* portDefs = sf_ports::allPortDefinitions(portCount);
-    for (size_t i = 0; i < portCount; ++i) {
-        const sf_ports::PortDefinition& def = portDefs[i];
-
-        const String defaultType = sf_ports::configuredPortType(defaultCONFIG, def.id);
-        const String defaultSensor = sf_ports::configuredPortSensor(defaultCONFIG, def.id);
-        const String defaultDeviceName = sf_ports::configuredPortDeviceName(defaultCONFIG, def.id);
-
-        const String typeKey = portTypeConfigKey(def);
-        const String sensorKey = portSensorConfigKey(def);
-        const String deviceNameKey = portDeviceNameConfigKey(def);
-        const String legacyBusTypeKey = legacyBusTypeConfigKey(def);
-        const String legacySensorKey = legacySensorConfigKey(def);
-        const String legacyTypeKey = legacyTypeConfigKey(def);
-        const String legacyDeviceNameKey = legacyDeviceNameConfigKey(def);
-
-        const String loadedType = doc[typeKey] |
-                      doc[legacyBusTypeKey] |
-                      doc[legacyTypeKey] |
-                                  defaultType;
-        const String loadedSensor = doc[sensorKey] |
-                        doc[legacySensorKey] |
-                        doc[legacyTypeKey] |
-                                    defaultSensor;
-        const String loadedDeviceName = doc[deviceNameKey] |
-                        doc[legacyDeviceNameKey] |
-                                        defaultDeviceName;
-
-        sf_ports::setConfiguredPortType(CONFIG, def.id, canonicalPortType(loadedType, defaultType));
-        sf_ports::setConfiguredPortSensor(CONFIG, def.id, canonicalPortSensor(loadedSensor, defaultSensor));
-        sf_ports::setConfiguredPortDeviceName(CONFIG, def.id, loadedDeviceName);
-    }
-
     CONFIG.rtc_timezone = doc["rtc_timezone"] | defaultCONFIG.rtc_timezone;
     
     CONFIG.level_wheelbase_mm = doc["level_wheelbase_mm"] | defaultCONFIG.level_wheelbase_mm;
@@ -304,7 +213,6 @@ bool config_load()
 
     CONFIG.admin_user = doc["admin_user"] | defaultCONFIG.admin_user;
     CONFIG.admin_pass = doc["admin_pass"] | defaultCONFIG.admin_pass;
-
 
     CONFIG.task_wifi_loop_ms = doc["task_wifi_loop_ms"] | defaultCONFIG.task_wifi_loop_ms;
     CONFIG.task_mqtt_loop_ms = doc["task_mqtt_loop_ms"] | defaultCONFIG.task_mqtt_loop_ms;
@@ -379,15 +287,6 @@ bool config_save()
     doc["sta_pass"] = CONFIG.sta_pass;                      // External network password
     doc["gaz_calibration_factor"] = CONFIG.gaz_calibration_factor;      // Weight sensor calibration
     doc["gaz_weight_average_window"] = CONFIG.gaz_weight_average_window; // Gaz smoothing window
-
-    size_t portCount = 0;
-    const sf_ports::PortDefinition* portDefs = sf_ports::allPortDefinitions(portCount);
-    for (size_t i = 0; i < portCount; ++i) {
-        const sf_ports::PortDefinition& def = portDefs[i];
-        doc[portTypeConfigKey(def)] = sf_ports::configuredPortType(CONFIG, def.id);
-        doc[portSensorConfigKey(def)] = sf_ports::configuredPortSensor(CONFIG, def.id);
-        doc[portDeviceNameConfigKey(def)] = sf_ports::configuredPortDeviceName(CONFIG, def.id);
-    }
 
     doc["rtc_timezone"] = CONFIG.rtc_timezone;
     doc["level_wheelbase_mm"] = CONFIG.level_wheelbase_mm;

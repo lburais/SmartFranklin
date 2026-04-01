@@ -22,15 +22,14 @@ namespace {
 
 struct ResolvedPort {
     bool valid = false;
-    sf_ports::PortId portId = sf_ports::PortId::Unknown;
-    const char* normalized = "";
+    sf_ports::PortName portName = sf_ports::PortName::Unknown;
 };
 
 std::mutex g_i2cRouteMutex;
 bool g_wireInitialized = false;
 uint32_t g_activeWireClockHz = 0;
 
-ResolvedPort resolveConfiguredPort(const String& configuredPort, const char* label, const bool logInvalid)
+ResolvedPort resolveConfiguredPort(sf_ports::PortSensor sensor, const char* label, const bool logInvalid)
 {
     const sf_ports::PortDefinition* def = sf_ports::findPortByName(configuredPort);
     if (def != nullptr) {

@@ -16,162 +16,21 @@ namespace sf_ports {
 namespace {
 
 constexpr PortDefinition kPortDefinitions[] = {
-    {PortId::PortA1, "a1", PortType::I2C, PortSensor::Gaz, "M5Stack Weight I2C Unit"},
-    {PortId::PortA2, "a2", PortType::I2C, PortSensor::Tank, "M5Stack Unit Ultrasonic I2C (RCWL-9600)"},
-    {PortId::PortB1, "b1", PortType::I2C, PortSensor::Gps, "DFRobot Gravity GNSS (DFR1103)"},
-    {PortId::PortB2, "b2", PortType::UART, PortSensor::Lin, "LIN Bus"},
-    {PortId::PortC1, "c1", PortType::UART, PortSensor::Lte, "M5Stack NB-IOT2"},
-    {PortId::PortC2, "c2", PortType::UART, PortSensor::Lora, "M5Stack C6L"},
+    {PortName::PortA1, PortType::I2C, PortSensor::Gaz, "M5Stack Weight I2C Unit"},
+    {PortName::PortA2, PortType::I2C, PortSensor::Tank, "M5Stack Unit Ultrasonic I2C (RCWL-9600)"},
+    {PortName::PortB1, PortType::I2C, PortSensor::Gps, "DFRobot Gravity GNSS (DFR1103)"},
+    {PortName::PortB2, PortType::UART, PortSensor::Lin, "LIN Bus"},
+    {PortName::PortC1, PortType::UART, PortSensor::Lte, "M5Stack NB-IOT2"},
+    {PortName::PortC2, PortType::UART, PortSensor::Lora, "M5Stack C6L"},
+    {PortName::Internal, PortType::I2C, PortSensor::Imu, "MPU6886"},
+    {PortName::Internal, PortType::I2C, PortSensor::Rtc, "BM8563"},
+    {PortName::Internal, PortType::I2C, PortSensor::Ina, "INA3221"},
+    {PortName::Internal, PortType::I2C, PortSensor::Axp, "AXP192"},
+    {PortName::Bluetooth, PortType::BLE, PortSensor::Bat, "Battery"},
+    {PortName::Bluetooth, PortType::BLE, PortSensor::Obd, "OBD"},
 };
 
 }  // namespace
-
-const PortDefinition* allPortDefinitions(size_t& count)
-{
-    count = sizeof(kPortDefinitions) / sizeof(kPortDefinitions[0]);
-    return kPortDefinitions;
-}
-
-const PortDefinition* findPortById(const PortId id)
-{
-    size_t count = 0;
-    const PortDefinition* defs = allPortDefinitions(count);
-    for (size_t i = 0; i < count; ++i) {
-        if (defs[i].id == id) {
-            return &defs[i];
-        }
-    }
-    return nullptr;
-}
-
-String normalizePortName(const String& configuredPort)
-{
-    String port = configuredPort;
-    port.trim();
-    port.toUpperCase();
-
-    if (port.isEmpty() || port == "WIRE" || port == "PORTA" || port == "A1") return String("a1");
-    if (port == "A2") return String("a2");
-    if (port == "B1" || port == "PORTB") return String("b1");
-    if (port == "B2") return String("b2");
-    if (port == "C1") return String("c1");
-    if (port == "C2") return String("c2");
-
-    return String();
-}
-
-const String& configuredPortType(const SmartConfig& config, const PortId id)
-{
-    switch (id) {
-    case PortId::PortA1: return config.port_a1_type;
-    case PortId::PortA2: return config.port_a2_type;
-    case PortId::PortB1: return config.port_b1_type;
-    case PortId::PortB2: return config.port_b2_type;
-    case PortId::PortC1: return config.port_c1_type;
-    case PortId::PortC2: return config.port_c2_type;
-    default: return config.port_a1_type;
-    }
-}
-
-const String& configuredPortSensor(const SmartConfig& config, const PortId id)
-{
-    switch (id) {
-    case PortId::PortA1: return config.port_a1_sensor;
-    case PortId::PortA2: return config.port_a2_sensor;
-    case PortId::PortB1: return config.port_b1_sensor;
-    case PortId::PortB2: return config.port_b2_sensor;
-    case PortId::PortC1: return config.port_c1_sensor;
-    case PortId::PortC2: return config.port_c2_sensor;
-    default: return config.port_a1_sensor;
-    }
-}
-
-const String& configuredPortDeviceName(const SmartConfig& config, const PortId id)
-{
-    switch (id) {
-    case PortId::PortA1: return config.port_a1_device_name;
-    case PortId::PortA2: return config.port_a2_device_name;
-    case PortId::PortB1: return config.port_b1_device_name;
-    case PortId::PortB2: return config.port_b2_device_name;
-    case PortId::PortC1: return config.port_c1_device_name;
-    case PortId::PortC2: return config.port_c2_device_name;
-    default: return config.port_a1_device_name;
-    }
-}
-
-void setConfiguredPortType(SmartConfig& config, const PortId id, const String& value)
-{
-    switch (id) {
-    case PortId::PortA1: config.port_a1_type = value; break;
-    case PortId::PortA2: config.port_a2_type = value; break;
-    case PortId::PortB1: config.port_b1_type = value; break;
-    case PortId::PortB2: config.port_b2_type = value; break;
-    case PortId::PortC1: config.port_c1_type = value; break;
-    case PortId::PortC2: config.port_c2_type = value; break;
-    default: break;
-    }
-}
-
-void setConfiguredPortSensor(SmartConfig& config, const PortId id, const String& value)
-{
-    switch (id) {
-    case PortId::PortA1: config.port_a1_sensor = value; break;
-    case PortId::PortA2: config.port_a2_sensor = value; break;
-    case PortId::PortB1: config.port_b1_sensor = value; break;
-    case PortId::PortB2: config.port_b2_sensor = value; break;
-    case PortId::PortC1: config.port_c1_sensor = value; break;
-    case PortId::PortC2: config.port_c2_sensor = value; break;
-    default: break;
-    }
-}
-
-void setConfiguredPortDeviceName(SmartConfig& config, const PortId id, const String& value)
-{
-    switch (id) {
-    case PortId::PortA1: config.port_a1_device_name = value; break;
-    case PortId::PortA2: config.port_a2_device_name = value; break;
-    case PortId::PortB1: config.port_b1_device_name = value; break;
-    case PortId::PortB2: config.port_b2_device_name = value; break;
-    case PortId::PortC1: config.port_c1_device_name = value; break;
-    case PortId::PortC2: config.port_c2_device_name = value; break;
-    default: break;
-    }
-}
-
-const PortDefinition* findPortByName(const String& configuredPort)
-{
-    const String normalized = normalizePortName(configuredPort);
-    if (normalized.isEmpty()) {
-        return nullptr;
-    }
-
-    size_t count = 0;
-    const PortDefinition* defs = allPortDefinitions(count);
-    for (size_t i = 0; i < count; ++i) {
-        if (normalized.equalsIgnoreCase(defs[i].normalizedName)) {
-            return &defs[i];
-        }
-    }
-    return nullptr;
-}
-
-String defaultPortType(const PortId id)
-{
-    const PortDefinition* def = findPortById(id);
-    return (def != nullptr) ? String(toString(def->defaultType)) : String(toString(PortType::Unknown));
-}
-
-String defaultPortSensor(const PortId id)
-{
-    const PortDefinition* def = findPortById(id);
-    return (def != nullptr) ? String(toString(def->defaultSensor)) : String(toString(PortSensor::Unknown));
-}
-
-String defaultPortDeviceName(const PortId id)
-{
-    const PortDefinition* def = findPortById(id);
-    return (def != nullptr) ? String(def->defaultDeviceName) : String();
-}
 
 const char* toString(const PortType type)
 {
@@ -180,6 +39,8 @@ const char* toString(const PortType type)
         return "I2C";
     case PortType::UART:
         return "UART";
+    case PortType::BLE:
+        return "BLE";
     case PortType::Unused:
         return "unused";
     default:
@@ -187,16 +48,30 @@ const char* toString(const PortType type)
     }
 }
 
-PortType portTypeFromString(const String& value)
+const char* toString(const PortName id)
 {
-    String normalized = value;
-    normalized.trim();
-    normalized.toUpperCase();
-
-    if (normalized == "I2C") return PortType::I2C;
-    if (normalized == "UART") return PortType::UART;
-    if (normalized == "UNUSED" || normalized.isEmpty()) return PortType::Unused;
-    return PortType::Unknown;
+    switch (id) {
+    case PortName::PortA1:
+        return "a1";
+    case PortName::PortA2:
+        return "a2";
+    case PortName::PortB1:
+        return "b1";
+    case PortName::PortB2:
+        return "b2";
+    case PortName::PortC1:
+        return "c1";
+    case PortName::PortC2:
+        return "c2";
+    case PortName::Internal:
+        return "internal";
+    case PortName::Bluetooth:
+        return "bluetooth";
+    case PortName::Unknown:
+        return "unknown";
+    default:
+        return "unknown";
+    }
 }
 
 const char* toString(const PortSensor sensor)
@@ -216,25 +91,50 @@ const char* toString(const PortSensor sensor)
         return "lora";
     case PortSensor::Lin:
         return "lin";
+    case PortSensor::Imu:
+        return "imu";
+    case PortSensor::Rtc:
+        return "rtc";
+    case PortSensor::Ina:
+        return "ina";
+    case PortSensor::Axp:
+        return "axp";
     default:
         return "unknown";
     }
 }
 
-PortSensor portSensorFromString(const String& value)
+const PortDefinition* allPortDefinitions(size_t& count)
 {
-    String normalized = value;
-    normalized.trim();
-    normalized.toLowerCase();
+    count = sizeof(kPortDefinitions) / sizeof(kPortDefinitions[0]);
+    return kPortDefinitions;
+}
 
-    if (normalized.isEmpty() || normalized == "none" || normalized == "unused") return PortSensor::None;
-    if (normalized == "gaz") return PortSensor::Gaz;
-    if (normalized == "tank") return PortSensor::Tank;
-    if (normalized == "gps") return PortSensor::Gps;
-    if (normalized == "lte") return PortSensor::Lte;
-    if (normalized == "lora") return PortSensor::Lora;
-    if (normalized == "lin") return PortSensor::Lin;
-    return PortSensor::Unknown;
+const PortDefinition* findPortBySensor(PortSensor sensor)
+{
+    size_t count = 0;
+    const PortDefinition* defs = allPortDefinitions(count);
+    for (size_t i = 0; i < count; ++i) {
+        if (defs[i].Sensor == sensor) {
+            return &defs[i];
+        }
+    }
+    return nullptr;
+}
+
+PortName getPortName(const PortSensor sensor){
+    const PortDefinition* port = findPortBySensor(sensor);
+    return port ? port->Name : PortName::Unknown;
+}
+
+PortType getPortType(const PortSensor sensor){
+    const PortDefinition* port = findPortBySensor(sensor);
+    return port ? port->Type : PortType::Unknown;
+}
+
+String getPortDeviceName(const PortSensor sensor){
+    const PortDefinition* port = findPortBySensor(sensor);
+    return port ? port->DeviceName : "Unknown";
 }
 
 }  // namespace sf_ports
