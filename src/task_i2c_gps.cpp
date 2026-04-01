@@ -38,7 +38,7 @@ void taskGps(void* pv)
             } else {
                 i2cPublishConfiguration("gps", configuredPort, deviceAddress);
                 initialized = GPS_MODULE.init(GPS::Source::ExternalDfrobotGravity,
-                                              i2cIsConfiguredPortInternal(configuredPort),
+                                              configuredPort,
                                               deviceAddress);
                 if (!initialized) {
                     scheduleRetry(nextInitAttemptMs, nowMs);

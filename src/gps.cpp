@@ -21,6 +21,7 @@
 
 #include "data_model.h"
 #include "mqtt.h"
+#include "ports.h"
 
 namespace {
 
@@ -40,7 +41,7 @@ struct GpsState {
     bool initialized = false;
     GPS::Source source = GPS::Source::None;
 
-    bool isInternalRoute = false;
+    sf_ports::PortId portId = sf_ports::PortId::Unknown;
     uint8_t i2cAddress = 0x00;
 
     double latitudeDeg = 0.0;
@@ -60,10 +61,15 @@ struct GpsState {
 
 GpsState GPS_STATE;
 
-/** Write a single device register through internal or Wire route. */
+bool isInternalPort(const sf_ports::PortId portId)
+{
+    return portId == sf_ports::PortId::Internal;
+}
+
+/** Write a single device register through the configured I2C port. */
 bool writeRegister(const GpsState& state, uint8_t reg, uint8_t value)
 {
-    if (state.isInternalRoute) {
+    if (isInternalPort(state.portId)) {
         if (!M5.Ex_I2C.start(state.i2cAddress, false, Wire.getClock())) {
             return false;
         }
@@ -77,14 +83,14 @@ bool writeRegister(const GpsState& state, uint8_t reg, uint8_t value)
     return Wire.endTransmission() == 0;
 }
 
-/** Read contiguous registers from GPS through selected bus route. */
+/** Read contiguous registers from GPS through the selected configured port. */
 bool readRegisters(const GpsState& state, uint8_t reg, uint8_t* out, size_t len)
 {
     if (out == nullptr || len == 0U) {
         return false;
     }
 
-    if (state.isInternalRoute) {
+    if (isInternalPort(state.portId)) {
         if (!M5.Ex_I2C.start(state.i2cAddress, false, Wire.getClock())) {
             return false;
         }
@@ -208,14 +214,20 @@ bool readPoseAndTimeLocked(GpsState& state)
     return true;
 }
 
-/** Initialize GPS backend for requested source and route. */
-bool initState(GpsState& state, GPS::Source source, bool isInternalRoute, uint8_t i2cAddress)
+/** Initialize GPS backend for requested source and configured port. */
+bool initState(GpsState& state, GPS::Source source, const String& configuredPort, uint8_t i2cAddress)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
 
+    const sf_ports::PortDefinition* def = sf_ports::findPortByName(configuredPort);
+    if (def == nullptr) {
+        M5_LOGW("[GPS] invalid configured port '%s'", configuredPort.c_str());
+        return false;
+    }
+
     state.initialized = false;
     state.source = GPS::Source::None;
-    state.isInternalRoute = isInternalRoute;
+    state.portId = def->id;
     state.i2cAddress = i2cAddress;
 
     if (source != GPS::Source::ExternalDfrobotGravity) {
@@ -233,10 +245,10 @@ bool initState(GpsState& state, GPS::Source source, bool isInternalRoute, uint8_
     state.source = source;
     state.initialized = true;
 
-    M5_LOGI("[GPS] initialized source:%s address:0x%02X route:%s",
+    M5_LOGI("[GPS] initialized source:%s address:0x%02X port:%s",
             GPS::sourceToString(state.source),
             state.i2cAddress,
-            state.isInternalRoute ? "internal" : "wire");
+            def->normalizedName);
 
     return true;
 }
@@ -336,9 +348,9 @@ GPS::Source sourceState(const GpsState& state)
 
 GPS GPS_MODULE;
 
-bool GPS::init(Source source, bool isInternalRoute, uint8_t i2cAddress)
+bool GPS::init(Source source, const String& configuredPort, uint8_t i2cAddress)
 {
-    return initState(GPS_STATE, source, isInternalRoute, i2cAddress);
+    return initState(GPS_STATE, source, configuredPort, i2cAddress);
 }
 
 void GPS::process()

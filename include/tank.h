@@ -34,6 +34,8 @@
 
 #include <Arduino.h>
 
+#include "ports.h"
+
 /**
  * @brief Tank ultrasonic water level sensor runtime.
  *
@@ -41,7 +43,7 @@
  * water tank depth and computing fill percentage.
  *
  * **Lifecycle:**
- * - `init(isInternalRoute, i2cAddress)` - Initialize sensor on detected I2C route
+ * - `init(configuredPort, i2cAddress)` - Initialize sensor on configured port
  * - `process()` - Perform one measurement cycle (read, compute, publish)
  * - `isInitialized()` - Query initialization state
  *
@@ -54,12 +56,11 @@
 class Tank {
 public:
     /**
-     * @brief Initialize the tank ultrasonic sensor on the detected I2C route.
+    * @brief Initialize the tank ultrasonic sensor on the configured port.
      *
-     * Activates the RCWL-9600 sensor on either the M5 internal I2C (Ex_I2C)
-     * or the primary Wire interface.
+    * Activates the RCWL-9600 sensor on the resolved port from configuration.
      *
-     * @param isInternalRoute Use M5 internal I2C (Ex_I2C) if true; Wire if false
+    * @param configuredPort Normalized port name such as internal, a1, a2, b1...
      * @param i2cAddress The I2C address of the sensor (typically 0x57)
      *
      * @return true if sensor is detected and initialized; false otherwise
@@ -67,7 +68,7 @@ public:
      * @note Should be called once during system boot after I2C is ready.
      *       Multiple calls reset the sensor state.
      */
-    bool init(bool isInternalRoute, uint8_t i2cAddress);
+    bool init(const String& configuredPort, uint8_t i2cAddress);
 
     /**
      * @brief Execute one complete measurement and publication cycle.

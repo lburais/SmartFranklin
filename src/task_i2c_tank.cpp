@@ -37,7 +37,7 @@ void taskTank(void* pv)
                 scheduleRetry(nextInitAttemptMs, nowMs);
             } else {
                 i2cPublishConfiguration("tank", configuredPort, deviceAddress);
-                initialized = TANK_MODULE.init(i2cIsConfiguredPortInternal(configuredPort), deviceAddress);
+                initialized = TANK_MODULE.init(configuredPort, deviceAddress);
                 if (!initialized) {
                     scheduleRetry(nextInitAttemptMs, nowMs);
                 }

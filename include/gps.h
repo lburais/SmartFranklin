@@ -13,6 +13,8 @@
 
 #include <Arduino.h>
 
+#include "ports.h"
+
 class GPS {
 public:
     /**
@@ -26,13 +28,13 @@ public:
     };
 
     /**
-     * @brief Initialize GPS runtime with the selected source and route.
+    * @brief Initialize GPS runtime with the selected source and configured port.
      * @param source GNSS source implementation to initialize.
-     * @param isInternalRoute True when using M5 internal route, false for Wire.
+    * @param configuredPort Normalized configured port name (internal, a1, a2, b1...).
      * @param i2cAddress I2C address of the GPS unit when applicable.
      * @return True when initialization succeeds.
      */
-    bool init(Source source, bool isInternalRoute, uint8_t i2cAddress);
+    bool init(Source source, const String& configuredPort, uint8_t i2cAddress);
 
     /**
      * @brief Execute one periodic GPS processing cycle.

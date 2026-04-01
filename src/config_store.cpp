@@ -224,98 +224,31 @@ bool config_load()
                                     defaultCONFIG.gaz_calibration_factor;
     CONFIG.gaz_weight_average_window = doc["gaz_weight_average_window"] | defaultCONFIG.gaz_weight_average_window;
 
-    CONFIG.port_internal_type = doc["port_internal_type"] |
-                                doc["i2c_internal_bus_type"] |
-                                doc["i2c_internal_type"] |
-                                defaultCONFIG.port_internal_type;
-    CONFIG.port_internal_sensor = doc["port_internal_sensor"] |
-                                  doc["i2c_internal_sensor"] |
-                                  doc["i2c_internal_type"] |
-                                  defaultCONFIG.port_internal_sensor;
-    CONFIG.port_internal_device_name = doc["port_internal_device_name"] |
-                                       doc["i2c_internal_device_name"] |
-                                       defaultCONFIG.port_internal_device_name;
+    size_t portCount = 0;
+    const sf_ports::PortDefinition* portDefs = sf_ports::allPortDefinitions(portCount);
+    for (size_t i = 0; i < portCount; ++i) {
+        const sf_ports::PortDefinition& def = portDefs[i];
 
-    CONFIG.port_a1_type = doc["port_a1_type"] |
-                          doc["i2c_a1_bus_type"] |
-                          String("I2C");
-    CONFIG.port_a1_sensor = doc["port_a1_sensor"] |
-                            doc["i2c_a1_sensor"] |
-                            doc["i2c_a1_type"] |
-                            defaultCONFIG.port_a1_sensor;
-    CONFIG.port_a1_device_name = doc["port_a1_device_name"] |
-                                 doc["i2c_a1_device_name"] |
-                                 defaultCONFIG.port_a1_device_name;
+        const String defaultType = sf_ports::configuredPortType(defaultCONFIG, def.id);
+        const String defaultSensor = sf_ports::configuredPortSensor(defaultCONFIG, def.id);
+        const String defaultDeviceName = sf_ports::configuredPortDeviceName(defaultCONFIG, def.id);
 
-    CONFIG.port_a2_type = doc["port_a2_type"] |
-                          doc["i2c_a2_bus_type"] |
-                          String("I2C");
-    CONFIG.port_a2_sensor = doc["port_a2_sensor"] |
-                            doc["i2c_a2_sensor"] |
-                            doc["i2c_a2_type"] |
-                            defaultCONFIG.port_a2_sensor;
-    CONFIG.port_a2_device_name = doc["port_a2_device_name"] |
-                                 doc["i2c_a2_device_name"] |
-                                 defaultCONFIG.port_a2_device_name;
+        const String loadedType = doc[def.typeConfigKey] |
+                                  doc[def.legacyBusTypeConfigKey] |
+                                  doc[def.legacyTypeConfigKey] |
+                                  defaultType;
+        const String loadedSensor = doc[def.sensorConfigKey] |
+                                    doc[def.legacySensorConfigKey] |
+                                    doc[def.legacyTypeConfigKey] |
+                                    defaultSensor;
+        const String loadedDeviceName = doc[def.deviceNameConfigKey] |
+                                        doc[def.legacyDeviceNameConfigKey] |
+                                        defaultDeviceName;
 
-    CONFIG.port_b1_type = doc["port_b1_type"] |
-                          doc["i2c_b1_bus_type"] |
-                          String("I2C");
-    CONFIG.port_b1_sensor = doc["port_b1_sensor"] |
-                            doc["i2c_b1_sensor"] |
-                            doc["i2c_b1_type"] |
-                            defaultCONFIG.port_b1_sensor;
-    CONFIG.port_b1_device_name = doc["port_b1_device_name"] |
-                                 doc["i2c_b1_device_name"] |
-                                 defaultCONFIG.port_b1_device_name;
-
-    CONFIG.port_b2_type = doc["port_b2_type"] |
-                          doc["i2c_b2_bus_type"] |
-                          defaultCONFIG.port_b2_type;
-    CONFIG.port_b2_sensor = doc["port_b2_sensor"] |
-                            doc["i2c_b2_sensor"] |
-                            doc["i2c_b2_type"] |
-                            defaultCONFIG.port_b2_sensor;
-    CONFIG.port_b2_device_name = doc["port_b2_device_name"] |
-                                 doc["i2c_b2_device_name"] |
-                                 defaultCONFIG.port_b2_device_name;
-
-    CONFIG.port_c1_type = doc["port_c1_type"] |
-                          doc["i2c_c1_bus_type"] |
-                          defaultCONFIG.port_c1_type;
-    CONFIG.port_c1_sensor = doc["port_c1_sensor"] |
-                            doc["i2c_c1_sensor"] |
-                            doc["i2c_c1_type"] |
-                            defaultCONFIG.port_c1_sensor;
-    CONFIG.port_c1_device_name = doc["port_c1_device_name"] |
-                                 doc["i2c_c1_device_name"] |
-                                 defaultCONFIG.port_c1_device_name;
-
-    CONFIG.port_c2_type = doc["port_c2_type"] |
-                          doc["i2c_c2_bus_type"] |
-                          defaultCONFIG.port_c2_type;
-    CONFIG.port_c2_sensor = doc["port_c2_sensor"] |
-                            doc["i2c_c2_sensor"] |
-                            doc["i2c_c2_type"] |
-                            defaultCONFIG.port_c2_sensor;
-    CONFIG.port_c2_device_name = doc["port_c2_device_name"] |
-                                 doc["i2c_c2_device_name"] |
-                                 defaultCONFIG.port_c2_device_name;
-
-    CONFIG.port_internal_type = canonicalPortType(CONFIG.port_internal_type, defaultCONFIG.port_internal_type);
-    CONFIG.port_internal_sensor = canonicalPortSensor(CONFIG.port_internal_sensor, defaultCONFIG.port_internal_sensor);
-    CONFIG.port_a1_type = canonicalPortType(CONFIG.port_a1_type, defaultCONFIG.port_a1_type);
-    CONFIG.port_a1_sensor = canonicalPortSensor(CONFIG.port_a1_sensor, defaultCONFIG.port_a1_sensor);
-    CONFIG.port_a2_type = canonicalPortType(CONFIG.port_a2_type, defaultCONFIG.port_a2_type);
-    CONFIG.port_a2_sensor = canonicalPortSensor(CONFIG.port_a2_sensor, defaultCONFIG.port_a2_sensor);
-    CONFIG.port_b1_type = canonicalPortType(CONFIG.port_b1_type, defaultCONFIG.port_b1_type);
-    CONFIG.port_b1_sensor = canonicalPortSensor(CONFIG.port_b1_sensor, defaultCONFIG.port_b1_sensor);
-    CONFIG.port_b2_type = canonicalPortType(CONFIG.port_b2_type, defaultCONFIG.port_b2_type);
-    CONFIG.port_b2_sensor = canonicalPortSensor(CONFIG.port_b2_sensor, defaultCONFIG.port_b2_sensor);
-    CONFIG.port_c1_type = canonicalPortType(CONFIG.port_c1_type, defaultCONFIG.port_c1_type);
-    CONFIG.port_c1_sensor = canonicalPortSensor(CONFIG.port_c1_sensor, defaultCONFIG.port_c1_sensor);
-    CONFIG.port_c2_type = canonicalPortType(CONFIG.port_c2_type, defaultCONFIG.port_c2_type);
-    CONFIG.port_c2_sensor = canonicalPortSensor(CONFIG.port_c2_sensor, defaultCONFIG.port_c2_sensor);
+        sf_ports::setConfiguredPortType(CONFIG, def.id, canonicalPortType(loadedType, defaultType));
+        sf_ports::setConfiguredPortSensor(CONFIG, def.id, canonicalPortSensor(loadedSensor, defaultSensor));
+        sf_ports::setConfiguredPortDeviceName(CONFIG, def.id, loadedDeviceName);
+    }
 
     CONFIG.rtc_timezone = doc["rtc_timezone"] | defaultCONFIG.rtc_timezone;
     
@@ -403,27 +336,16 @@ bool config_save()
     doc["sta_pass"] = CONFIG.sta_pass;                      // External network password
     doc["gaz_calibration_factor"] = CONFIG.gaz_calibration_factor;      // Weight sensor calibration
     doc["gaz_weight_average_window"] = CONFIG.gaz_weight_average_window; // Gaz smoothing window
-    doc["port_internal_type"] = CONFIG.port_internal_type;
-    doc["port_internal_sensor"] = CONFIG.port_internal_sensor;
-    doc["port_internal_device_name"] = CONFIG.port_internal_device_name;
-    doc["port_a1_type"] = CONFIG.port_a1_type;
-    doc["port_a1_sensor"] = CONFIG.port_a1_sensor;
-    doc["port_a1_device_name"] = CONFIG.port_a1_device_name;
-    doc["port_a2_type"] = CONFIG.port_a2_type;
-    doc["port_a2_sensor"] = CONFIG.port_a2_sensor;
-    doc["port_a2_device_name"] = CONFIG.port_a2_device_name;
-    doc["port_b1_type"] = CONFIG.port_b1_type;
-    doc["port_b1_sensor"] = CONFIG.port_b1_sensor;
-    doc["port_b1_device_name"] = CONFIG.port_b1_device_name;
-    doc["port_b2_type"] = CONFIG.port_b2_type;
-    doc["port_b2_sensor"] = CONFIG.port_b2_sensor;
-    doc["port_b2_device_name"] = CONFIG.port_b2_device_name;
-    doc["port_c1_type"] = CONFIG.port_c1_type;
-    doc["port_c1_sensor"] = CONFIG.port_c1_sensor;
-    doc["port_c1_device_name"] = CONFIG.port_c1_device_name;
-    doc["port_c2_type"] = CONFIG.port_c2_type;
-    doc["port_c2_sensor"] = CONFIG.port_c2_sensor;
-    doc["port_c2_device_name"] = CONFIG.port_c2_device_name;
+
+    size_t portCount = 0;
+    const sf_ports::PortDefinition* portDefs = sf_ports::allPortDefinitions(portCount);
+    for (size_t i = 0; i < portCount; ++i) {
+        const sf_ports::PortDefinition& def = portDefs[i];
+        doc[def.typeConfigKey] = sf_ports::configuredPortType(CONFIG, def.id);
+        doc[def.sensorConfigKey] = sf_ports::configuredPortSensor(CONFIG, def.id);
+        doc[def.deviceNameConfigKey] = sf_ports::configuredPortDeviceName(CONFIG, def.id);
+    }
+
     doc["rtc_timezone"] = CONFIG.rtc_timezone;
     doc["level_wheelbase_mm"] = CONFIG.level_wheelbase_mm;
     doc["level_track_width_mm"] = CONFIG.level_track_width_mm;

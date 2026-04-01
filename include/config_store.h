@@ -61,27 +61,27 @@ struct SmartConfig {
     int gaz_weight_average_window = 10;
 
     // Port metadata by configured port
-    String port_internal_type = sf_ports::toString(sf_ports::PortType::I2C);
-    String port_internal_sensor = sf_ports::toString(sf_ports::PortSensor::Internal);
-    String port_internal_device_name = "M5 Internal I2C";
-    String port_a1_type = sf_ports::toString(sf_ports::PortType::I2C);
-    String port_a1_sensor = sf_ports::toString(sf_ports::PortSensor::Gaz);
-    String port_a1_device_name = "M5Stack Weight I2C Unit";
-    String port_a2_type = sf_ports::toString(sf_ports::PortType::I2C);
-    String port_a2_sensor = sf_ports::toString(sf_ports::PortSensor::Tank);
-    String port_a2_device_name = "M5Stack Unit Ultrasonic I2C (RCWL-9600)";
-    String port_b1_type = sf_ports::toString(sf_ports::PortType::I2C);
-    String port_b1_sensor = sf_ports::toString(sf_ports::PortSensor::Gps);
-    String port_b1_device_name = "DFRobot Gravity GNSS (DFR1103)";
-    String port_b2_type = sf_ports::toString(sf_ports::PortType::Unused);
-    String port_b2_sensor = sf_ports::toString(sf_ports::PortSensor::None);
-    String port_b2_device_name = "";
-    String port_c1_type = sf_ports::toString(sf_ports::PortType::Unused);
-    String port_c1_sensor = sf_ports::toString(sf_ports::PortSensor::None);
-    String port_c1_device_name = "";
-    String port_c2_type = sf_ports::toString(sf_ports::PortType::Unused);
-    String port_c2_sensor = sf_ports::toString(sf_ports::PortSensor::None);
-    String port_c2_device_name = "";
+    String port_internal_type = sf_ports::defaultPortType(sf_ports::PortId::Internal);
+    String port_internal_sensor = sf_ports::defaultPortSensor(sf_ports::PortId::Internal);
+    String port_internal_device_name = sf_ports::defaultPortDeviceName(sf_ports::PortId::Internal);
+    String port_a1_type = sf_ports::defaultPortType(sf_ports::PortId::PortA1);
+    String port_a1_sensor = sf_ports::defaultPortSensor(sf_ports::PortId::PortA1);
+    String port_a1_device_name = sf_ports::defaultPortDeviceName(sf_ports::PortId::PortA1);
+    String port_a2_type = sf_ports::defaultPortType(sf_ports::PortId::PortA2);
+    String port_a2_sensor = sf_ports::defaultPortSensor(sf_ports::PortId::PortA2);
+    String port_a2_device_name = sf_ports::defaultPortDeviceName(sf_ports::PortId::PortA2);
+    String port_b1_type = sf_ports::defaultPortType(sf_ports::PortId::PortB1);
+    String port_b1_sensor = sf_ports::defaultPortSensor(sf_ports::PortId::PortB1);
+    String port_b1_device_name = sf_ports::defaultPortDeviceName(sf_ports::PortId::PortB1);
+    String port_b2_type = sf_ports::defaultPortType(sf_ports::PortId::PortB2);
+    String port_b2_sensor = sf_ports::defaultPortSensor(sf_ports::PortId::PortB2);
+    String port_b2_device_name = sf_ports::defaultPortDeviceName(sf_ports::PortId::PortB2);
+    String port_c1_type = sf_ports::defaultPortType(sf_ports::PortId::PortC1);
+    String port_c1_sensor = sf_ports::defaultPortSensor(sf_ports::PortId::PortC1);
+    String port_c1_device_name = sf_ports::defaultPortDeviceName(sf_ports::PortId::PortC1);
+    String port_c2_type = sf_ports::defaultPortType(sf_ports::PortId::PortC2);
+    String port_c2_sensor = sf_ports::defaultPortSensor(sf_ports::PortId::PortC2);
+    String port_c2_device_name = sf_ports::defaultPortDeviceName(sf_ports::PortId::PortC2);
     
     String rtc_timezone = "Europe/Paris";
 

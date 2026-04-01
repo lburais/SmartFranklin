@@ -42,23 +42,23 @@ ExternalPort g_activeWirePort = ExternalPort::PortA1;
 uint32_t g_activeWireClockHz = 0;
 bool g_exInitialized = false;
 
-const char* externalPortToString(const ExternalPort port)
+ExternalPort portIdToExternalPort(const sf_ports::PortId id)
 {
-    switch (port) {
-    case ExternalPort::PortA1:
-        return "a1";
-    case ExternalPort::PortA2:
-        return "a2";
-    case ExternalPort::PortB1:
-        return "b1";
-    case ExternalPort::PortB2:
-        return "b2";
-    case ExternalPort::PortC1:
-        return "c1";
-    case ExternalPort::PortC2:
-        return "c2";
+    switch (id) {
+    case sf_ports::PortId::PortA1:
+        return ExternalPort::PortA1;
+    case sf_ports::PortId::PortA2:
+        return ExternalPort::PortA2;
+    case sf_ports::PortId::PortB1:
+        return ExternalPort::PortB1;
+    case sf_ports::PortId::PortB2:
+        return ExternalPort::PortB2;
+    case sf_ports::PortId::PortC1:
+        return ExternalPort::PortC1;
+    case sf_ports::PortId::PortC2:
+        return ExternalPort::PortC2;
     default:
-        return "a1";
+        return ExternalPort::PortA1;
     }
 }
 
@@ -70,38 +70,15 @@ ResolvedPort resolveConfiguredPort(const String& configuredPort, const char* lab
         port.valid = true;
         port.normalized = def->normalizedName;
 
-        switch (def->id) {
-        case sf_ports::PortId::Internal:
+        if (def->id == sf_ports::PortId::Internal) {
             port.internal = true;
             port.externalPort = ExternalPort::PortA1;
             return port;
-        case sf_ports::PortId::PortA1:
-            port.internal = false;
-            port.externalPort = ExternalPort::PortA1;
-            return port;
-        case sf_ports::PortId::PortA2:
-            port.internal = false;
-            port.externalPort = ExternalPort::PortA2;
-            return port;
-        case sf_ports::PortId::PortB1:
-            port.internal = false;
-            port.externalPort = ExternalPort::PortB1;
-            return port;
-        case sf_ports::PortId::PortB2:
-            port.internal = false;
-            port.externalPort = ExternalPort::PortB2;
-            return port;
-        case sf_ports::PortId::PortC1:
-            port.internal = false;
-            port.externalPort = ExternalPort::PortC1;
-            return port;
-        case sf_ports::PortId::PortC2:
-            port.internal = false;
-            port.externalPort = ExternalPort::PortC2;
-            return port;
-        default:
-            break;
         }
+
+        port.internal = false;
+        port.externalPort = portIdToExternalPort(def->id);
+        return port;
     }
 
     if (logInvalid) {
@@ -188,38 +165,20 @@ bool exDeviceExists(const uint8_t address, const uint32_t clockHz)
 
 String configuredTypeForNormalizedPort(const char* normalized)
 {
-    if (strcmp(normalized, "internal") == 0) return CONFIG.port_internal_type;
-    if (strcmp(normalized, "a1") == 0) return CONFIG.port_a1_type;
-    if (strcmp(normalized, "a2") == 0) return CONFIG.port_a2_type;
-    if (strcmp(normalized, "b1") == 0) return CONFIG.port_b1_type;
-    if (strcmp(normalized, "b2") == 0) return CONFIG.port_b2_type;
-    if (strcmp(normalized, "c1") == 0) return CONFIG.port_c1_type;
-    if (strcmp(normalized, "c2") == 0) return CONFIG.port_c2_type;
-    return String();
+    const sf_ports::PortDefinition* def = sf_ports::findPortByName(String(normalized));
+    return (def != nullptr) ? sf_ports::configuredPortType(CONFIG, def->id) : String();
 }
 
 String configuredSensorForNormalizedPort(const char* normalized)
 {
-    if (strcmp(normalized, "internal") == 0) return CONFIG.port_internal_sensor;
-    if (strcmp(normalized, "a1") == 0) return CONFIG.port_a1_sensor;
-    if (strcmp(normalized, "a2") == 0) return CONFIG.port_a2_sensor;
-    if (strcmp(normalized, "b1") == 0) return CONFIG.port_b1_sensor;
-    if (strcmp(normalized, "b2") == 0) return CONFIG.port_b2_sensor;
-    if (strcmp(normalized, "c1") == 0) return CONFIG.port_c1_sensor;
-    if (strcmp(normalized, "c2") == 0) return CONFIG.port_c2_sensor;
-    return String();
+    const sf_ports::PortDefinition* def = sf_ports::findPortByName(String(normalized));
+    return (def != nullptr) ? sf_ports::configuredPortSensor(CONFIG, def->id) : String();
 }
 
 String configuredDeviceNameForNormalizedPort(const char* normalized)
 {
-    if (strcmp(normalized, "internal") == 0) return CONFIG.port_internal_device_name;
-    if (strcmp(normalized, "a1") == 0) return CONFIG.port_a1_device_name;
-    if (strcmp(normalized, "a2") == 0) return CONFIG.port_a2_device_name;
-    if (strcmp(normalized, "b1") == 0) return CONFIG.port_b1_device_name;
-    if (strcmp(normalized, "b2") == 0) return CONFIG.port_b2_device_name;
-    if (strcmp(normalized, "c1") == 0) return CONFIG.port_c1_device_name;
-    if (strcmp(normalized, "c2") == 0) return CONFIG.port_c2_device_name;
-    return String();
+    const sf_ports::PortDefinition* def = sf_ports::findPortByName(String(normalized));
+    return (def != nullptr) ? sf_ports::configuredPortDeviceName(CONFIG, def->id) : String();
 }
 
 }  // namespace

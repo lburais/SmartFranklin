@@ -20,6 +20,7 @@
 
 #include "data_model.h"
 #include "mqtt.h"
+#include "ports.h"
 
 namespace {
 
@@ -84,8 +85,8 @@ struct TankState {
     mutable std::mutex mutex;
     /** Set to true once module initialization succeeds. */
     bool initialized = false;
-    /** True when sensor is reached through internal M5 I2C route. */
-    bool isInternalRoute = false;
+    /** Configured port identifier for the active tank sensor. */
+    sf_ports::PortId portId = sf_ports::PortId::Unknown;
     /** Effective I2C address used for the ultrasonic sensor. */
     uint8_t i2cAddress = 0x57;
     /** Last valid measured distance in millimeters. */
@@ -93,6 +94,11 @@ struct TankState {
 };
 
 TankState TANK_STATE;
+
+bool isInternalPort(const sf_ports::PortId portId)
+{
+    return portId == sf_ports::PortId::Internal;
+}
 
 }  // namespace
 
@@ -104,7 +110,7 @@ static bool refreshMeasurementLocked(TankState& state, int32_t& distanceMm)
     uint32_t rawDistance = 0;
     bool readOk = false;
 
-    if (state.isInternalRoute) {
+    if (isInternalPort(state.portId)) {
         if (!M5.Ex_I2C.start(state.i2cAddress, false, Wire.getClock())) {
             return false;
         }
@@ -122,7 +128,7 @@ static bool refreshMeasurementLocked(TankState& state, int32_t& distanceMm)
 
     delay(TANK_CONVERSION_DELAY_MS);
 
-    if (state.isInternalRoute) {
+    if (isInternalPort(state.portId)) {
 
         if (!M5.Ex_I2C.start(state.i2cAddress, true, Wire.getClock())) {
             return false;
@@ -172,16 +178,23 @@ static bool refreshMeasurementLocked(TankState& state, int32_t& distanceMm)
     return true;
 }
 
-/** Initialize tank state and selected route metadata. */
-static bool initState(TankState& state, bool isInternalRoute, uint8_t i2cAddress)
+/** Initialize tank state and selected port metadata. */
+static bool initState(TankState& state, const String& configuredPort, uint8_t i2cAddress)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
 
-    state.isInternalRoute = isInternalRoute;
+    const sf_ports::PortDefinition* def = sf_ports::findPortByName(configuredPort);
+    if (def == nullptr) {
+        M5_LOGW("[TANK] invalid configured port '%s'", configuredPort.c_str());
+        state.initialized = false;
+        return false;
+    }
+
+    state.portId = def->id;
     state.i2cAddress = i2cAddress;
     state.initialized = true;
 
-    M5_LOGI("[TANK] Ultrasonic I2C initialization complete");
+    M5_LOGI("[TANK] Ultrasonic I2C initialization complete on port '%s'", def->normalizedName);
     return true;
 }
 
@@ -237,10 +250,10 @@ static bool isInitializedState(const TankState& state)
     return state.initialized;
 }
 
-/** @brief Initializes the tank module with selected route and address. */
-bool Tank::init(bool isInternalRoute, uint8_t i2cAddress)
+/** @brief Initializes the tank module with configured port and address. */
+bool Tank::init(const String& configuredPort, uint8_t i2cAddress)
 {
-    return initState(TANK_STATE, isInternalRoute, i2cAddress);
+    return initState(TANK_STATE, configuredPort, i2cAddress);
 }
 
 /** @brief Executes one acquisition cycle and publishes tank telemetry. */

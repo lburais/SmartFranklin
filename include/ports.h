@@ -12,6 +12,8 @@
 #include <cstddef>
 #include <cstdint>
 
+struct SmartConfig;
+
 namespace sf_ports {
 
 enum class PortId : uint8_t {
@@ -47,6 +49,13 @@ struct PortDefinition {
     PortType defaultType;
     PortSensor defaultSensor;
     const char* defaultDeviceName;
+    const char* typeConfigKey;
+    const char* sensorConfigKey;
+    const char* deviceNameConfigKey;
+    const char* legacyBusTypeConfigKey;
+    const char* legacySensorConfigKey;
+    const char* legacyTypeConfigKey;
+    const char* legacyDeviceNameConfigKey;
 };
 
 const PortDefinition* allPortDefinitions(size_t& count);
@@ -54,6 +63,18 @@ const PortDefinition* findPortById(PortId id);
 const PortDefinition* findPortByName(const String& configuredPort);
 
 String normalizePortName(const String& configuredPort);
+
+String defaultPortType(PortId id);
+String defaultPortSensor(PortId id);
+String defaultPortDeviceName(PortId id);
+
+const String& configuredPortType(const SmartConfig& config, PortId id);
+const String& configuredPortSensor(const SmartConfig& config, PortId id);
+const String& configuredPortDeviceName(const SmartConfig& config, PortId id);
+
+void setConfiguredPortType(SmartConfig& config, PortId id, const String& value);
+void setConfiguredPortSensor(SmartConfig& config, PortId id, const String& value);
+void setConfiguredPortDeviceName(SmartConfig& config, PortId id, const String& value);
 
 const char* toString(PortType type);
 PortType portTypeFromString(const String& value);
