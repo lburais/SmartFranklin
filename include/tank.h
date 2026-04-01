@@ -34,70 +34,15 @@
 
 #include <Arduino.h>
 
-#include "ports.h"
-
 /**
- * @brief Tank ultrasonic water level sensor runtime.
+ * @brief Acquire one tank measurement, update DATA, and publish MQTT topics.
  *
- * This module manages the M5Stack Unit Ultrasonic I2C sensor for measuring
- * water tank depth and computing fill percentage.
+ * This helper expects that the task already selected and initialized the
+ * external I2C port (A1/A2/B1/B2/C1/C2) before calling it.
  *
- * **Lifecycle:**
- * - `init(configuredPort, i2cAddress)` - Initialize sensor on configured port
- * - `process()` - Perform one measurement cycle (read, compute, publish)
- * - `isInitialized()` - Query initialization state
- *
- * **Thread Safety:** All state is protected by internal mutex.
- *
- * **MQTT Topics:**
- * - `smartfranklin/tank/mm` - Raw distance reading in millimeters
- * - `smartfranklin/tank/fill` - Computed fill percentage (0-100%)
+ * @param i2cAddress Ultrasonic sensor I2C address (typically 0x57)
+ * @return true when one valid measurement was processed and published
  */
-class Tank {
-public:
-    /**
-    * @brief Initialize the tank ultrasonic sensor on the configured port.
-     *
-    * Activates the RCWL-9600 sensor on the resolved port from configuration.
-     *
-    * @param configuredPort Normalized port name such as internal, a1, a2, b1...
-     * @param i2cAddress The I2C address of the sensor (typically 0x57)
-     *
-     * @return true if sensor is detected and initialized; false otherwise
-     *
-     * @note Should be called once during system boot after I2C is ready.
-     *       Multiple calls reset the sensor state.
-     */
-    bool init(const String& configuredPort, uint8_t i2cAddress);
-
-    /**
-     * @brief Execute one complete measurement and publication cycle.
-     *
-     * Reads raw distance from the sensor, validates the measurement,
-     * computes fill percentage, updates the shared DATA model,
-     * and publishes results to MQTT.
-     *
-     * @note Should be called periodically (typically every 1000 ms) from
-     *       the dedicated sensor task context.
-     *
-    * @note Logs warnings on measurement failures and exits early when data is invalid.
-     */
-    void process();
-
-    /**
-     * @brief Query whether the tank sensor has been successfully initialized.
-     *
-     * @return true if init() succeeded; false if not yet initialized or init failed
-     */
-    bool isInitialized() const;
-};
-
-/**
- * @brief Global Tank module singleton instance.
- *
- * This is the canonical instance used throughout SmartFranklin, typically
- * accessed by the sensor task and HMI.
- */
-extern Tank TANK_MODULE;
+bool tankReadAndPublish(uint8_t i2cAddress);
 
 

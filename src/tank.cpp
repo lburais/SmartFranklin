@@ -1,10 +1,9 @@
 /**
  * @file tank.cpp
- * @brief Tank ultrasonic sensor implementation and fill-level mapping.
+ * @brief Tank ultrasonic sensor acquisition and fill-level mapping.
  *
- * Reads raw distance samples, clamps invalid values, computes tank fill
- * percentage from installation geometry, updates shared data, and publishes
- * telemetry topics for monitoring.
+ * This module performs one-shot reads on the external Wire bus, computes
+ * fill percentage, updates shared DATA, and publishes telemetry topics.
  *
  * SPDX-License-Identifier: MIT
  */
@@ -18,30 +17,23 @@
 #include <cstdint>
 #include <mutex>
 
+#include "config_store.h"
 #include "data_model.h"
+#include "i2c.h"
 #include "mqtt.h"
-#include "ports.h"
 
 namespace {
 
-/** Register used by the ultrasonic unit to trigger/read distance conversion. */
 constexpr uint8_t TANK_DISTANCE_REGISTER = 0x01;
-/** Sensor conversion latency required between command and readback. */
 constexpr uint32_t TANK_CONVERSION_DELAY_MS = 120U;
 
-/** Minimum supported measurement in millimeters (sensor datasheet bound). */
 constexpr int32_t TANK_DISTANCE_MIN_MM = 20;
-/** Maximum supported measurement in millimeters (sensor datasheet bound). */
 constexpr int32_t TANK_DISTANCE_MAX_MM = 4500;
 
-// Tank mapping defaults: tune these values to match the physical installation.
-/** Distance corresponding to full tank (100%). */
 constexpr int32_t TANK_FULL_DISTANCE_MM = 300;
-/** Distance corresponding to empty tank (0%). */
 constexpr int32_t TANK_EMPTY_DISTANCE_MM = 1500;
 
-/** Clamp sensor distance to supported RCWL-9600 range. */
-int32_t clampDistanceMm(int32_t distanceMm)
+int32_t clampDistanceMm(const int32_t distanceMm)
 {
     if (distanceMm < TANK_DISTANCE_MIN_MM) {
         return TANK_DISTANCE_MIN_MM;
@@ -52,7 +44,6 @@ int32_t clampDistanceMm(int32_t distanceMm)
     return distanceMm;
 }
 
-/** Convert distance in mm to fill percentage using configured mapping. */
 int32_t distanceToFillPct(const int32_t distanceMm)
 {
     if (distanceMm <= TANK_FULL_DISTANCE_MM) {
@@ -80,92 +71,27 @@ int32_t distanceToFillPct(const int32_t distanceMm)
     return pct;
 }
 
-struct TankState {
-    /** Protects all mutable tank runtime state. */
-    mutable std::mutex mutex;
-    /** Set to true once module initialization succeeds. */
-    bool initialized = false;
-    /** Configured port identifier for the active tank sensor. */
-    sf_ports::PortId portId = sf_ports::PortId::Unknown;
-    /** Effective I2C address used for the ultrasonic sensor. */
-    uint8_t i2cAddress = 0x57;
-    /** Last valid measured distance in millimeters. */
-    int32_t lastDistanceMm = 0;
-};
-
-TankState TANK_STATE;
-
-bool isInternalPort(const sf_ports::PortId portId)
+bool readDistanceMm(const uint8_t i2cAddress, int32_t& distanceMm)
 {
-    return portId == sf_ports::PortId::Internal;
-}
-
-}  // namespace
-
-Tank TANK_MODULE;
-
-/** Acquire one tank sample while state mutex is held. */
-static bool refreshMeasurementLocked(TankState& state, int32_t& distanceMm)
-{
-    uint32_t rawDistance = 0;
-    bool readOk = false;
-
-    if (isInternalPort(state.portId)) {
-        if (!M5.Ex_I2C.start(state.i2cAddress, false, Wire.getClock())) {
-            return false;
-        }
-
-        if (!M5.Ex_I2C.write(TANK_DISTANCE_REGISTER) || !M5.Ex_I2C.stop()) {
-            return false;
-        }
-    } else {
-        Wire.beginTransmission(state.i2cAddress);
-        Wire.write(TANK_DISTANCE_REGISTER);
-        if (Wire.endTransmission() != 0) {
-            return false;
-        }
+    Wire.beginTransmission(i2cAddress);
+    Wire.write(TANK_DISTANCE_REGISTER);
+    if (Wire.endTransmission() != 0) {
+        return false;
     }
 
     delay(TANK_CONVERSION_DELAY_MS);
 
-    if (isInternalPort(state.portId)) {
-
-        if (!M5.Ex_I2C.start(state.i2cAddress, true, Wire.getClock())) {
-            return false;
-        }
-
-        rawDistance = 0;
-        for (uint8_t i = 0; i < 3; ++i) {
-            uint8_t byte = 0;
-            const bool lastNack = (i == 2);
-            if (!M5.Ex_I2C.read(&byte, 1U, lastNack)) {
-                M5.Ex_I2C.stop();
-                return false;
-            }
-
-            rawDistance <<= 8;
-            rawDistance |= static_cast<uint32_t>(byte);
-        }
-
-        readOk = M5.Ex_I2C.stop();
-    } else {
-        const uint8_t readCount = Wire.requestFrom(state.i2cAddress, static_cast<uint8_t>(3));
-        if (readCount < 3) {
-            return false;
-        }
-
-        rawDistance = 0;
-        rawDistance = static_cast<uint32_t>(Wire.read());
-        rawDistance <<= 8;
-        rawDistance |= static_cast<uint32_t>(Wire.read());
-        rawDistance <<= 8;
-        rawDistance |= static_cast<uint32_t>(Wire.read());
-        readOk = true;
-    }
-
-    if (!readOk) {
+    const uint8_t readCount = Wire.requestFrom(i2cAddress, static_cast<uint8_t>(3));
+    if (readCount < 3) {
         return false;
     }
+
+    uint32_t rawDistance = 0;
+    rawDistance = static_cast<uint32_t>(Wire.read());
+    rawDistance <<= 8;
+    rawDistance |= static_cast<uint32_t>(Wire.read());
+    rawDistance <<= 8;
+    rawDistance |= static_cast<uint32_t>(Wire.read());
 
     const float distanceRawMm = static_cast<float>(rawDistance) / 1000.0f;
     if (!std::isfinite(distanceRawMm)) {
@@ -174,32 +100,10 @@ static bool refreshMeasurementLocked(TankState& state, int32_t& distanceMm)
     }
 
     distanceMm = clampDistanceMm(static_cast<int32_t>(lroundf(distanceRawMm)));
-    state.lastDistanceMm = distanceMm;
     return true;
 }
 
-/** Initialize tank state and selected port metadata. */
-static bool initState(TankState& state, const String& configuredPort, uint8_t i2cAddress)
-{
-    std::lock_guard<std::mutex> lock(state.mutex);
-
-    const sf_ports::PortDefinition* def = sf_ports::findPortByName(configuredPort);
-    if (def == nullptr) {
-        M5_LOGW("[TANK] invalid configured port '%s'", configuredPort.c_str());
-        state.initialized = false;
-        return false;
-    }
-
-    state.portId = def->id;
-    state.i2cAddress = i2cAddress;
-    state.initialized = true;
-
-    M5_LOGI("[TANK] Ultrasonic I2C initialization complete on port '%s'", def->normalizedName);
-    return true;
-}
-
-/** Publish tank distance and fill percentage to MQTT. */
-static void publishDistance(const int32_t distanceMm, const int32_t fillPct)
+void publishDistance(const int32_t distanceMm, const int32_t fillPct)
 {
     char mmBuf[24] = {0};
     snprintf(mmBuf, sizeof(mmBuf), "%d", distanceMm);
@@ -212,24 +116,13 @@ static void publishDistance(const int32_t distanceMm, const int32_t fillPct)
     M5_LOGI("[TANK] Distance: %d mm     Fill level: %d%%", distanceMm, fillPct);
 }
 
-/** Run one full process cycle: measure, convert, persist, publish. */
-static void processState(TankState& state)
+}  // namespace
+
+bool tankReadAndPublish(const uint8_t i2cAddress)
 {
     int32_t distanceMm = 0;
-    bool hasMeasurement = false;
-
-    {
-        std::lock_guard<std::mutex> lock(state.mutex);
-        if (!state.initialized) {
-            return;
-        }
-
-        hasMeasurement = refreshMeasurementLocked(state, distanceMm);
-    }
-
-    if (!hasMeasurement) {
-        M5_LOGW("[TANK] No measurement");
-        return;
+    if (!readDistanceMm(i2cAddress, distanceMm)) {
+        return false;
     }
 
     const int32_t fillPct = distanceToFillPct(distanceMm);
@@ -241,29 +134,75 @@ static void processState(TankState& state)
     }
 
     publishDistance(distanceMm, fillPct);
+    return true;
 }
 
-/** Return current initialization flag from protected state. */
-static bool isInitializedState(const TankState& state)
-{
-    std::lock_guard<std::mutex> lock(state.mutex);
-    return state.initialized;
-}
+// ---- FreeRTOS task ----
 
-/** @brief Initializes the tank module with configured port and address. */
-bool Tank::init(const String& configuredPort, uint8_t i2cAddress)
+void taskTank(void* pv)
 {
-    return initState(TANK_STATE, configuredPort, i2cAddress);
-}
+    (void)pv;
+    M5_LOGI("[TANK] Task started");
 
-/** @brief Executes one acquisition cycle and publishes tank telemetry. */
-void Tank::process()
-{
-    processState(TANK_STATE);
-}
+    i2cBeginPortA();
 
-/** @brief Returns true when tank module initialization has completed. */
-bool Tank::isInitialized() const
-{
-    return isInitializedState(TANK_STATE);
+    bool initialized = false;
+    String activeConfiguredPort;
+    uint32_t nextInitAttemptMs = 0;
+
+    constexpr uint8_t deviceAddress = 0x57;
+
+    auto isRetryDue = [](uint32_t nowMs, uint32_t nextAttemptMs) {
+        return static_cast<int32_t>(nowMs - nextAttemptMs) >= 0;
+    };
+
+    auto scheduleRetry = [](uint32_t& nextAttemptMs, uint32_t nowMs) {
+        nextAttemptMs = nowMs + kI2cInitRetryMs;
+    };
+
+    for (;;) {
+        const uint32_t nowMs = millis();
+
+#ifndef DISABLE_TANK
+        if (!initialized && isRetryDue(nowMs, nextInitAttemptMs)) {
+            const String configuredPort = i2cConfiguredPortForSensor(sf_ports::PortSensor::Tank, "TANK");
+            if (i2cIsConfiguredPortInternal(configuredPort)) {
+                M5_LOGW("[TANK] invalid configured port '%s': tank supports external ports only (A1/A2/B1/B2/C1/C2)",
+                        configuredPort.c_str());
+                initialized = false;
+                activeConfiguredPort = String();
+                scheduleRetry(nextInitAttemptMs, nowMs);
+            } else if (!i2cBeginConfiguredPort(configuredPort, "TANK") ||
+                       !i2cDeviceExistsOnConfiguredPort(deviceAddress, configuredPort, "TANK")) {
+                initialized = false;
+                activeConfiguredPort = String();
+                scheduleRetry(nextInitAttemptMs, nowMs);
+            } else {
+                i2cPublishConfiguration("tank", configuredPort, deviceAddress);
+                initialized = true;
+                activeConfiguredPort = configuredPort;
+            }
+
+            if (!initialized) {
+                M5_LOGW("[TANK] Init failed");
+            }
+        }
+
+        if (initialized) {
+            if (activeConfiguredPort.isEmpty()) {
+                initialized = false;
+                scheduleRetry(nextInitAttemptMs, nowMs);
+                continue;
+            }
+
+            i2cBeginConfiguredPort(activeConfiguredPort, "TANK");
+            if (!tankReadAndPublish(deviceAddress)) {
+                M5_LOGW("[TANK] No measurement");
+            }
+        }
+#endif
+
+        const int loopMs = (CONFIG.task_i2c_loop_ms > 0) ? CONFIG.task_i2c_loop_ms : 1000;
+        vTaskDelay(pdMS_TO_TICKS(loopMs));
+    }
 }
