@@ -34,15 +34,30 @@
 
 #include <Arduino.h>
 
+#include <mutex>
+
 /**
- * @brief Acquire one tank measurement, update DATA, and publish MQTT topics.
- *
- * This helper expects that the task already selected and initialized the
- * external I2C port (A1/A2/B1/B2/C1/C2) before calling it.
- *
- * @param i2cAddress Ultrasonic sensor I2C address (typically 0x57)
- * @return true when one valid measurement was processed and published
+ * @brief Tank ultrasonic water level runtime.
  */
-bool tankReadAndPublish(uint8_t i2cAddress);
+class Tank {
+public:
+	/** Initialize tank sensor from configured tank port metadata. */
+	bool init();
+
+	/** Run one acquisition and publication cycle. */
+	void process();
+
+	/** Return true when module initialization is complete. */
+	bool isInitialized() const;
+
+private:
+	mutable std::mutex m_mutex;
+	bool m_initialized = false;
+	String m_activeConfiguredPort;
+	uint8_t m_i2cAddress = 0x57;
+};
+
+/** Global singleton used by taskTank, mirroring LEVEL_TASK pattern. */
+extern Tank TANK_TASK;
 
 

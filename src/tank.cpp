@@ -118,14 +118,60 @@ void publishDistance(const int32_t distanceMm, const int32_t fillPct)
 
 }  // namespace
 
-bool tankReadAndPublish(const uint8_t i2cAddress)
+Tank TANK_TASK;
+
+bool Tank::isInitialized() const
 {
-    int32_t distanceMm = 0;
-    if (!readDistanceMm(i2cAddress, distanceMm)) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_initialized;
+}
+
+bool Tank::init()
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    m_initialized = false;
+    m_activeConfiguredPort = String();
+
+    const String configuredPort = i2cConfiguredPortForSensor(sf_ports::PortSensor::Tank, "TANK");
+    if (i2cIsConfiguredPortInternal(configuredPort)) {
+        M5_LOGW("[TANK] invalid configured port '%s': tank supports external ports only (A1/A2/B1/B2/C1/C2)",
+                configuredPort.c_str());
         return false;
     }
 
-    const int32_t fillPct = distanceToFillPct(distanceMm);
+    if (!i2cBeginConfiguredPort(configuredPort, "TANK") ||
+        !i2cDeviceExistsOnConfiguredPort(m_i2cAddress, configuredPort, "TANK")) {
+        return false;
+    }
+
+    i2cPublishConfiguration("tank", configuredPort, m_i2cAddress);
+    m_activeConfiguredPort = configuredPort;
+    m_initialized = true;
+
+    M5_LOGI("[TANK] initialized on port '%s' (0x%02X)", configuredPort.c_str(), m_i2cAddress);
+    return true;
+}
+
+void Tank::process()
+{
+    int32_t distanceMm = 0;
+    int32_t fillPct = 0;
+
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (!m_initialized || m_activeConfiguredPort.isEmpty()) {
+            return;
+        }
+
+        i2cBeginConfiguredPort(m_activeConfiguredPort, "TANK");
+        if (!readDistanceMm(m_i2cAddress, distanceMm)) {
+            M5_LOGW("[TANK] No measurement");
+            return;
+        }
+
+        fillPct = distanceToFillPct(distanceMm);
+    }
 
     {
         std::lock_guard<std::mutex> lock(DATA_MUTEX);
@@ -134,7 +180,6 @@ bool tankReadAndPublish(const uint8_t i2cAddress)
     }
 
     publishDistance(distanceMm, fillPct);
-    return true;
 }
 
 // ---- FreeRTOS task ----
@@ -144,13 +189,8 @@ void taskTank(void* pv)
     (void)pv;
     M5_LOGI("[TANK] Task started");
 
-    i2cBeginPortA();
-
-    bool initialized = false;
-    String activeConfiguredPort;
+    bool     initialized       = false;
     uint32_t nextInitAttemptMs = 0;
-
-    constexpr uint8_t deviceAddress = 0x57;
 
     auto isRetryDue = [](uint32_t nowMs, uint32_t nextAttemptMs) {
         return static_cast<int32_t>(nowMs - nextAttemptMs) >= 0;
@@ -165,40 +205,15 @@ void taskTank(void* pv)
 
 #ifndef DISABLE_TANK
         if (!initialized && isRetryDue(nowMs, nextInitAttemptMs)) {
-            const String configuredPort = i2cConfiguredPortForSensor(sf_ports::PortSensor::Tank, "TANK");
-            if (i2cIsConfiguredPortInternal(configuredPort)) {
-                M5_LOGW("[TANK] invalid configured port '%s': tank supports external ports only (A1/A2/B1/B2/C1/C2)",
-                        configuredPort.c_str());
-                initialized = false;
-                activeConfiguredPort = String();
-                scheduleRetry(nextInitAttemptMs, nowMs);
-            } else if (!i2cBeginConfiguredPort(configuredPort, "TANK") ||
-                       !i2cDeviceExistsOnConfiguredPort(deviceAddress, configuredPort, "TANK")) {
-                initialized = false;
-                activeConfiguredPort = String();
-                scheduleRetry(nextInitAttemptMs, nowMs);
-            } else {
-                i2cPublishConfiguration("tank", configuredPort, deviceAddress);
-                initialized = true;
-                activeConfiguredPort = configuredPort;
-            }
-
+            initialized = TANK_TASK.init();
             if (!initialized) {
                 M5_LOGW("[TANK] Init failed");
+                scheduleRetry(nextInitAttemptMs, nowMs);
             }
         }
 
         if (initialized) {
-            if (activeConfiguredPort.isEmpty()) {
-                initialized = false;
-                scheduleRetry(nextInitAttemptMs, nowMs);
-                continue;
-            }
-
-            i2cBeginConfiguredPort(activeConfiguredPort, "TANK");
-            if (!tankReadAndPublish(deviceAddress)) {
-                M5_LOGW("[TANK] No measurement");
-            }
+            TANK_TASK.process();
         }
 #endif
 
