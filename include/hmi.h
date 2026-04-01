@@ -46,6 +46,18 @@
 #include <Arduino.h>
 
 /**
+ * @brief Sets all 7 board RGB LEDs to white (startup splash state).
+ */
+void hmiSetAllBoardLedsWhite();
+
+/**
+ * @brief Updates one port LED to reflect init result.
+ * @param configuredPort Port name (A1/A2/B1/B2/C1/C2, case-insensitive).
+ * @param initialized True when port init succeeded, false when it failed.
+ */
+void hmiSetPortLedInitResult(const String& configuredPort, bool initialized);
+
+/**
  * @brief Human-Machine Interface runtime for display and local controls.
  *
  * Lifecycle model:

@@ -3,6 +3,7 @@
 
 #include "config_store.h"
 #include "gps.h"
+#include "hmi.h"
 #include "i2c.h"
 
 void taskGps(void* pv)
@@ -34,12 +35,14 @@ void taskGps(void* pv)
             if (!i2cBeginConfiguredPort(configuredPort, "GPS") ||
                 !i2cDeviceExistsOnConfiguredPort(deviceAddress, configuredPort, "GPS")) {
                 initialized = false;
+                hmiSetPortLedInitResult(configuredPort, false);
                 scheduleRetry(nextInitAttemptMs, nowMs);
             } else {
                 i2cPublishConfiguration("gps", configuredPort, deviceAddress);
                 initialized = GPS_MODULE.init(GPS::Source::ExternalDfrobotGravity,
                                               configuredPort,
                                               deviceAddress);
+                hmiSetPortLedInitResult(configuredPort, initialized);
                 if (!initialized) {
                     scheduleRetry(nextInitAttemptMs, nowMs);
                 }

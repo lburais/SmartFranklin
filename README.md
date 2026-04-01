@@ -2,7 +2,7 @@
 
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-ESP32-F5822A?logo=platformio&logoColor=white)](https://platformio.org/)
 [![Framework](https://img.shields.io/badge/framework-Arduino-00979D?logo=arduino&logoColor=white)](https://www.arduino.cc/)
-[![Board](https://img.shields.io/badge/board-M5Station%20BAT-1f6feb)](https://docs.m5stack.com/en/core/station-bat)
+[![Board](https://img.shields.io/badge/board-M5Station%20BAT-1f6feb)](https://docs.m5stack.com/en/core/station_bat)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-2ea44f?logo=github)](https://lburais.github.io/SmartFranklin/)
 

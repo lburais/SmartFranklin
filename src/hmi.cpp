@@ -66,10 +66,15 @@
 #include <M5GFX.h>
 #include <M5Unified.h>
 
+#include <memory>
+#include <mutex>
+
 #include "config_store.h"
 #include "data_model.h"
 #include "gaz.h"
 #include "mqtt.h"
+#include "ports.h"
+#include "utility/led/LED_Strip_Class.hpp"
 
 namespace {
 
@@ -140,7 +145,107 @@ void drawCenteredTextLine(lgfx::LGFXBase& surface,
     surface.drawCenterString(text, center_x, top_y);
 }
 
+constexpr size_t kBoardLedCount = 7;
+constexpr size_t kStatusLedIndex = 6;
+
+std::mutex g_hmiLedMutex;
+bool g_hmiLedConfigured = false;
+
+size_t ledIndexForPortId(const sf_ports::PortId id)
+{
+    switch (id) {
+    case sf_ports::PortId::PortA1: return 0;
+    case sf_ports::PortId::PortA2: return 1;
+    case sf_ports::PortId::PortB1: return 2;
+    case sf_ports::PortId::PortB2: return 3;
+    case sf_ports::PortId::PortC1: return 4;
+    case sf_ports::PortId::PortC2: return 5;
+    default: return kStatusLedIndex;
+    }
+}
+
+bool initBoardLeds()
+{
+    M5.begin();
+
+    if (g_hmiLedConfigured && M5.Led.getCount() == kBoardLedCount) {
+        return true;
+    }
+
+    const int pinRgbLed = M5.getPin(m5::pin_name_t::rgb_led);
+    if (pinRgbLed < 0) {
+        return false;
+    }
+
+    auto busLed = std::make_shared<m5::LedBus_RMT>();
+    auto busCfg = busLed->getConfig();
+    busCfg.pin_data = pinRgbLed;
+    busLed->setConfig(busCfg);
+
+    auto ledStrip = std::make_shared<m5::LED_Strip_Class>();
+    auto ledCfg = ledStrip->getConfig();
+    ledCfg.led_count = kBoardLedCount;
+    ledCfg.byte_per_led = 3;
+    ledCfg.color_order = m5::LED_Strip_Class::config_t::color_order_grb;
+    ledStrip->setConfig(ledCfg);
+    ledStrip->setBus(busLed);
+
+    M5.Led.setLedInstance(ledStrip);
+
+    g_hmiLedConfigured = M5.Led.begin() || M5.Led.getCount() != kBoardLedCount;
+    if (!g_hmiLedConfigured ) {
+        M5_LOGW("[HMI] LED initialization failed or LED count mismatch (expected %u, got %u) on pin %d",
+                kBoardLedCount, M5.Led.getCount(), pinRgbLed);
+    }
+
+    M5.Led.setBrightness(255);
+
+    return g_hmiLedConfigured;
+}
+
+void setPortLedInitResultLocked(const String& configuredPort, const bool initialized)
+{
+    if (!initBoardLeds()) {
+        return;
+    }
+
+    const sf_ports::PortDefinition* def = sf_ports::findPortByName(configuredPort);
+    if (def == nullptr) {
+        return;
+    }
+
+    const size_t index = ledIndexForPortId(def->id);
+    if (!initialized) {
+        M5.Led.setColor(index, 255, 0, 0);
+        return;
+    }
+
+    const sf_ports::PortType type = sf_ports::portTypeFromString(sf_ports::configuredPortType(CONFIG, def->id));
+    if (type == sf_ports::PortType::I2C) {
+        M5.Led.setColor(index, 0, 255, 0);
+    } else {
+        M5.Led.setColor(index, 0, 0, 255);
+    }
+}
+
 }  // namespace
+
+void hmiSetAllBoardLedsWhite()
+{
+    std::lock_guard<std::mutex> lock(g_hmiLedMutex);
+
+    if (!initBoardLeds()) {
+        return;
+    }
+
+    M5.Led.setAllColor(255, 255, 255);
+}
+
+void hmiSetPortLedInitResult(const String& configuredPort, const bool initialized)
+{
+    std::lock_guard<std::mutex> lock(g_hmiLedMutex);
+    setPortLedInitResultLocked(configuredPort, initialized);
+}
 
 /**
  * @brief Initializes display hardware state and internal HMI runtime state.
@@ -166,7 +271,8 @@ bool HMI::init()
     lcd.setRotation(DISPLAY_ROTATION);
     lcd.invertDisplay(false);
 
-    // Show startup splash before entering normal page rendering.
+    hmiSetAllBoardLedsWhite();
+
     lcd.fillScreen(COLOR_SPLASH_BG);
     const char* splash = "SmartFranklin";
     lcd.setTextSize(CONTENT_TEXT_SIZE);
@@ -227,54 +333,6 @@ void HMI::process()
     bool btnB_rising = M5.BtnB.wasPressed() || (btnB_now && !btnB_prev_);
     btnB_prev_ = btnB_now;
 
-#if defined(ARDUINO_M5STACK_DIAL)
-    // M5 Dial rotary encoder channels are wired on GPIO42 / GPIO40 (active-low).
-    const bool encA_now = (!m5gfx::gpio_in(GPIO_NUM_42)) & 1;
-    const bool encB_now = (!m5gfx::gpio_in(GPIO_NUM_40)) & 1;
-    const int8_t encoder_state = (encA_now ? 1 : 0) | (encB_now ? 2 : 0);
-    const int8_t prev_state = dial_encoder_prev_state_;
-    dial_encoder_prev_state_ = encoder_state;
-
-    // Decode one quadrature transition for clockwise/counter-clockwise navigation.
-    const int8_t transition = (prev_state << 2) | encoder_state;
-    int8_t direction = 0;
-    switch (transition) {
-    case 0b0001:
-    case 0b0111:
-    case 0b1110:
-    case 0b1000:
-        direction = +1;
-        break;
-    case 0b0010:
-    case 0b1011:
-    case 0b1101:
-    case 0b0100:
-        direction = -1;
-        break;
-    default:
-        break;
-    }
-
-    if (direction != 0) {
-        dial_encoder_accum_ = static_cast<int8_t>(dial_encoder_accum_ + direction);
-
-        // Commit one page change per encoder detent (~4 transitions).
-        if (dial_encoder_accum_ >= 4) {
-            next_screen = (next_screen + 1) % kScreenCount;
-            dial_encoder_accum_ = 0;
-        } else if (dial_encoder_accum_ <= -4) {
-            next_screen = (next_screen - 1 + kScreenCount) % kScreenCount;
-            dial_encoder_accum_ = 0;
-        }
-    }
-
-    // On Dial, BtnB is part of rotary channeling; do not use it for calibration action.
-    btnB_rising = false;
-#else
-    if (btnA_rising) {
-        next_screen = (next_screen + 1) % kScreenCount;
-    }
-#endif
     if (btnA_rising) {
         next_screen = (next_screen + 1) % kScreenCount;
     }

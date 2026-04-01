@@ -21,6 +21,7 @@
 
 #include "config_store.h"
 #include "data_model.h"
+#include "hmi.h"
 #include "i2c.h"
 #include "mqtt.h"
 
@@ -402,6 +403,8 @@ void taskGaz(void* pv)
 
         if (!initialized && isRetryDue(nowMs, nextInitAttemptMs)) {
             initialized = GAZ_TASK.init();
+            const String configuredPort = i2cConfiguredPortForSensor(sf_ports::PortSensor::Gaz, "GAZ");
+            hmiSetPortLedInitResult(configuredPort, initialized);
             if (!initialized) {
                 M5_LOGW("[GAZ] Init failed");
                 scheduleRetry(nextInitAttemptMs, nowMs);

@@ -19,6 +19,7 @@
 
 #include "config_store.h"
 #include "data_model.h"
+#include "hmi.h"
 #include "i2c.h"
 #include "mqtt.h"
 
@@ -135,11 +136,8 @@ bool Tank::init()
 
     const String configuredPort = i2cConfiguredPortForSensor(sf_ports::PortSensor::Tank, "TANK");
 
-    M5_LOGI("[***************] init: '%s'", configuredPort.c_str());
-
     if (!i2cBeginConfiguredPort(configuredPort, "TANK") ||
         !i2cDeviceExistsOnConfiguredPort(m_i2cAddress, configuredPort, "TANK")) {
-        M5_LOGW("[***************] begin fail: '%s' (0x%02X)", configuredPort.c_str(), m_i2cAddress);
         return false;
     }
 
@@ -203,6 +201,8 @@ void taskTank(void* pv)
 
         if (!initialized && isRetryDue(nowMs, nextInitAttemptMs)) {
             initialized = TANK_TASK.init();
+            const String configuredPort = i2cConfiguredPortForSensor(sf_ports::PortSensor::Tank, "TANK");
+            hmiSetPortLedInitResult(configuredPort, initialized);
             if (!initialized) {
                 M5_LOGW("[TANK] Init failed");
                 scheduleRetry(nextInitAttemptMs, nowMs);
