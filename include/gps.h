@@ -30,7 +30,7 @@ public:
     /**
     * @brief Initialize GPS runtime with the selected source and configured port.
      * @param source GNSS source implementation to initialize.
-    * @param configuredPort Normalized configured port name (internal, a1, a2, b1...).
+    * @param configuredPort Normalized configured port name (a1, a2, b1, b2, c1, c2).
      * @param i2cAddress I2C address of the GPS unit when applicable.
      * @return True when initialization succeeds.
      */

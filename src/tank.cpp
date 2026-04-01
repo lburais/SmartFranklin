@@ -134,14 +134,12 @@ bool Tank::init()
     m_activeConfiguredPort = String();
 
     const String configuredPort = i2cConfiguredPortForSensor(sf_ports::PortSensor::Tank, "TANK");
-    if (i2cIsConfiguredPortInternal(configuredPort)) {
-        M5_LOGW("[TANK] invalid configured port '%s': tank supports external ports only (A1/A2/B1/B2/C1/C2)",
-                configuredPort.c_str());
-        return false;
-    }
+
+    M5_LOGI("[***************] init: '%s'", configuredPort.c_str());
 
     if (!i2cBeginConfiguredPort(configuredPort, "TANK") ||
         !i2cDeviceExistsOnConfiguredPort(m_i2cAddress, configuredPort, "TANK")) {
+        M5_LOGW("[***************] begin fail: '%s' (0x%02X)", configuredPort.c_str(), m_i2cAddress);
         return false;
     }
 
@@ -203,7 +201,6 @@ void taskTank(void* pv)
     for (;;) {
         const uint32_t nowMs = millis();
 
-#ifndef DISABLE_TANK
         if (!initialized && isRetryDue(nowMs, nextInitAttemptMs)) {
             initialized = TANK_TASK.init();
             if (!initialized) {
@@ -215,7 +212,6 @@ void taskTank(void* pv)
         if (initialized) {
             TANK_TASK.process();
         }
-#endif
 
         const int loopMs = (CONFIG.task_i2c_loop_ms > 0) ? CONFIG.task_i2c_loop_ms : 1000;
         vTaskDelay(pdMS_TO_TICKS(loopMs));

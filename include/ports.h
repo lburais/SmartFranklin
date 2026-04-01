@@ -17,8 +17,7 @@ struct SmartConfig;
 namespace sf_ports {
 
 enum class PortId : uint8_t {
-    Internal = 0,
-    PortA1,
+    PortA1 = 0,
     PortA2,
     PortB1,
     PortB2,
@@ -36,10 +35,12 @@ enum class PortType : uint8_t {
 
 enum class PortSensor : uint8_t {
     None = 0,
-    Internal,
     Gaz,
     Tank,
     Gps,
+    Lte,
+    Lora,
+    Lin,
     Unknown,
 };
 
@@ -49,13 +50,6 @@ struct PortDefinition {
     PortType defaultType;
     PortSensor defaultSensor;
     const char* defaultDeviceName;
-    const char* typeConfigKey;
-    const char* sensorConfigKey;
-    const char* deviceNameConfigKey;
-    const char* legacyBusTypeConfigKey;
-    const char* legacySensorConfigKey;
-    const char* legacyTypeConfigKey;
-    const char* legacyDeviceNameConfigKey;
 };
 
 const PortDefinition* allPortDefinitions(size_t& count);

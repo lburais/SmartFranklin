@@ -41,7 +41,6 @@ struct GpsState {
     bool initialized = false;
     GPS::Source source = GPS::Source::None;
 
-    sf_ports::PortId portId = sf_ports::PortId::Unknown;
     uint8_t i2cAddress = 0x00;
 
     double latitudeDeg = 0.0;
@@ -61,22 +60,9 @@ struct GpsState {
 
 GpsState GPS_STATE;
 
-bool isInternalPort(const sf_ports::PortId portId)
-{
-    return portId == sf_ports::PortId::Internal;
-}
-
 /** Write a single device register through the configured I2C port. */
 bool writeRegister(const GpsState& state, uint8_t reg, uint8_t value)
 {
-    if (isInternalPort(state.portId)) {
-        if (!M5.Ex_I2C.start(state.i2cAddress, false, Wire.getClock())) {
-            return false;
-        }
-        const bool ok = M5.Ex_I2C.write(reg) && M5.Ex_I2C.write(value) && M5.Ex_I2C.stop();
-        return ok;
-    }
-
     Wire.beginTransmission(state.i2cAddress);
     Wire.write(reg);
     Wire.write(value);
@@ -88,30 +74,6 @@ bool readRegisters(const GpsState& state, uint8_t reg, uint8_t* out, size_t len)
 {
     if (out == nullptr || len == 0U) {
         return false;
-    }
-
-    if (isInternalPort(state.portId)) {
-        if (!M5.Ex_I2C.start(state.i2cAddress, false, Wire.getClock())) {
-            return false;
-        }
-
-        if (!M5.Ex_I2C.write(reg) || !M5.Ex_I2C.stop()) {
-            return false;
-        }
-
-        if (!M5.Ex_I2C.start(state.i2cAddress, true, Wire.getClock())) {
-            return false;
-        }
-
-        for (size_t i = 0; i < len; ++i) {
-            const bool lastNack = (i + 1U == len);
-            if (!M5.Ex_I2C.read(&out[i], 1U, lastNack)) {
-                M5.Ex_I2C.stop();
-                return false;
-            }
-        }
-
-        return M5.Ex_I2C.stop();
     }
 
     Wire.beginTransmission(state.i2cAddress);
@@ -227,7 +189,6 @@ bool initState(GpsState& state, GPS::Source source, const String& configuredPort
 
     state.initialized = false;
     state.source = GPS::Source::None;
-    state.portId = def->id;
     state.i2cAddress = i2cAddress;
 
     if (source != GPS::Source::ExternalDfrobotGravity) {

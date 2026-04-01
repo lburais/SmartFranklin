@@ -20,47 +20,15 @@
 
 namespace {
 
-enum class ExternalPort : uint8_t {
-    PortA1 = 0,
-    PortA2,
-    PortB1,
-    PortB2,
-    PortC1,
-    PortC2,
-};
-
 struct ResolvedPort {
     bool valid = false;
-    bool internal = false;
-    ExternalPort externalPort = ExternalPort::PortA1;
+    sf_ports::PortId portId = sf_ports::PortId::Unknown;
     const char* normalized = "";
 };
 
 std::mutex g_i2cRouteMutex;
 bool g_wireInitialized = false;
-ExternalPort g_activeWirePort = ExternalPort::PortA1;
 uint32_t g_activeWireClockHz = 0;
-bool g_exInitialized = false;
-
-ExternalPort portIdToExternalPort(const sf_ports::PortId id)
-{
-    switch (id) {
-    case sf_ports::PortId::PortA1:
-        return ExternalPort::PortA1;
-    case sf_ports::PortId::PortA2:
-        return ExternalPort::PortA2;
-    case sf_ports::PortId::PortB1:
-        return ExternalPort::PortB1;
-    case sf_ports::PortId::PortB2:
-        return ExternalPort::PortB2;
-    case sf_ports::PortId::PortC1:
-        return ExternalPort::PortC1;
-    case sf_ports::PortId::PortC2:
-        return ExternalPort::PortC2;
-    default:
-        return ExternalPort::PortA1;
-    }
-}
 
 ResolvedPort resolveConfiguredPort(const String& configuredPort, const char* label, const bool logInvalid)
 {
@@ -69,98 +37,52 @@ ResolvedPort resolveConfiguredPort(const String& configuredPort, const char* lab
         ResolvedPort port{};
         port.valid = true;
         port.normalized = def->normalizedName;
-
-        if (def->id == sf_ports::PortId::Internal) {
-            port.internal = true;
-            port.externalPort = ExternalPort::PortA1;
-            return port;
-        }
-
-        port.internal = false;
-        port.externalPort = portIdToExternalPort(def->id);
+        port.portId = def->id;
         return port;
     }
 
     if (logInvalid) {
-        M5_LOGW("[%s] invalid configured I2C port '%s' (valid: INTERNAL, EX, A1, A2, B1, B2, C1, C2)",
+        M5_LOGW("[%s] invalid configured I2C port '%s' (valid: A1, A2, B1, B2, C1, C2)",
                 (label != nullptr) ? label : "I2C",
                 configuredPort.c_str());
     }
     return {};
 }
 
-void beginInternalBus()
-{
-    std::lock_guard<std::mutex> lock(g_i2cRouteMutex);
-    if (!g_exInitialized) {
-        M5.Ex_I2C.begin();
-        g_exInitialized = true;
-    }
-}
-
-void beginExternalBus(const ExternalPort port, const uint32_t clockHz)
+bool beginSharedWireBus(const uint32_t clockHz)
 {
     std::lock_guard<std::mutex> lock(g_i2cRouteMutex);
 
-    int8_t sda = -1;
-    int8_t scl = -1;
+    int8_t sda = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_a_sda));
+    int8_t scl = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_a_scl));
 
-    switch (port) {
-    case ExternalPort::PortA1:
-    case ExternalPort::PortA2:
-        sda = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_a_sda));
-        scl = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_a_scl));
-        break;
-    case ExternalPort::PortB1:
-        sda = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_b_out));
-        scl = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_b_in));
-        break;
-    case ExternalPort::PortB2:
-        sda = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_b2_pin2));
-        scl = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_b2_pin1));
-        break;
-    case ExternalPort::PortC1:
-        sda = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_c_txd));
-        scl = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_c_rxd));
-        break;
-    case ExternalPort::PortC2:
-        sda = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_c2_pin2));
-        scl = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_c2_pin1));
-        break;
+    // M5Station routes external Grove ports on main Wire (default 21/22).
+    if (sda < 0) {
+        sda = 21;
+    }
+    if (scl < 0) {
+        scl = 22;
     }
 
-    if (sda < 0 || scl < 0) {
-        return;
-    }
-
-    const bool wireNeedsReinit = !g_wireInitialized
-                              || g_activeWirePort != port
-                              || g_activeWireClockHz != clockHz;
+    const bool wireNeedsReinit = !g_wireInitialized || g_activeWireClockHz != clockHz;
 
     if (wireNeedsReinit) {
         Wire.end();
-        Wire.begin(sda, scl, clockHz);
-        Wire.setPins(sda, scl);
+        if (!Wire.begin(sda, scl, clockHz)) {
+            g_wireInitialized = false;
+            return false;
+        }
         g_wireInitialized = true;
-        g_activeWirePort = port;
         g_activeWireClockHz = clockHz;
     }
 
-    if (!g_exInitialized) {
-        M5.Ex_I2C.begin();
-        g_exInitialized = true;
-    }
+    return true;
 }
 
 bool wireDeviceExists(const uint8_t address)
 {
     Wire.beginTransmission(address);
     return Wire.endTransmission() == 0;
-}
-
-bool exDeviceExists(const uint8_t address, const uint32_t clockHz)
-{
-    return M5.Ex_I2C.scanID(address, clockHz);
 }
 
 String configuredTypeForNormalizedPort(const char* normalized)
@@ -185,7 +107,7 @@ String configuredDeviceNameForNormalizedPort(const char* normalized)
 
 void i2cBeginPortA(const uint32_t clockHz)
 {
-    beginExternalBus(ExternalPort::PortA1, clockHz);
+    static_cast<void>(beginSharedWireBus(clockHz));
 }
 
 bool i2cBeginConfiguredPort(const String& configuredPort, const char* label, const uint32_t clockHz)
@@ -195,13 +117,7 @@ bool i2cBeginConfiguredPort(const String& configuredPort, const char* label, con
         return false;
     }
 
-    if (port.internal) {
-        beginInternalBus();
-    } else {
-        beginExternalBus(port.externalPort, clockHz);
-    }
-
-    return true;
+    return beginSharedWireBus(clockHz);
 }
 
 bool i2cDeviceExistsOnConfiguredPort(const uint8_t deviceAddress,
@@ -218,14 +134,7 @@ bool i2cDeviceExistsOnConfiguredPort(const uint8_t deviceAddress,
         return false;
     }
 
-    return port.internal ? exDeviceExists(deviceAddress, clockHz)
-                         : wireDeviceExists(deviceAddress);
-}
-
-bool i2cIsConfiguredPortInternal(const String& configuredPort)
-{
-    const ResolvedPort port = resolveConfiguredPort(configuredPort, nullptr, false);
-    return port.valid && port.internal;
+    return wireDeviceExists(deviceAddress);
 }
 
 String i2cPortName(const String& configuredPort)

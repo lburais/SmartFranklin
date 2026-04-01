@@ -61,9 +61,6 @@ struct SmartConfig {
     int gaz_weight_average_window = 10;
 
     // Port metadata by configured port
-    String port_internal_type = sf_ports::defaultPortType(sf_ports::PortId::Internal);
-    String port_internal_sensor = sf_ports::defaultPortSensor(sf_ports::PortId::Internal);
-    String port_internal_device_name = sf_ports::defaultPortDeviceName(sf_ports::PortId::Internal);
     String port_a1_type = sf_ports::defaultPortType(sf_ports::PortId::PortA1);
     String port_a1_sensor = sf_ports::defaultPortSensor(sf_ports::PortId::PortA1);
     String port_a1_device_name = sf_ports::defaultPortDeviceName(sf_ports::PortId::PortA1);

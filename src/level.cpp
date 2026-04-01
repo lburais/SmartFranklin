@@ -167,7 +167,7 @@ bool Level::init()
 
     if (imuReady) {
         m_initialized = true;
-        M5_LOGI("[LEVEL] initialized on internal port");
+        M5_LOGI("[LEVEL] initialized on internal IMU");
     } else {
         M5_LOGE("[LEVEL] unable to initialize");
     }

@@ -159,9 +159,7 @@ bool Gaz::init()
     i2cPublishConfiguration("gaz", configuredPort, kI2CAddress);
 
     m_units = m5::unit::UnitUnified{};
-    const bool ok = i2cIsConfiguredPortInternal(configuredPort)
-                    ? (m_units.add(m_unit, M5.Ex_I2C) && m_units.begin())
-                    : (m_units.add(m_unit, Wire)       && m_units.begin());
+    const bool ok = m_units.add(m_unit, Wire) && m_units.begin();
 
     if (!ok) {
         M5_LOGW("[GAZ] Weight I2C unit not detected");

@@ -90,6 +90,41 @@
 
 namespace {
 
+String portTypeConfigKey(const sf_ports::PortDefinition& def)
+{
+    return String("port_") + def.normalizedName + "_type";
+}
+
+String portSensorConfigKey(const sf_ports::PortDefinition& def)
+{
+    return String("port_") + def.normalizedName + "_sensor";
+}
+
+String portDeviceNameConfigKey(const sf_ports::PortDefinition& def)
+{
+    return String("port_") + def.normalizedName + "_device_name";
+}
+
+String legacyBusTypeConfigKey(const sf_ports::PortDefinition& def)
+{
+    return String("i2c_") + def.normalizedName + "_bus_type";
+}
+
+String legacySensorConfigKey(const sf_ports::PortDefinition& def)
+{
+    return String("i2c_") + def.normalizedName + "_sensor";
+}
+
+String legacyTypeConfigKey(const sf_ports::PortDefinition& def)
+{
+    return String("i2c_") + def.normalizedName + "_type";
+}
+
+String legacyDeviceNameConfigKey(const sf_ports::PortDefinition& def)
+{
+    return String("i2c_") + def.normalizedName + "_device_name";
+}
+
 String canonicalPortType(const String& raw, const String& fallback)
 {
     const sf_ports::PortType parsed = sf_ports::portTypeFromString(raw);
@@ -233,16 +268,24 @@ bool config_load()
         const String defaultSensor = sf_ports::configuredPortSensor(defaultCONFIG, def.id);
         const String defaultDeviceName = sf_ports::configuredPortDeviceName(defaultCONFIG, def.id);
 
-        const String loadedType = doc[def.typeConfigKey] |
-                                  doc[def.legacyBusTypeConfigKey] |
-                                  doc[def.legacyTypeConfigKey] |
+        const String typeKey = portTypeConfigKey(def);
+        const String sensorKey = portSensorConfigKey(def);
+        const String deviceNameKey = portDeviceNameConfigKey(def);
+        const String legacyBusTypeKey = legacyBusTypeConfigKey(def);
+        const String legacySensorKey = legacySensorConfigKey(def);
+        const String legacyTypeKey = legacyTypeConfigKey(def);
+        const String legacyDeviceNameKey = legacyDeviceNameConfigKey(def);
+
+        const String loadedType = doc[typeKey] |
+                      doc[legacyBusTypeKey] |
+                      doc[legacyTypeKey] |
                                   defaultType;
-        const String loadedSensor = doc[def.sensorConfigKey] |
-                                    doc[def.legacySensorConfigKey] |
-                                    doc[def.legacyTypeConfigKey] |
+        const String loadedSensor = doc[sensorKey] |
+                        doc[legacySensorKey] |
+                        doc[legacyTypeKey] |
                                     defaultSensor;
-        const String loadedDeviceName = doc[def.deviceNameConfigKey] |
-                                        doc[def.legacyDeviceNameConfigKey] |
+        const String loadedDeviceName = doc[deviceNameKey] |
+                        doc[legacyDeviceNameKey] |
                                         defaultDeviceName;
 
         sf_ports::setConfiguredPortType(CONFIG, def.id, canonicalPortType(loadedType, defaultType));
@@ -341,9 +384,9 @@ bool config_save()
     const sf_ports::PortDefinition* portDefs = sf_ports::allPortDefinitions(portCount);
     for (size_t i = 0; i < portCount; ++i) {
         const sf_ports::PortDefinition& def = portDefs[i];
-        doc[def.typeConfigKey] = sf_ports::configuredPortType(CONFIG, def.id);
-        doc[def.sensorConfigKey] = sf_ports::configuredPortSensor(CONFIG, def.id);
-        doc[def.deviceNameConfigKey] = sf_ports::configuredPortDeviceName(CONFIG, def.id);
+        doc[portTypeConfigKey(def)] = sf_ports::configuredPortType(CONFIG, def.id);
+        doc[portSensorConfigKey(def)] = sf_ports::configuredPortSensor(CONFIG, def.id);
+        doc[portDeviceNameConfigKey(def)] = sf_ports::configuredPortDeviceName(CONFIG, def.id);
     }
 
     doc["rtc_timezone"] = CONFIG.rtc_timezone;

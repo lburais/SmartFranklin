@@ -28,10 +28,7 @@ bool i2cDeviceExistsOnConfiguredPort(uint8_t deviceAddress,
                                      const char* label,
                                      uint32_t clockHz = 100000U);
 
-/** @brief Return true when the configured port maps to the internal M5 I2C bus. */
-bool i2cIsConfiguredPortInternal(const String& configuredPort);
-
-/** @brief Return normalized configured port name: internal, a1, a2, b1, b2, c1, c2. */
+/** @brief Return normalized configured port name: a1, a2, b1, b2, c1, c2. */
 String i2cPortName(const String& configuredPort);
 
 /** @brief Return configured type metadata associated with a port. */
