@@ -404,7 +404,7 @@ void taskGaz(void* pv)
         if (!initialized && isRetryDue(nowMs, nextInitAttemptMs)) {
             initialized = GAZ_TASK.init();
             const String configuredPort = i2cConfiguredPortForSensor(sf_ports::PortSensor::Gaz, "GAZ");
-            hmiSetPortLedInitResult(configuredPort, initialized);
+            hmiSetPortLedStatus(configuredPort, initialized, false);
             if (!initialized) {
                 M5_LOGW("[GAZ] Init failed");
                 scheduleRetry(nextInitAttemptMs, nowMs);

@@ -202,7 +202,7 @@ void taskTank(void* pv)
         if (!initialized && isRetryDue(nowMs, nextInitAttemptMs)) {
             initialized = TANK_TASK.init();
             const String configuredPort = i2cConfiguredPortForSensor(sf_ports::PortSensor::Tank, "TANK");
-            hmiSetPortLedInitResult(configuredPort, initialized);
+            hmiSetPortLedStatus(configuredPort, initialized, false);
             if (!initialized) {
                 M5_LOGW("[TANK] Init failed");
                 scheduleRetry(nextInitAttemptMs, nowMs);

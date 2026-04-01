@@ -55,7 +55,7 @@ void hmiSetAllBoardLedsWhite();
  * @param configuredPort Port name (A1/A2/B1/B2/C1/C2, case-insensitive).
  * @param initialized True when port init succeeded, false when it failed.
  */
-void hmiSetPortLedInitResult(const String& configuredPort, bool initialized);
+void hmiSetPortLedStatus(const String& configuredPort, bool initialized, bool error);
 
 /**
  * @brief Human-Machine Interface runtime for display and local controls.

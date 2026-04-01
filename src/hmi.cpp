@@ -65,6 +65,7 @@
 
 #include <M5GFX.h>
 #include <M5Unified.h>
+#include <Adafruit_NeoPixel.h>
 
 #include <memory>
 #include <mutex>
@@ -74,7 +75,6 @@
 #include "gaz.h"
 #include "mqtt.h"
 #include "ports.h"
-#include "utility/led/LED_Strip_Class.hpp"
 
 namespace {
 
@@ -146,7 +146,7 @@ void drawCenteredTextLine(lgfx::LGFXBase& surface,
 }
 
 constexpr size_t kBoardLedCount = 7;
-constexpr size_t kStatusLedIndex = 6;
+constexpr size_t kBoardLedPin = 4;
 
 std::mutex g_hmiLedMutex;
 bool g_hmiLedConfigured = false;
@@ -157,48 +157,26 @@ size_t ledIndexForPortId(const sf_ports::PortId id)
     case sf_ports::PortId::PortA1: return 0;
     case sf_ports::PortId::PortA2: return 1;
     case sf_ports::PortId::PortB1: return 2;
-    case sf_ports::PortId::PortB2: return 3;
-    case sf_ports::PortId::PortC1: return 4;
-    case sf_ports::PortId::PortC2: return 5;
-    default: return kStatusLedIndex;
+    case sf_ports::PortId::PortB2: return 6;
+    case sf_ports::PortId::PortC1: return 5;
+    case sf_ports::PortId::PortC2: return 4;
+    default: return 3;
     }
 }
 
+Adafruit_NeoPixel strip(kBoardLedCount, kBoardLedPin, NEO_GRB + NEO_KHZ800);
+
 bool initBoardLeds()
 {
-    M5.begin();
-
     if (g_hmiLedConfigured && M5.Led.getCount() == kBoardLedCount) {
         return true;
     }
 
-    const int pinRgbLed = M5.getPin(m5::pin_name_t::rgb_led);
-    if (pinRgbLed < 0) {
-        return false;
-    }
+    strip.begin();
+    strip.setBrightness(50);   // 0–255, ici 50
+    strip.show();
 
-    auto busLed = std::make_shared<m5::LedBus_RMT>();
-    auto busCfg = busLed->getConfig();
-    busCfg.pin_data = pinRgbLed;
-    busLed->setConfig(busCfg);
-
-    auto ledStrip = std::make_shared<m5::LED_Strip_Class>();
-    auto ledCfg = ledStrip->getConfig();
-    ledCfg.led_count = kBoardLedCount;
-    ledCfg.byte_per_led = 3;
-    ledCfg.color_order = m5::LED_Strip_Class::config_t::color_order_grb;
-    ledStrip->setConfig(ledCfg);
-    ledStrip->setBus(busLed);
-
-    M5.Led.setLedInstance(ledStrip);
-
-    g_hmiLedConfigured = M5.Led.begin() || M5.Led.getCount() != kBoardLedCount;
-    if (!g_hmiLedConfigured ) {
-        M5_LOGW("[HMI] LED initialization failed or LED count mismatch (expected %u, got %u) on pin %d",
-                kBoardLedCount, M5.Led.getCount(), pinRgbLed);
-    }
-
-    M5.Led.setBrightness(255);
+    g_hmiLedConfigured = true; 
 
     return g_hmiLedConfigured;
 }
@@ -216,16 +194,18 @@ void setPortLedInitResultLocked(const String& configuredPort, const bool initial
 
     const size_t index = ledIndexForPortId(def->id);
     if (!initialized) {
-        M5.Led.setColor(index, 255, 0, 0);
+        strip.setPixelColor(index, strip.Color(255, 0, 0));
+        strip.show();
         return;
     }
 
     const sf_ports::PortType type = sf_ports::portTypeFromString(sf_ports::configuredPortType(CONFIG, def->id));
     if (type == sf_ports::PortType::I2C) {
-        M5.Led.setColor(index, 0, 255, 0);
+        strip.setPixelColor(index, strip.Color(0, 255, 0));
     } else {
-        M5.Led.setColor(index, 0, 0, 255);
+        strip.setPixelColor(index, strip.Color(0, 0, 255));
     }
+    strip.show();
 }
 
 }  // namespace
@@ -238,10 +218,11 @@ void hmiSetAllBoardLedsWhite()
         return;
     }
 
-    M5.Led.setAllColor(255, 255, 255);
+    strip.fill(strip.Color(255, 255, 255), 0, kBoardLedCount);
+    strip.show();
 }
 
-void hmiSetPortLedInitResult(const String& configuredPort, const bool initialized)
+void hmiSetPortLedStatus(const String& configuredPort, const bool initialized, const bool error)
 {
     std::lock_guard<std::mutex> lock(g_hmiLedMutex);
     setPortLedInitResultLocked(configuredPort, initialized);
