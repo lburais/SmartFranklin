@@ -39,7 +39,6 @@ struct GpsState {
     mutable std::mutex mutex;
 
     bool initialized = false;
-    GPS::Source source = GPS::Source::None;
 
     uint8_t i2cAddress = 0x00;
 
@@ -177,17 +176,12 @@ bool readPoseAndTimeLocked(GpsState& state)
 }
 
 /** Initialize GPS backend for requested source and configured port. */
-bool initState(GpsState& state, GPS::Source source, const String& configuredPort, uint8_t i2cAddress)
+bool initState(GpsState& state, uint8_t i2cAddress)
 {
     std::lock_guard<std::mutex> lock(state.mutex);
 
     state.initialized = false;
-    state.source = GPS::Source::None;
     state.i2cAddress = i2cAddress;
-
-    if (source != GPS::Source::ExternalDfrobotGravity) {
-        return false;
-    }
 
     uint8_t probe = 0;
     if (!readRegisters(state, REG_USE_STAR, &probe, 1U)) {
@@ -197,13 +191,11 @@ bool initState(GpsState& state, GPS::Source source, const String& configuredPort
     // 0x07 = GPS + BeiDou + GLONASS in DFRobot firmware.
     static_cast<void>(writeRegister(state, 34U, 0x07));
 
-    state.source = source;
     state.initialized = true;
 
-    M5_LOGI("[GPS] initialized source:%s address:0x%02X port:%s",
-            GPS::sourceToString(state.source),
+    M5_LOGI("[GPS] initialized address:0x%02X port:%s",
             state.i2cAddress,
-            sf_ports::toString(sf_ports::findPortBySensor(sf_ports::PortSensor::Gps)->Name));
+            sf_ports::toString(getName(sf_ports::PortSensor::Gps)));
 
     return true;
 }
@@ -292,20 +284,13 @@ bool isInitializedState(const GpsState& state)
     return state.initialized;
 }
 
-/** Return current source enum from protected state. */
-GPS::Source sourceState(const GpsState& state)
-{
-    std::lock_guard<std::mutex> lock(state.mutex);
-    return state.source;
-}
-
 }  // namespace
 
 GPS GPS_MODULE;
 
-bool GPS::init(Source source, const String& configuredPort, uint8_t i2cAddress)
+bool GPS::init()
 {
-    return initState(GPS_STATE, source, configuredPort, i2cAddress);
+    return initState(GPS_STATE, deviceAddress);
 }
 
 void GPS::process()
@@ -322,25 +307,4 @@ void GPS::process()
 bool GPS::isInitialized() const
 {
     return isInitializedState(GPS_STATE);
-}
-
-GPS::Source GPS::source() const
-{
-    return sourceState(GPS_STATE);
-}
-
-const char* GPS::sourceName() const
-{
-    return sourceToString(source());
-}
-
-const char* GPS::sourceToString(Source source)
-{
-    switch (source) {
-    case Source::ExternalDfrobotGravity:
-        return "external_dfrobot_gravity";
-    case Source::None:
-    default:
-        return "none";
-    }
 }

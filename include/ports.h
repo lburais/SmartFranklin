@@ -12,8 +12,6 @@
 #include <cstddef>
 #include <cstdint>
 
-//struct SmartConfig;
-
 namespace sf_ports {
 
 enum class PortName : uint8_t {
@@ -61,11 +59,11 @@ struct PortDefinition {
 };
 
 const PortDefinition* allPortDefinitions(size_t& count);
-const PortDefinition* findPortBySensor(PortSensor sensor);
+const PortDefinition* findBySensor(PortSensor sensor);
 
-PortName getPortName(PortSensor sensor);
-PortType getPortType(PortSensor sensor);
-String getPortDeviceName(PortSensor sensor);
+PortName getName(PortSensor sensor);
+PortType getType(PortSensor sensor);
+String getDeviceName(PortSensor sensor);
 
 const char* toString(PortName name);
 const char* toString(PortType type);

@@ -14,6 +14,8 @@
 
 #include "ports.h"
 
+namespace sf_i2c {
+
 constexpr uint32_t kI2cInitRetryMs = 10000UL;
 
 /** @brief Initialize the bus selected by a configured port string. */
@@ -28,4 +30,6 @@ bool i2cDeviceExistsOnConfiguredPort(sf_ports::PortSensor sensor,
 /** @brief Publish configuration metadata for one logical I2C device. */
 void i2cPublishConfiguration(sf_ports::PortSensor sensor,
                              uint8_t address);
+
+}  // namespace sf_i2c
 

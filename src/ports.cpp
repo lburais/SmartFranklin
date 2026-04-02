@@ -110,7 +110,7 @@ const PortDefinition* allPortDefinitions(size_t& count)
     return kPortDefinitions;
 }
 
-const PortDefinition* findPortBySensor(PortSensor sensor)
+const PortDefinition* findBySensor(PortSensor sensor)
 {
     size_t count = 0;
     const PortDefinition* defs = allPortDefinitions(count);
@@ -122,18 +122,18 @@ const PortDefinition* findPortBySensor(PortSensor sensor)
     return nullptr;
 }
 
-PortName getPortName(const PortSensor sensor){
-    const PortDefinition* port = findPortBySensor(sensor);
+PortName getName(const PortSensor sensor){
+    const PortDefinition* port = findBySensor(sensor);
     return port ? port->Name : PortName::Unknown;
 }
 
-PortType getPortType(const PortSensor sensor){
-    const PortDefinition* port = findPortBySensor(sensor);
+PortType getType(const PortSensor sensor){
+    const PortDefinition* port = findBySensor(sensor);
     return port ? port->Type : PortType::Unknown;
 }
 
-String getPortDeviceName(const PortSensor sensor){
-    const PortDefinition* port = findPortBySensor(sensor);
+String getDeviceName(const PortSensor sensor){
+    const PortDefinition* port = findBySensor(sensor);
     return port ? port->DeviceName : "Unknown";
 }
 

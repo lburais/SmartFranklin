@@ -17,15 +17,7 @@
 
 class GPS {
 public:
-    /**
-     * @brief Supported GPS input sources.
-     */
-    enum class Source : uint8_t {
-        /** No valid source selected. */
-        None = 0,
-        /** External DFRobot Gravity I2C GNSS module. */
-        ExternalDfrobotGravity,
-    };
+    const uint8_t deviceAddress = 0x66;
 
     /**
     * @brief Initialize GPS runtime with the selected source and configured port.
@@ -34,7 +26,7 @@ public:
      * @param i2cAddress I2C address of the GPS unit when applicable.
      * @return True when initialization succeeds.
      */
-    bool init(Source source, const String& configuredPort, uint8_t i2cAddress);
+    bool init();
 
     /**
      * @brief Execute one periodic GPS processing cycle.
@@ -50,24 +42,6 @@ public:
      */
     bool isInitialized() const;
 
-    /**
-     * @brief Get currently selected source.
-     * @return Active source enum.
-     */
-    Source source() const;
-
-    /**
-     * @brief Get human-readable active source label.
-     * @return Source label string.
-     */
-    const char* sourceName() const;
-
-    /**
-     * @brief Convert source enum to a stable text identifier.
-     * @param source Source value to convert.
-     * @return Constant source name string.
-     */
-    static const char* sourceToString(Source source);
 };
 
 /** Global singleton instance used by runtime tasks. */

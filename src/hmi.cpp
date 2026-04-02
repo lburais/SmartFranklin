@@ -187,7 +187,7 @@ void setPortLedInitResultLocked(const sf_ports::PortSensor sensor, const bool in
         return;
     }
 
-    sf_ports::PortName portName = sf_ports::getPortName(sensor);
+    sf_ports::PortName portName = sf_ports::getName(sensor);
     const size_t index = ledIndexForPortName(portName);
     if (index == -1) {
         return;
@@ -199,7 +199,7 @@ void setPortLedInitResultLocked(const sf_ports::PortSensor sensor, const bool in
         return;
     }
 
-    const sf_ports::PortType type = sf_ports::getPortType(sensor);
+    const sf_ports::PortType type = sf_ports::getType(sensor);
     if (type == sf_ports::PortType::I2C) {
         strip.setPixelColor(index, strip.Color(0, 255, 0));
     } else {

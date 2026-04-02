@@ -132,20 +132,18 @@ bool Tank::init()
     std::lock_guard<std::mutex> lock(m_mutex);
 
     m_initialized = false;
-    m_activeConfiguredPort = String();
+    m_activeConfiguredPort = "";
 
-    const String configuredPort = i2cConfiguredPortForSensor(sf_ports::PortSensor::Tank, "TANK");
-
-    if (!i2cBeginConfiguredPort(configuredPort, "TANK") ||
-        !i2cDeviceExistsOnConfiguredPort(m_i2cAddress, configuredPort, "TANK")) {
+    if (!sf_i2c::i2cBeginConfiguredPort(sf_ports::PortSensor::Tank) ||
+        !sf_i2c::i2cDeviceExistsOnConfiguredPort(sf_ports::PortSensor::Tank, m_i2cAddress)) {
         return false;
     }
 
-    i2cPublishConfiguration("tank", configuredPort, m_i2cAddress);
-    m_activeConfiguredPort = configuredPort;
+    sf_i2c::i2cPublishConfiguration(sf_ports::PortSensor::Tank, m_i2cAddress);
+    m_activeConfiguredPort = sf_ports::toString(sf_ports::getName(sf_ports::PortSensor::Tank));
     m_initialized = true;
 
-    M5_LOGI("[TANK] initialized on port '%s' (0x%02X)", configuredPort.c_str(), m_i2cAddress);
+    M5_LOGI("[TANK] initialized on port '%s' (0x%02X)", m_activeConfiguredPort.c_str(), m_i2cAddress);
     return true;
 }
 
@@ -160,7 +158,7 @@ void Tank::process()
             return;
         }
 
-        i2cBeginConfiguredPort(m_activeConfiguredPort, "TANK");
+        sf_i2c::i2cBeginConfiguredPort(sf_ports::PortSensor::Tank);
         if (!readDistanceMm(m_i2cAddress, distanceMm)) {
             M5_LOGW("[TANK] No measurement");
             return;
@@ -193,7 +191,7 @@ void taskTank(void* pv)
     };
 
     auto scheduleRetry = [](uint32_t& nextAttemptMs, uint32_t nowMs) {
-        nextAttemptMs = nowMs + kI2cInitRetryMs;
+        nextAttemptMs = nowMs + sf_i2c::kI2cInitRetryMs;
     };
 
     for (;;) {
@@ -201,8 +199,7 @@ void taskTank(void* pv)
 
         if (!initialized && isRetryDue(nowMs, nextInitAttemptMs)) {
             initialized = TANK_TASK.init();
-            const String configuredPort = i2cConfiguredPortForSensor(sf_ports::PortSensor::Tank, "TANK");
-            hmiSetPortLedStatus(configuredPort, initialized, false);
+            hmiSetPortLedStatus(sf_ports::PortSensor::Tank, initialized, false);
             if (!initialized) {
                 M5_LOGW("[TANK] Init failed");
                 scheduleRetry(nextInitAttemptMs, nowMs);

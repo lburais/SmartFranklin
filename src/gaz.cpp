@@ -146,16 +146,16 @@ bool Gaz::init()
     m_lastFillPct        = 0;
     m_lastCalibrationGap = 1.0f;
 
-    if (!i2cBeginConfiguredPort(sf_ports::PortSensor::Gaz)) {
+    if (!sf_i2c::i2cBeginConfiguredPort(sf_ports::PortSensor::Gaz)) {
         return false;
     }
 
-    if (!i2cDeviceExistsOnConfiguredPort(sf_ports::PortSensor::Gaz, kI2CAddress)) {
+    if (!sf_i2c::i2cDeviceExistsOnConfiguredPort(sf_ports::PortSensor::Gaz, kI2CAddress)) {
         M5_LOGW("[GAZ] sensor (0x%02X) not found", kI2CAddress);
         return false;
     }
 
-    i2cPublishConfiguration(sf_ports::PortSensor::Gaz, kI2CAddress);
+    sf_i2c::i2cPublishConfiguration(sf_ports::PortSensor::Gaz, kI2CAddress);
 
     m_units = m5::unit::UnitUnified{};
     const bool ok = m_units.add(m_unit, Wire) && m_units.begin();
@@ -392,7 +392,7 @@ void taskGaz(void* pv)
     };
 
     auto scheduleRetry = [](uint32_t& nextAttemptMs, uint32_t nowMs) {
-        nextAttemptMs = nowMs + kI2cInitRetryMs;
+        nextAttemptMs = nowMs + sf_i2c::kI2cInitRetryMs;
     };
 
     for (;;) {
