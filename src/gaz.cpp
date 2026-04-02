@@ -22,7 +22,7 @@
 #include "config_store.h"
 #include "data_model.h"
 #include "hmi.h"
-#include "i2c.h"
+#include "interfaces.h"
 #include "mqtt.h"
 
 Gaz GAZ_TASK;
@@ -146,16 +146,16 @@ bool Gaz::init()
     m_lastFillPct        = 0;
     m_lastCalibrationGap = 1.0f;
 
-    if (!sf_i2c::i2cBeginConfiguredPort(sf_ports::PortSensor::Gaz)) {
+    if (!sf_i2c::i2cBeginConfiguredPort(sf_interfaces::InterfaceSensor::Gaz)) {
         return false;
     }
 
-    if (!sf_i2c::i2cDeviceExistsOnConfiguredPort(sf_ports::PortSensor::Gaz, kI2CAddress)) {
+    if (!sf_i2c::i2cDeviceExistsOnConfiguredPort(sf_interfaces::InterfaceSensor::Gaz, kI2CAddress)) {
         M5_LOGW("[GAZ] sensor (0x%02X) not found", kI2CAddress);
         return false;
     }
 
-    sf_i2c::i2cPublishConfiguration(sf_ports::PortSensor::Gaz, kI2CAddress);
+    sf_i2c::i2cPublishConfiguration(sf_interfaces::InterfaceSensor::Gaz, kI2CAddress);
 
     m_units = m5::unit::UnitUnified{};
     const bool ok = m_units.add(m_unit, Wire) && m_units.begin();
@@ -400,7 +400,7 @@ void taskGaz(void* pv)
 
         if (!initialized && isRetryDue(nowMs, nextInitAttemptMs)) {
             initialized = GAZ_TASK.init();
-            hmiSetPortLedStatus(sf_ports::PortSensor::Gaz, initialized, false);
+            hmiSetPortLedStatus(sf_interfaces::InterfaceSensor::Gaz, initialized, false);
             if (!initialized) {
                 M5_LOGW("[GAZ] Init failed");
                 scheduleRetry(nextInitAttemptMs, nowMs);

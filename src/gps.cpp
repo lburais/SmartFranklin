@@ -21,7 +21,7 @@
 
 #include "data_model.h"
 #include "mqtt.h"
-#include "ports.h"
+#include "interfaces.h"
 
 namespace {
 
@@ -195,7 +195,7 @@ bool initState(GpsState& state, uint8_t i2cAddress)
 
     M5_LOGI("[GPS] initialized address:0x%02X port:%s",
             state.i2cAddress,
-            sf_ports::toString(getName(sf_ports::PortSensor::Gps)));
+            sf_interfaces::toString(getName(sf_interfaces::InterfaceSensor::Gps)));
 
     return true;
 }

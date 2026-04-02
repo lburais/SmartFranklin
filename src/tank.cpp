@@ -20,7 +20,7 @@
 #include "config_store.h"
 #include "data_model.h"
 #include "hmi.h"
-#include "i2c.h"
+#include "interfaces.h"
 #include "mqtt.h"
 
 namespace {
@@ -134,13 +134,13 @@ bool Tank::init()
     m_initialized = false;
     m_activeConfiguredPort = "";
 
-    if (!sf_i2c::i2cBeginConfiguredPort(sf_ports::PortSensor::Tank) ||
-        !sf_i2c::i2cDeviceExistsOnConfiguredPort(sf_ports::PortSensor::Tank, m_i2cAddress)) {
+    if (!sf_i2c::i2cBeginConfiguredPort(sf_interfaces::InterfaceSensor::Tank) ||
+        !sf_i2c::i2cDeviceExistsOnConfiguredPort(sf_interfaces::InterfaceSensor::Tank, m_i2cAddress)) {
         return false;
     }
 
-    sf_i2c::i2cPublishConfiguration(sf_ports::PortSensor::Tank, m_i2cAddress);
-    m_activeConfiguredPort = sf_ports::toString(sf_ports::getName(sf_ports::PortSensor::Tank));
+    sf_i2c::i2cPublishConfiguration(sf_interfaces::InterfaceSensor::Tank, m_i2cAddress);
+    m_activeConfiguredPort = sf_interfaces::toString(sf_interfaces::getName(sf_interfaces::InterfaceSensor::Tank));
     m_initialized = true;
 
     M5_LOGI("[TANK] initialized on port '%s' (0x%02X)", m_activeConfiguredPort.c_str(), m_i2cAddress);
@@ -158,7 +158,7 @@ void Tank::process()
             return;
         }
 
-        sf_i2c::i2cBeginConfiguredPort(sf_ports::PortSensor::Tank);
+        sf_i2c::i2cBeginConfiguredPort(sf_interfaces::InterfaceSensor::Tank);
         if (!readDistanceMm(m_i2cAddress, distanceMm)) {
             M5_LOGW("[TANK] No measurement");
             return;
@@ -199,7 +199,7 @@ void taskTank(void* pv)
 
         if (!initialized && isRetryDue(nowMs, nextInitAttemptMs)) {
             initialized = TANK_TASK.init();
-            hmiSetPortLedStatus(sf_ports::PortSensor::Tank, initialized, false);
+            hmiSetPortLedStatus(sf_interfaces::InterfaceSensor::Tank, initialized, false);
             if (!initialized) {
                 M5_LOGW("[TANK] Init failed");
                 scheduleRetry(nextInitAttemptMs, nowMs);

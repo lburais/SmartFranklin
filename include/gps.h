@@ -13,7 +13,7 @@
 
 #include <Arduino.h>
 
-#include "ports.h"
+#include "interfaces.h"
 
 class GPS {
 public:

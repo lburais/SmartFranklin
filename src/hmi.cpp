@@ -74,7 +74,7 @@
 #include "data_model.h"
 #include "gaz.h"
 #include "mqtt.h"
-#include "ports.h"
+#include "interfaces.h"
 
 namespace {
 
@@ -151,15 +151,15 @@ constexpr size_t kBoardLedPin = 4;
 std::mutex g_hmiLedMutex;
 bool g_hmiLedConfigured = false;
 
-size_t ledIndexForPortName(const sf_ports::PortName name)
+size_t ledIndexForPortName(const sf_interfaces::InterfaceName name)
 {
     switch (name) {
-    case sf_ports::PortName::PortA1: return 0;
-    case sf_ports::PortName::PortA2: return 1;
-    case sf_ports::PortName::PortB1: return 2;
-    case sf_ports::PortName::PortB2: return 6;
-    case sf_ports::PortName::PortC1: return 5;
-    case sf_ports::PortName::PortC2: return 4;
+    case sf_interfaces::InterfaceName::PortA1: return 0;
+    case sf_interfaces::InterfaceName::PortA2: return 6;
+    case sf_interfaces::InterfaceName::PortB1: return 1;
+    case sf_interfaces::InterfaceName::PortB2: return 5;
+    case sf_interfaces::InterfaceName::PortC1: return 2;
+    case sf_interfaces::InterfaceName::PortC2: return 4;
     default: return -1;
     }
 }
@@ -181,13 +181,13 @@ bool initBoardLeds()
     return g_hmiLedConfigured;
 }
 
-void setPortLedInitResultLocked(const sf_ports::PortSensor sensor, const bool initialized)
+void setPortLedInitResultLocked(const sf_interfaces::InterfaceSensor sensor, const bool initialized)
 {
     if (!initBoardLeds()) {
         return;
     }
 
-    sf_ports::PortName portName = sf_ports::getName(sensor);
+    sf_interfaces::InterfaceName portName = sf_interfaces::getName(sensor);
     const size_t index = ledIndexForPortName(portName);
     if (index == -1) {
         return;
@@ -199,8 +199,8 @@ void setPortLedInitResultLocked(const sf_ports::PortSensor sensor, const bool in
         return;
     }
 
-    const sf_ports::PortType type = sf_ports::getType(sensor);
-    if (type == sf_ports::PortType::I2C) {
+    const sf_interfaces::InterfaceType type = sf_interfaces::getType(sensor);
+    if (type == sf_interfaces::InterfaceType::I2C) {
         strip.setPixelColor(index, strip.Color(0, 255, 0));
     } else {
         strip.setPixelColor(index, strip.Color(0, 0, 255));
@@ -222,7 +222,7 @@ void hmiSetAllBoardLedsWhite()
     strip.show();
 }
 
-void hmiSetPortLedStatus(const sf_ports::PortSensor sensor, const bool initialized, const bool error)
+void hmiSetPortLedStatus(const sf_interfaces::InterfaceSensor sensor, const bool initialized, const bool error)
 {
     std::lock_guard<std::mutex> lock(g_hmiLedMutex);
     setPortLedInitResultLocked(sensor, initialized);

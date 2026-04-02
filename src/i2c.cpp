@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "i2c.h"
+#include "interfaces.h"
 
 #include <M5Unified.h>
 #include <Wire.h>
@@ -23,10 +23,10 @@ std::mutex g_i2cRouteMutex;
 bool g_wireInitialized = false;
 uint32_t g_activeWireClockHz = 0;
 
-bool i2cBeginConfiguredPort(const sf_ports::PortSensor sensor, const uint32_t clockHz)
+bool i2cBeginConfiguredPort(const sf_interfaces::InterfaceSensor sensor, const uint32_t clockHz)
 {
-    sf_ports::PortType portType = sf_ports::getType(sensor);
-    if (portType != sf_ports::PortType::I2C) {
+    sf_interfaces::InterfaceType portType = sf_interfaces::getType(sensor);
+    if (portType != sf_interfaces::InterfaceType::I2C) {
         return false;
     }
 
@@ -59,12 +59,12 @@ bool i2cBeginConfiguredPort(const sf_ports::PortSensor sensor, const uint32_t cl
 
 }
 
-bool i2cDeviceExistsOnConfiguredPort(const sf_ports::PortSensor sensor,
+bool i2cDeviceExistsOnConfiguredPort(const sf_interfaces::InterfaceSensor sensor,
                                      uint8_t deviceAddress,
                                      const uint32_t clockHz)
 {
-    sf_ports::PortType portType = sf_ports::getType(sensor);
-    if (portType != sf_ports::PortType::I2C) {
+    sf_interfaces::InterfaceType portType = sf_interfaces::getType(sensor);
+    if (portType != sf_interfaces::InterfaceType::I2C) {
         return false;
     }
 
@@ -76,17 +76,17 @@ bool i2cDeviceExistsOnConfiguredPort(const sf_ports::PortSensor sensor,
     return Wire.endTransmission() == 0;
 }
 
-void i2cPublishConfiguration(const sf_ports::PortSensor sensor, const uint8_t address)
+void i2cPublishConfiguration(const sf_interfaces::InterfaceSensor sensor, const uint8_t address)
 {
     char addressBuf[8] = {0};
     char topicBuf[64] = {0};
-    const char* topicTag = sf_ports::toString(sensor);
+    const char* topicTag = sf_interfaces::toString(sensor);
 
     snprintf(addressBuf, sizeof(addressBuf), "0x%02X", address);
 
-    const String name = toString(sf_ports::getName(sensor));
-    const String type = toString(sf_ports::getType(sensor));
-    const String deviceName = sf_ports::getDeviceName(sensor);
+    const String name = sf_interfaces::toString(sf_interfaces::getName(sensor));
+    const String type = sf_interfaces::toString(sf_interfaces::getType(sensor));
+    const String deviceName = sf_interfaces::getDeviceName(sensor);
 
     snprintf(topicBuf, sizeof(topicBuf), "smartfranklin/system/i2c/%s/address", topicTag);
     sf_mqtt::publish(topicBuf, addressBuf, 1, true);

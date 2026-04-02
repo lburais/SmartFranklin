@@ -45,7 +45,7 @@
 
 #include <Arduino.h>
 
-#include "ports.h"
+#include "interfaces.h"
 
 /**
  * @brief Sets all 7 board RGB LEDs to white (startup splash state).
@@ -57,7 +57,7 @@
  * @param configuredPort Port name (A1/A2/B1/B2/C1/C2, case-insensitive).
  * @param initialized True when port init succeeded, false when it failed.
  */
-void hmiSetPortLedStatus(sf_ports::PortSensor sensor, bool initialized, bool error);
+void hmiSetPortLedStatus(sf_interfaces::InterfaceSensor sensor, bool initialized, bool error);
 
 /**
  * @brief Human-Machine Interface runtime for display and local controls.

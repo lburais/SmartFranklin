@@ -17,7 +17,7 @@
 
 #include "config_store.h"
 #include "data_model.h"
-#include "i2c.h"
+#include "interfaces.h"
 #include "mqtt.h"
 
 float Level::sanitizePositive(const float value, const float fallback, const float minValue, const float maxValue)

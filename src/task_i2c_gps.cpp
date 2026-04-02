@@ -4,7 +4,7 @@
 #include "config_store.h"
 #include "gps.h"
 #include "hmi.h"
-#include "i2c.h"
+#include "interfaces.h"
 
 void taskGps(void* pv)
 {
@@ -26,15 +26,15 @@ void taskGps(void* pv)
         const uint32_t nowMs = millis();
 
         if (!initialized && isRetryDue(nowMs, nextInitAttemptMs)) {
-            if (!sf_i2c::i2cBeginConfiguredPort(sf_ports::PortSensor::Gps) ||
-                !sf_i2c::i2cDeviceExistsOnConfiguredPort(sf_ports::PortSensor::Gps, GPS_MODULE.deviceAddress)) {
+            if (!sf_i2c::i2cBeginConfiguredPort(sf_interfaces::InterfaceSensor::Gps) ||
+                !sf_i2c::i2cDeviceExistsOnConfiguredPort(sf_interfaces::InterfaceSensor::Gps, GPS_MODULE.deviceAddress)) {
                 initialized = false;
-                hmiSetPortLedStatus(sf_ports::PortSensor::Gps, false, false);
+                hmiSetPortLedStatus(sf_interfaces::InterfaceSensor::Gps, false, false);
                 scheduleRetry(nextInitAttemptMs, nowMs);
             } else {
-                sf_i2c::i2cPublishConfiguration(sf_ports::PortSensor::Gps, GPS_MODULE.deviceAddress);
+                sf_i2c::i2cPublishConfiguration(sf_interfaces::InterfaceSensor::Gps, GPS_MODULE.deviceAddress);
                 initialized = GPS_MODULE.init();
-                hmiSetPortLedStatus(sf_ports::PortSensor::Gps, initialized, false);
+                hmiSetPortLedStatus(sf_interfaces::InterfaceSensor::Gps, initialized, false);
                 if (!initialized) {
                     scheduleRetry(nextInitAttemptMs, nowMs);
                 }
@@ -46,7 +46,7 @@ void taskGps(void* pv)
         }
 
         if (initialized) {
-            sf_i2c::i2cBeginConfiguredPort(sf_ports::PortSensor::Gps);
+            sf_i2c::i2cBeginConfiguredPort(sf_interfaces::InterfaceSensor::Gps);
             GPS_MODULE.process();
         }
 

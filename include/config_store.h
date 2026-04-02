@@ -40,7 +40,7 @@
 
 #include <Arduino.h>
 
-#include "ports.h"
+#include "interfaces.h"
 
 /**
  * @brief Persistent SmartFranklin configuration model.
