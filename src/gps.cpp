@@ -19,7 +19,9 @@
 #include <cstdint>
 #include <mutex>
 
+#include "config_store.h"
 #include "data_model.h"
+#include "hmi.h"
 #include "mqtt.h"
 #include "interfaces.h"
 
@@ -33,55 +35,33 @@ constexpr uint8_t REG_USE_STAR = 19;
 constexpr uint8_t REG_ALT_H = 20;
 constexpr uint8_t REG_SOG_H = 23;
 constexpr uint8_t REG_COG_H = 26;
-constexpr uint32_t PROCESS_PERIOD_MS = 1000UL;
+constexpr uint32_t kGpsI2cClockHz = 100000U;
 
-struct GpsState {
-    mutable std::mutex mutex;
+}  // namespace
 
-    bool initialized = false;
+GPS GPS_TASK;
 
-    uint8_t i2cAddress = 0x00;
-
-    double latitudeDeg = 0.0;
-    double longitudeDeg = 0.0;
-    double altitudeM = 0.0;
-    double speedKnots = 0.0;
-    double courseDeg = 0.0;
-    uint8_t satellites = 0;
-    bool hasFix = false;
-    uint16_t year = 0;
-    uint8_t month = 0;
-    uint8_t day = 0;
-    uint8_t hour = 0;
-    uint8_t minute = 0;
-    uint8_t second = 0;
-};
-
-GpsState GPS_STATE;
-
-/** Write a single device register through the configured I2C port. */
-bool writeRegister(const GpsState& state, uint8_t reg, uint8_t value)
+bool GPS::writeRegister(const uint8_t reg, const uint8_t value) const
 {
-    Wire.beginTransmission(state.i2cAddress);
+    Wire.beginTransmission(m_i2cAddress);
     Wire.write(reg);
     Wire.write(value);
     return Wire.endTransmission() == 0;
 }
 
-/** Read contiguous registers from GPS through the selected configured port. */
-bool readRegisters(const GpsState& state, uint8_t reg, uint8_t* out, size_t len)
+bool GPS::readRegisters(const uint8_t reg, uint8_t* out, const size_t len) const
 {
     if (out == nullptr || len == 0U) {
         return false;
     }
 
-    Wire.beginTransmission(state.i2cAddress);
+    Wire.beginTransmission(m_i2cAddress);
     Wire.write(reg);
     if (Wire.endTransmission(false) != 0) {
         return false;
     }
 
-    const size_t readCount = Wire.requestFrom(state.i2cAddress, static_cast<uint8_t>(len));
+    const size_t readCount = Wire.requestFrom(m_i2cAddress, static_cast<uint8_t>(len));
     if (readCount < len) {
         return false;
     }
@@ -93,15 +73,13 @@ bool readRegisters(const GpsState& state, uint8_t reg, uint8_t* out, size_t len)
     return true;
 }
 
-/** Decode DFRobot fixed-point (2-byte integer + 1-byte hundredth) format. */
-double decodeUnsigned_2_1_100(uint8_t b0, uint8_t b1, uint8_t b2)
+double GPS::decodeUnsigned_2_1_100(const uint8_t b0, const uint8_t b1, const uint8_t b2)
 {
     const uint16_t highLow = static_cast<uint16_t>((static_cast<uint16_t>(b0 & 0x7F) << 8) | b1);
     return static_cast<double>(highLow) + (static_cast<double>(b2) / 100.0);
 }
 
-/** Acquire one complete pose/time sample and update locked state fields. */
-bool readPoseAndTimeLocked(GpsState& state)
+bool GPS::readPoseAndTimeLocked()
 {
     uint8_t dateTimeRaw[7] = {0};
     uint8_t latRaw[6] = {0};
@@ -111,22 +89,22 @@ bool readPoseAndTimeLocked(GpsState& state)
     uint8_t sogRaw[3] = {0};
     uint8_t cogRaw[3] = {0};
 
-    if (!readRegisters(state, REG_YEAR_H, dateTimeRaw, sizeof(dateTimeRaw)) ||
-        !readRegisters(state, REG_LAT_1, latRaw, sizeof(latRaw)) ||
-        !readRegisters(state, REG_LON_1, lonRaw, sizeof(lonRaw)) ||
-        !readRegisters(state, REG_USE_STAR, satRaw, sizeof(satRaw)) ||
-        !readRegisters(state, REG_ALT_H, altRaw, sizeof(altRaw)) ||
-        !readRegisters(state, REG_SOG_H, sogRaw, sizeof(sogRaw)) ||
-        !readRegisters(state, REG_COG_H, cogRaw, sizeof(cogRaw))) {
+    if (!readRegisters(REG_YEAR_H, dateTimeRaw, sizeof(dateTimeRaw)) ||
+        !readRegisters(REG_LAT_1, latRaw, sizeof(latRaw)) ||
+        !readRegisters(REG_LON_1, lonRaw, sizeof(lonRaw)) ||
+        !readRegisters(REG_USE_STAR, satRaw, sizeof(satRaw)) ||
+        !readRegisters(REG_ALT_H, altRaw, sizeof(altRaw)) ||
+        !readRegisters(REG_SOG_H, sogRaw, sizeof(sogRaw)) ||
+        !readRegisters(REG_COG_H, cogRaw, sizeof(cogRaw))) {
         return false;
     }
 
-    state.year = static_cast<uint16_t>((static_cast<uint16_t>(dateTimeRaw[0]) << 8) | dateTimeRaw[1]);
-    state.month = dateTimeRaw[2];
-    state.day = dateTimeRaw[3];
-    state.hour = dateTimeRaw[4];
-    state.minute = dateTimeRaw[5];
-    state.second = dateTimeRaw[6];
+    m_year = static_cast<uint16_t>((static_cast<uint16_t>(dateTimeRaw[0]) << 8) | dateTimeRaw[1]);
+    m_month = dateTimeRaw[2];
+    m_day = dateTimeRaw[3];
+    m_hour = dateTimeRaw[4];
+    m_minute = dateTimeRaw[5];
+    m_second = dateTimeRaw[6];
 
     const uint8_t latDD = latRaw[0];
     const uint8_t latMM = latRaw[1];
@@ -159,49 +137,23 @@ bool readPoseAndTimeLocked(GpsState& state)
         longitude = -longitude;
     }
 
-    state.latitudeDeg = latitude;
-    state.longitudeDeg = longitude;
-    state.satellites = satRaw[0];
-    state.altitudeM = decodeUnsigned_2_1_100(altRaw[0], altRaw[1], altRaw[2]);
-    state.speedKnots = decodeUnsigned_2_1_100(sogRaw[0], sogRaw[1], sogRaw[2]);
-    state.courseDeg = decodeUnsigned_2_1_100(cogRaw[0], cogRaw[1], cogRaw[2]);
+    m_latitudeDeg = latitude;
+    m_longitudeDeg = longitude;
+    m_satellites = satRaw[0];
+    m_altitudeM = decodeUnsigned_2_1_100(altRaw[0], altRaw[1], altRaw[2]);
+    m_speedKnots = decodeUnsigned_2_1_100(sogRaw[0], sogRaw[1], sogRaw[2]);
+    m_courseDeg = decodeUnsigned_2_1_100(cogRaw[0], cogRaw[1], cogRaw[2]);
 
-    const bool validDate = (state.year >= 2000U && state.month >= 1U && state.month <= 12U && state.day >= 1U && state.day <= 31U);
-    const bool validUtc = (state.hour <= 23U && state.minute <= 59U && state.second <= 59U);
-    const bool validCoords = std::isfinite(state.latitudeDeg) && std::isfinite(state.longitudeDeg) &&
-                             fabs(state.latitudeDeg) <= 90.0 && fabs(state.longitudeDeg) <= 180.0;
+    const bool validDate = (m_year >= 2000U && m_month >= 1U && m_month <= 12U && m_day >= 1U && m_day <= 31U);
+    const bool validUtc = (m_hour <= 23U && m_minute <= 59U && m_second <= 59U);
+    const bool validCoords = std::isfinite(m_latitudeDeg) && std::isfinite(m_longitudeDeg) &&
+                             fabs(m_latitudeDeg) <= 90.0 && fabs(m_longitudeDeg) <= 180.0;
 
-    state.hasFix = (state.satellites > 0U) && validDate && validUtc && validCoords;
+    m_hasFix = (m_satellites > 0U) && validDate && validUtc && validCoords;
     return true;
 }
 
-/** Initialize GPS backend for requested source and configured port. */
-bool initState(GpsState& state, uint8_t i2cAddress)
-{
-    std::lock_guard<std::mutex> lock(state.mutex);
-
-    state.initialized = false;
-    state.i2cAddress = i2cAddress;
-
-    uint8_t probe = 0;
-    if (!readRegisters(state, REG_USE_STAR, &probe, 1U)) {
-        return false;
-    }
-
-    // 0x07 = GPS + BeiDou + GLONASS in DFRobot firmware.
-    static_cast<void>(writeRegister(state, 34U, 0x07));
-
-    state.initialized = true;
-
-    M5_LOGI("[GPS] initialized address:0x%02X port:%s",
-            state.i2cAddress,
-            sf_interfaces::toString(getName(sf_interfaces::InterfaceSensor::Gps)));
-
-    return true;
-}
-
-/** Publish latest GPS sample to MQTT topics. */
-void publishFix(const GpsState& state, const char* dateBuf, const char* utcBuf)
+void GPS::publishFix(const char* dateBuf, const char* utcBuf) const
 {
     char latBuf[24] = {0};
     char lonBuf[24] = {0};
@@ -210,14 +162,14 @@ void publishFix(const GpsState& state, const char* dateBuf, const char* utcBuf)
     char cogBuf[24] = {0};
     char satsBuf[8] = {0};
 
-    snprintf(latBuf, sizeof(latBuf), "%.7f", state.latitudeDeg);
-    snprintf(lonBuf, sizeof(lonBuf), "%.7f", state.longitudeDeg);
-    snprintf(altBuf, sizeof(altBuf), "%.2f", state.altitudeM);
-    snprintf(sogBuf, sizeof(sogBuf), "%.2f", state.speedKnots);
-    snprintf(cogBuf, sizeof(cogBuf), "%.2f", state.courseDeg);
-    snprintf(satsBuf, sizeof(satsBuf), "%u", static_cast<unsigned>(state.satellites));
+    snprintf(latBuf, sizeof(latBuf), "%.7f", m_latitudeDeg);
+    snprintf(lonBuf, sizeof(lonBuf), "%.7f", m_longitudeDeg);
+    snprintf(altBuf, sizeof(altBuf), "%.2f", m_altitudeM);
+    snprintf(sogBuf, sizeof(sogBuf), "%.2f", m_speedKnots);
+    snprintf(cogBuf, sizeof(cogBuf), "%.2f", m_courseDeg);
+    snprintf(satsBuf, sizeof(satsBuf), "%u", static_cast<unsigned>(m_satellites));
 
-    sf_mqtt::publish("smartfranklin/gps/has_fix", state.hasFix ? "1" : "0");
+    sf_mqtt::publish("smartfranklin/gps/has_fix", m_hasFix ? "1" : "0");
     sf_mqtt::publish("smartfranklin/gps/latitude_deg", latBuf);
     sf_mqtt::publish("smartfranklin/gps/longitude_deg", lonBuf);
     sf_mqtt::publish("smartfranklin/gps/altitude_m", altBuf);
@@ -227,84 +179,136 @@ void publishFix(const GpsState& state, const char* dateBuf, const char* utcBuf)
     sf_mqtt::publish("smartfranklin/gps/date", dateBuf);
     sf_mqtt::publish("smartfranklin/gps/utc", utcBuf);
 
-    if ( state.hasFix ) {
+    if (m_hasFix) {
         M5_LOGI("[GPS] sat=%s lat=%s lon=%s alt=%s date=%s utc=%s", satsBuf, latBuf, lonBuf, altBuf, dateBuf, utcBuf);
     } else {
         M5_LOGI("[GPS] no fix");
     }
 }
 
-/** Execute one processing cycle: read, validate, persist and publish. */
-void processState(GpsState& state)
+bool GPS::init()
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    m_initialized = false;
+    m_i2cAddress = deviceAddress;
+    m_lastProcessMs = 0;
+
+    if (!sf_i2c::i2cBeginConfiguredPort(sf_interfaces::InterfaceSensor::Gps, kGpsI2cClockHz)) {
+        M5_LOGW("[GPS] I2C bus init failed");
+        return false;
+    }
+
+    if (!sf_i2c::i2cDeviceExistsOnConfiguredPort(sf_interfaces::InterfaceSensor::Gps,
+                                                  m_i2cAddress,
+                                                  kGpsI2cClockHz)) {
+        M5_LOGW("[GPS] device (0x%02X) not found", m_i2cAddress);
+        return false;
+    }
+
+    sf_i2c::i2cPublishConfiguration(sf_interfaces::InterfaceSensor::Gps, m_i2cAddress);
+
+    uint8_t probe = 0;
+    if (!readRegisters(REG_USE_STAR, &probe, 1U)) {
+        M5_LOGE("[GPS] cannot read register address:0x%02X port:%s",
+                m_i2cAddress,
+                sf_interfaces::toString(sf_interfaces::getName(sf_interfaces::InterfaceSensor::Gps)));
+        return false;
+    }
+
+    // 0x07 = GPS + BeiDou + GLONASS in DFRobot firmware.
+    static_cast<void>(writeRegister(34U, 0x07));
+
+    m_initialized = true;
+
+    M5_LOGI("[GPS] initialized address:0x%02X port:%s",
+            m_i2cAddress,
+            sf_interfaces::toString(sf_interfaces::getName(sf_interfaces::InterfaceSensor::Gps)));
+    return true;
+}
+
+void GPS::process()
 {
     char dateBuf[16] = {0};
     char utcBuf[16] = {0};
 
+    const uint32_t nowMs = millis();
+
     {
-        std::lock_guard<std::mutex> lock(state.mutex);
-        if (!state.initialized) {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (!m_initialized) {
             return;
         }
 
-        if (!readPoseAndTimeLocked(state)) {
+        if ((nowMs - m_lastProcessMs) < kProcessPeriodMs) {
+            return;
+        }
+        m_lastProcessMs = nowMs;
+
+        if (!readPoseAndTimeLocked()) {
             M5_LOGW("[GPS] sample read failed");
             return;
         }
 
         snprintf(dateBuf, sizeof(dateBuf), "%04u-%02u-%02u",
-                 static_cast<unsigned>(state.year),
-                 static_cast<unsigned>(state.month),
-                 static_cast<unsigned>(state.day));
+                 static_cast<unsigned>(m_year),
+                 static_cast<unsigned>(m_month),
+                 static_cast<unsigned>(m_day));
         snprintf(utcBuf, sizeof(utcBuf), "%02u:%02u:%02u",
-                 static_cast<unsigned>(state.hour),
-                 static_cast<unsigned>(state.minute),
-                 static_cast<unsigned>(state.second));
+                 static_cast<unsigned>(m_hour),
+                 static_cast<unsigned>(m_minute),
+                 static_cast<unsigned>(m_second));
+
+        {
+            std::lock_guard<std::mutex> dataLock(DATA_MUTEX);
+            DATA.gps_has_fix = m_hasFix;
+            DATA.gps_latitude_deg = m_latitudeDeg;
+            DATA.gps_longitude_deg = m_longitudeDeg;
+            DATA.gps_altitude_m = m_altitudeM;
+            DATA.gps_speed_knots = m_speedKnots;
+            DATA.gps_course_deg = m_courseDeg;
+            DATA.gps_satellites = m_satellites;
+            DATA.gps_date = dateBuf;
+            DATA.gps_utc = utcBuf;
+        }
+
+        publishFix(dateBuf, utcBuf);
     }
+}
 
-    {
-        std::lock_guard<std::mutex> lock(DATA_MUTEX);
-        DATA.gps_has_fix = GPS_STATE.hasFix;
-        DATA.gps_latitude_deg = GPS_STATE.latitudeDeg;
-        DATA.gps_longitude_deg = GPS_STATE.longitudeDeg;
-        DATA.gps_altitude_m = GPS_STATE.altitudeM;
-        DATA.gps_speed_knots = GPS_STATE.speedKnots;
-        DATA.gps_course_deg = GPS_STATE.courseDeg;
-        DATA.gps_satellites = GPS_STATE.satellites;
-        DATA.gps_date = dateBuf;
-        DATA.gps_utc = utcBuf;
+void taskGps(void* pv)
+{
+    (void)pv;
+    M5_LOGI("[GPS] Task started");
+
+    bool     initialized       = false;
+    uint32_t nextInitAttemptMs = 0;
+
+    auto isRetryDue = [](uint32_t nowMs, uint32_t nextAttemptMs) {
+        return static_cast<int32_t>(nowMs - nextAttemptMs) >= 0;
+    };
+
+    auto scheduleRetry = [](uint32_t& nextAttemptMs, uint32_t nowMs) {
+        nextAttemptMs = nowMs + sf_i2c::kI2cInitRetryMs;
+    };
+
+    for (;;) {
+        const uint32_t nowMs = millis();
+
+        if (!initialized && isRetryDue(nowMs, nextInitAttemptMs)) {
+            initialized = GPS_TASK.init();
+            hmiSetPortLedStatus(sf_interfaces::InterfaceSensor::Gps, initialized, false);
+            if (!initialized) {
+                M5_LOGW("[GPS] Init failed");
+                scheduleRetry(nextInitAttemptMs, nowMs);
+            }
+        }
+
+        if (initialized) {
+            GPS_TASK.process();
+        }
+
+        const int loopMs = (CONFIG.task_i2c_loop_ms > 0) ? CONFIG.task_i2c_loop_ms : 1000;
+        vTaskDelay(pdMS_TO_TICKS(loopMs));
     }
-
-    publishFix(GPS_STATE, dateBuf, utcBuf);
-}
-
-/** Return module initialization flag from protected state. */
-bool isInitializedState(const GpsState& state)
-{
-    std::lock_guard<std::mutex> lock(state.mutex);
-    return state.initialized;
-}
-
-}  // namespace
-
-GPS GPS_MODULE;
-
-bool GPS::init()
-{
-    return initState(GPS_STATE, deviceAddress);
-}
-
-void GPS::process()
-{
-    static uint32_t lastProcessMs = 0;
-    const uint32_t now = millis();
-    if (now - lastProcessMs < PROCESS_PERIOD_MS) {
-        return;
-    }
-    lastProcessMs = now;
-    processState(GPS_STATE);
-}
-
-bool GPS::isInitialized() const
-{
-    return isInitializedState(GPS_STATE);
 }

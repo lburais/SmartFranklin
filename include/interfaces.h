@@ -80,12 +80,12 @@ constexpr uint32_t kI2cInitRetryMs = 10000UL;
 
 /** @brief Initialize the bus selected by a configured interface sensor. */
 bool i2cBeginConfiguredPort(sf_interfaces::InterfaceSensor sensor,
-                            uint32_t clockHz = 100000U);
+                            uint32_t clockHz = 400000U);
 
 /** @brief Check whether a device is reachable on a configured interface. */
 bool i2cDeviceExistsOnConfiguredPort(sf_interfaces::InterfaceSensor sensor,
                                      uint8_t deviceAddress,
-                                     uint32_t clockHz = 100000U);
+                                     uint32_t clockHz = 400000U);
 
 /** @brief Publish configuration metadata for one logical I2C device. */
 void i2cPublishConfiguration(sf_interfaces::InterfaceSensor sensor,

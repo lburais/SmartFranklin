@@ -149,6 +149,7 @@ void setup() {
     cfg.output_power = true;   // Enable 5V output power for peripheral devices
     cfg.internal_imu = true;
     cfg.internal_rtc = true;
+    cfg.fallback_board = m5::board_t::board_M5Station;
 
     M5.begin(cfg);
 

@@ -160,6 +160,7 @@ size_t ledIndexForPortName(const sf_interfaces::InterfaceName name)
     case sf_interfaces::InterfaceName::PortB2: return 5;
     case sf_interfaces::InterfaceName::PortC1: return 2;
     case sf_interfaces::InterfaceName::PortC2: return 4;
+    case sf_interfaces::InterfaceName::Internal: return 3;
     default: return -1;
     }
 }
