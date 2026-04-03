@@ -296,7 +296,8 @@ void taskLevel(void* pv)
             LEVEL_TASK.process();
         }
 
-        const int loopMs = (CONFIG.task_i2c_loop_ms > 0) ? CONFIG.task_i2c_loop_ms : 1000;
+        const uint32_t recurrenceMs = sf_interfaces::getRecurrenceMs(sf_interfaces::InterfaceSensor::Imu);
+        const int loopMs = (recurrenceMs > 0) ? static_cast<int>(recurrenceMs) : 1000;
         vTaskDelay(pdMS_TO_TICKS(loopMs));
     }
 }

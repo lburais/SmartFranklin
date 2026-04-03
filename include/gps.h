@@ -19,8 +19,6 @@
 
 class GPS {
 public:
-    const uint8_t deviceAddress = 0x66;
-
     /**
     * @brief Initialize GPS runtime on the configured I2C interface.
      * @return True when initialization succeeds.
@@ -52,7 +50,6 @@ private:
 
     mutable std::mutex m_mutex;
     bool m_initialized = false;
-    uint8_t m_i2cAddress = 0x00;
 
     double m_latitudeDeg = 0.0;
     double m_longitudeDeg = 0.0;

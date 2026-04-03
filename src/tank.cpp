@@ -74,25 +74,25 @@ int32_t distanceToFillPct(const int32_t distanceMm)
 
 bool readDistanceMm(const uint8_t i2cAddress, int32_t& distanceMm)
 {
-    Wire.beginTransmission(i2cAddress);
-    Wire.write(TANK_DISTANCE_REGISTER);
-    if (Wire.endTransmission() != 0) {
+    Wire1.beginTransmission(i2cAddress);
+    Wire1.write(TANK_DISTANCE_REGISTER);
+    if (Wire1.endTransmission() != 0) {
         return false;
     }
 
     delay(TANK_CONVERSION_DELAY_MS);
 
-    const uint8_t readCount = Wire.requestFrom(i2cAddress, static_cast<uint8_t>(3));
+    const uint8_t readCount = Wire1.requestFrom(i2cAddress, static_cast<uint8_t>(3));
     if (readCount < 3) {
         return false;
     }
 
     uint32_t rawDistance = 0;
-    rawDistance = static_cast<uint32_t>(Wire.read());
+    rawDistance = static_cast<uint32_t>(Wire1.read());
     rawDistance <<= 8;
-    rawDistance |= static_cast<uint32_t>(Wire.read());
+    rawDistance |= static_cast<uint32_t>(Wire1.read());
     rawDistance <<= 8;
-    rawDistance |= static_cast<uint32_t>(Wire.read());
+    rawDistance |= static_cast<uint32_t>(Wire1.read());
 
     const float distanceRawMm = static_cast<float>(rawDistance) / 1000.0f;
     if (!std::isfinite(distanceRawMm)) {
@@ -130,20 +130,27 @@ bool Tank::isInitialized() const
 bool Tank::init()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::recursive_mutex> i2cLock(sf_i2c::i2cMutex());
+
+    const uint8_t i2cAddress = sf_interfaces::getAddress(sf_interfaces::InterfaceSensor::Tank);
+    if (i2cAddress == 0) {
+        M5_LOGW("[TANK] address not defined in interfaces");
+        return false;
+    }
 
     m_initialized = false;
     m_activeConfiguredPort = "";
 
     if (!sf_i2c::i2cBeginConfiguredPort(sf_interfaces::InterfaceSensor::Tank) ||
-        !sf_i2c::i2cDeviceExistsOnConfiguredPort(sf_interfaces::InterfaceSensor::Tank, m_i2cAddress)) {
+        !sf_i2c::i2cDeviceExistsOnConfiguredPort(sf_interfaces::InterfaceSensor::Tank, i2cAddress)) {
         return false;
     }
 
-    sf_i2c::i2cPublishConfiguration(sf_interfaces::InterfaceSensor::Tank, m_i2cAddress);
+    sf_i2c::i2cPublishConfiguration(sf_interfaces::InterfaceSensor::Tank, i2cAddress);
     m_activeConfiguredPort = sf_interfaces::toString(sf_interfaces::getName(sf_interfaces::InterfaceSensor::Tank));
     m_initialized = true;
 
-    M5_LOGI("[TANK] initialized on port '%s' (0x%02X)", m_activeConfiguredPort.c_str(), m_i2cAddress);
+    M5_LOGI("[TANK] initialized on port '%s' (0x%02X)", m_activeConfiguredPort.c_str(), i2cAddress);
     return true;
 }
 
@@ -154,12 +161,19 @@ void Tank::process()
 
     {
         std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::recursive_mutex> i2cLock(sf_i2c::i2cMutex());
+        const uint8_t i2cAddress = sf_interfaces::getAddress(sf_interfaces::InterfaceSensor::Tank);
+        if (i2cAddress == 0) {
+            M5_LOGW("[TANK] address not defined in interfaces");
+            return;
+        }
+
         if (!m_initialized || m_activeConfiguredPort.isEmpty()) {
             return;
         }
 
         sf_i2c::i2cBeginConfiguredPort(sf_interfaces::InterfaceSensor::Tank);
-        if (!readDistanceMm(m_i2cAddress, distanceMm)) {
+        if (!readDistanceMm(i2cAddress, distanceMm)) {
             M5_LOGW("[TANK] No measurement");
             return;
         }
@@ -210,7 +224,8 @@ void taskTank(void* pv)
             TANK_TASK.process();
         }
 
-        const int loopMs = (CONFIG.task_i2c_loop_ms > 0) ? CONFIG.task_i2c_loop_ms : 1000;
+        const uint32_t recurrenceMs = sf_interfaces::getRecurrenceMs(sf_interfaces::InterfaceSensor::Tank);
+        const int loopMs = (recurrenceMs > 0) ? static_cast<int>(recurrenceMs) : 1000;
         vTaskDelay(pdMS_TO_TICKS(loopMs));
     }
 }

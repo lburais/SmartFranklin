@@ -54,7 +54,6 @@ private:
 	mutable std::mutex m_mutex;
 	bool m_initialized = false;
 	String m_activeConfiguredPort;
-	uint8_t m_i2cAddress = 0x57;
 };
 
 /** Global singleton used by taskTank, mirroring LEVEL_TASK pattern. */

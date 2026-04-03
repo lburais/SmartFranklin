@@ -35,7 +35,7 @@ constexpr uint8_t REG_USE_STAR = 19;
 constexpr uint8_t REG_ALT_H = 20;
 constexpr uint8_t REG_SOG_H = 23;
 constexpr uint8_t REG_COG_H = 26;
-constexpr uint32_t kGpsI2cClockHz = 100000U;
+constexpr uint32_t kGpsI2cClockHz = 400000U;
 
 }  // namespace
 
@@ -43,31 +43,47 @@ GPS GPS_TASK;
 
 bool GPS::writeRegister(const uint8_t reg, const uint8_t value) const
 {
-    Wire.beginTransmission(m_i2cAddress);
-    Wire.write(reg);
-    Wire.write(value);
-    return Wire.endTransmission() == 0;
+    const uint8_t i2cAddress = sf_interfaces::getAddress(sf_interfaces::InterfaceSensor::Gps);
+    if (i2cAddress == 0) {
+        return false;
+    }
+
+    Wire1.beginTransmission(i2cAddress);
+    Wire1.write(reg);
+    Wire1.write(value);
+    return Wire1.endTransmission() == 0;
 }
 
 bool GPS::readRegisters(const uint8_t reg, uint8_t* out, const size_t len) const
 {
     if (out == nullptr || len == 0U) {
+        M5_LOGE("[GPS] params %d", len);
         return false;
     }
 
-    Wire.beginTransmission(m_i2cAddress);
-    Wire.write(reg);
-    if (Wire.endTransmission(false) != 0) {
+    const uint8_t i2cAddress = sf_interfaces::getAddress(sf_interfaces::InterfaceSensor::Gps);
+    if (i2cAddress == 0) {
         return false;
     }
 
-    const size_t readCount = Wire.requestFrom(m_i2cAddress, static_cast<uint8_t>(len));
+    Wire1.beginTransmission(i2cAddress);
+    Wire1.write(reg);
+    if (Wire1.endTransmission(false) != 0) {
+        M5_LOGE("[GPS] endTransmission");
+        return false;
+    }
+
+    const size_t readCount = Wire1.requestFrom(i2cAddress, static_cast<uint8_t>(len));
     if (readCount < len) {
+        M5_LOGE("[GPS] readCount %d/%d", readCount, len);
         return false;
+    } else {
+        M5_LOGI("[GPS] readCount %d/%d", readCount, len);
+
     }
 
     for (size_t i = 0; i < len; ++i) {
-        out[i] = static_cast<uint8_t>(Wire.read());
+        out[i] = static_cast<uint8_t>(Wire1.read());
     }
 
     return true;
@@ -189,9 +205,15 @@ void GPS::publishFix(const char* dateBuf, const char* utcBuf) const
 bool GPS::init()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::recursive_mutex> i2cLock(sf_i2c::i2cMutex());
+
+    const uint8_t i2cAddress = sf_interfaces::getAddress(sf_interfaces::InterfaceSensor::Gps);
+    if (i2cAddress == 0) {
+        M5_LOGW("[GPS] address not defined in interfaces");
+        return false;
+    }
 
     m_initialized = false;
-    m_i2cAddress = deviceAddress;
     m_lastProcessMs = 0;
 
     if (!sf_i2c::i2cBeginConfiguredPort(sf_interfaces::InterfaceSensor::Gps, kGpsI2cClockHz)) {
@@ -200,18 +222,18 @@ bool GPS::init()
     }
 
     if (!sf_i2c::i2cDeviceExistsOnConfiguredPort(sf_interfaces::InterfaceSensor::Gps,
-                                                  m_i2cAddress,
+                                                  i2cAddress,
                                                   kGpsI2cClockHz)) {
-        M5_LOGW("[GPS] device (0x%02X) not found", m_i2cAddress);
+        M5_LOGW("[GPS] device (0x%02X) not found", i2cAddress);
         return false;
     }
 
-    sf_i2c::i2cPublishConfiguration(sf_interfaces::InterfaceSensor::Gps, m_i2cAddress);
+    sf_i2c::i2cPublishConfiguration(sf_interfaces::InterfaceSensor::Gps, i2cAddress);
 
     uint8_t probe = 0;
     if (!readRegisters(REG_USE_STAR, &probe, 1U)) {
         M5_LOGE("[GPS] cannot read register address:0x%02X port:%s",
-                m_i2cAddress,
+                i2cAddress,
                 sf_interfaces::toString(sf_interfaces::getName(sf_interfaces::InterfaceSensor::Gps)));
         return false;
     }
@@ -222,7 +244,7 @@ bool GPS::init()
     m_initialized = true;
 
     M5_LOGI("[GPS] initialized address:0x%02X port:%s",
-            m_i2cAddress,
+            i2cAddress,
             sf_interfaces::toString(sf_interfaces::getName(sf_interfaces::InterfaceSensor::Gps)));
     return true;
 }
@@ -236,6 +258,7 @@ void GPS::process()
 
     {
         std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::recursive_mutex> i2cLock(sf_i2c::i2cMutex());
         if (!m_initialized) {
             return;
         }
@@ -244,6 +267,11 @@ void GPS::process()
             return;
         }
         m_lastProcessMs = nowMs;
+
+        if (!sf_i2c::i2cBeginConfiguredPort(sf_interfaces::InterfaceSensor::Gps, kGpsI2cClockHz)) {
+            M5_LOGW("[GPS] I2C route setup failed");
+            return;
+        }
 
         if (!readPoseAndTimeLocked()) {
             M5_LOGW("[GPS] sample read failed");
@@ -308,7 +336,8 @@ void taskGps(void* pv)
             GPS_TASK.process();
         }
 
-        const int loopMs = (CONFIG.task_i2c_loop_ms > 0) ? CONFIG.task_i2c_loop_ms : 1000;
+        const uint32_t recurrenceMs = sf_interfaces::getRecurrenceMs(sf_interfaces::InterfaceSensor::Gps);
+        const int loopMs = (recurrenceMs > 0) ? static_cast<int>(recurrenceMs) : 1000;
         vTaskDelay(pdMS_TO_TICKS(loopMs));
     }
 }

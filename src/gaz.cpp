@@ -14,7 +14,6 @@
 #include <M5UnitUnifiedWEIGHT.h>
 #include <M5Utility.h>
 
-#include <array>
 #include <cmath>
 #include <cstdio>
 #include <mutex>
@@ -68,46 +67,12 @@ void Gaz::publishWeight(const int32_t weightG, const int32_t fillPct)
 
 // ---- instance methods ----
 
-size_t Gaz::sanitizedAveragingWindow() const
-{
-    const int configured = CONFIG.gaz_weight_average_window;
-    if (configured < static_cast<int>(kAvgWindowMin)) { return kAvgWindowMin; }
-    if (configured > static_cast<int>(kAvgWindowMax)) { return kAvgWindowMax; }
-    return static_cast<size_t>(configured);
-}
-
-int32_t Gaz::pushAndAverage(const int32_t rawWeightG)
-{
-    const size_t window = sanitizedAveragingWindow();
-
-    if (m_recentWindow != window) {
-        m_recentWindow = window;
-        m_recentCount  = 0;
-        m_recentHead   = 0;
-    }
-
-    if (m_recentCount > window) {
-        m_recentCount = window;
-    }
-
-    m_recentWeights[m_recentHead] = rawWeightG;
-    m_recentHead = (m_recentHead + 1U) % window;
-    if (m_recentCount < window) {
-        ++m_recentCount;
-    }
-
-    int64_t sum = 0;
-    for (size_t i = 0; i < m_recentCount; ++i) {
-        sum += static_cast<int64_t>(m_recentWeights[i]);
-    }
-    return static_cast<int32_t>(sum / static_cast<int64_t>(m_recentCount));
-}
-
 bool Gaz::refreshMeasurement(int32_t& weightG, int32_t& fillPct)
 {
     m_units.update();
 
     if (!m_unit.updated()) {
+        M5_LOGW("[GAZ] not updated");
         return false;
     }
 
@@ -117,8 +82,7 @@ bool Gaz::refreshMeasurement(int32_t& weightG, int32_t& fillPct)
         return false;
     }
 
-    const int32_t rawWeightG = static_cast<int32_t>(lroundf(rawWeight));
-    weightG = pushAndAverage(rawWeightG);
+    weightG = static_cast<int32_t>(lroundf(rawWeight));
     m_lastWeightG = weightG;
 
     fillPct = computeFillPct(weightG);
@@ -131,17 +95,22 @@ bool Gaz::refreshMeasurement(int32_t& weightG, int32_t& fillPct)
 bool Gaz::isInitialized() const
 {
     std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::recursive_mutex> i2cLock(sf_i2c::i2cMutex());
     return m_initialized;
 }
 
 bool Gaz::init()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::recursive_mutex> i2cLock(sf_i2c::i2cMutex());
+
+    const uint8_t i2cAddress = sf_interfaces::getAddress(sf_interfaces::InterfaceSensor::Gaz);
+    if (i2cAddress == 0) {
+        M5_LOGW("[GAZ] address not defined in interfaces");
+        return false;
+    }
 
     m_initialized        = false;
-    m_recentCount        = 0;
-    m_recentHead         = 0;
-    m_recentWindow       = 0;
     m_lastWeightG        = 0;
     m_lastFillPct        = 0;
     m_lastCalibrationGap = 1.0f;
@@ -150,15 +119,15 @@ bool Gaz::init()
         return false;
     }
 
-    if (!sf_i2c::i2cDeviceExistsOnConfiguredPort(sf_interfaces::InterfaceSensor::Gaz, kI2CAddress)) {
-        M5_LOGW("[GAZ] sensor (0x%02X) not found", kI2CAddress);
+    if (!sf_i2c::i2cDeviceExistsOnConfiguredPort(sf_interfaces::InterfaceSensor::Gaz, i2cAddress)) {
+        M5_LOGW("[GAZ] sensor (0x%02X) not found", i2cAddress);
         return false;
     }
 
-    sf_i2c::i2cPublishConfiguration(sf_interfaces::InterfaceSensor::Gaz, kI2CAddress);
+    sf_i2c::i2cPublishConfiguration(sf_interfaces::InterfaceSensor::Gaz, i2cAddress);
 
     m_units = m5::unit::UnitUnified{};
-    const bool ok = m_units.add(m_unit, Wire) && m_units.begin();
+    const bool ok = m_units.add(m_unit, sf_i2c::i2cGetWire(sf_interfaces::InterfaceSensor::Gaz)) && m_units.begin();
 
     if (!ok) {
         M5_LOGW("[GAZ] Weight I2C unit not detected");
@@ -173,7 +142,7 @@ bool Gaz::init()
     publishCalibrationGap(effectiveGap);
 
     m_initialized = true;
-    M5_LOGI("[GAZ] (0x%02X) initialized", kI2CAddress);
+    M5_LOGI("[GAZ] (0x%02X) initialized", i2cAddress);
     return true;
 }
 
@@ -181,6 +150,7 @@ bool Gaz::calibrate()
 {
     {
         std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::recursive_mutex> i2cLock(sf_i2c::i2cMutex());
 
         if (!m_initialized) {
             M5_LOGW("[GAZ] calibrate called before init");
@@ -223,7 +193,13 @@ void Gaz::process()
 
     {
         std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::recursive_mutex> i2cLock(sf_i2c::i2cMutex());
         if (!m_initialized) {
+            return;
+        }
+
+        if (!sf_i2c::i2cBeginConfiguredPort(sf_interfaces::InterfaceSensor::Gaz)) {
+            M5_LOGW("[GAZ] I2C route setup failed");
             return;
         }
 
@@ -238,6 +214,16 @@ void Gaz::process()
         }
 
         hasMeasurement = refreshMeasurement(weightG, fillPct);
+        if (!hasMeasurement) {
+            // After long idle gaps another task may have disturbed the bus state.
+            // Re-apply routing and retry one immediate sample.
+            if (sf_i2c::i2cBeginConfiguredPort(sf_interfaces::InterfaceSensor::Gaz)) {
+                hasMeasurement = refreshMeasurement(weightG, fillPct);
+                if (hasMeasurement) {
+                    M5_LOGW("[GAZ] measurement recovered after I2C re-begin");
+                }
+            }
+        }
     }
 
     if (!hasMeasurement) {
@@ -257,6 +243,7 @@ void Gaz::process()
 bool Gaz::tare()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::recursive_mutex> i2cLock(sf_i2c::i2cMutex());
     if (!m_initialized) {
         return false;
     }
@@ -271,6 +258,7 @@ bool Gaz::applyCalibration(const float gap)
 {
     const float effectiveGap = sanitizedGap(gap);
     std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::recursive_mutex> i2cLock(sf_i2c::i2cMutex());
     if (!m_initialized) {
         return false;
     }
@@ -285,6 +273,7 @@ bool Gaz::applyCalibration(const float gap)
 float Gaz::readCalibrationSample()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::recursive_mutex> i2cLock(sf_i2c::i2cMutex());
     if (!m_initialized) {
         return 0.0f;
     }
@@ -299,6 +288,7 @@ float Gaz::readCalibrationSample()
 bool Gaz::readCalibrationGap(float& gap)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::recursive_mutex> i2cLock(sf_i2c::i2cMutex());
     if (!m_initialized) {
         return false;
     }
@@ -308,6 +298,7 @@ bool Gaz::readCalibrationGap(float& gap)
 bool Gaz::readRawAdc(int32_t& rawAdc)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::recursive_mutex> i2cLock(sf_i2c::i2cMutex());
     if (!m_initialized) {
         return false;
     }
@@ -407,11 +398,13 @@ void taskGaz(void* pv)
             }
         }
 
+        const uint32_t recurrenceMs = sf_interfaces::getRecurrenceMs(sf_interfaces::InterfaceSensor::Gaz);
+        const int loopMs = (recurrenceMs > 0) ? static_cast<int>(recurrenceMs) : 1000;
+        vTaskDelay(pdMS_TO_TICKS(loopMs));
+
         if (initialized) {
             GAZ_TASK.process();
         }
 
-        const int loopMs = (CONFIG.task_i2c_loop_ms > 0) ? CONFIG.task_i2c_loop_ms : 1000;
-        vTaskDelay(pdMS_TO_TICKS(loopMs));
     }
 }

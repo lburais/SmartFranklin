@@ -14,7 +14,6 @@
 #include <M5UnitUnified.h>
 #include <M5UnitUnifiedWEIGHT.h>
 
-#include <array>
 #include <mutex>
 
 class Gaz {
@@ -36,17 +35,12 @@ private:
     static constexpr int32_t  kBottleFullG    = 6450;
     static constexpr int32_t  kBottleEmptyG   = 3700;
     static constexpr float    kGapEpsilon     = 1e-6f;
-    static constexpr size_t   kAvgWindowMin   = 1U;
-    static constexpr size_t   kAvgWindowMax   = 64U;
-    static constexpr uint8_t  kI2CAddress     = 0x26;
 
     static float   sanitizedGap(float gap);
     static int32_t computeFillPct(int32_t weightG);
     static void    publishWeight(int32_t weightG, int32_t fillPct);
     static void    publishCalibrationGap(float gap);
 
-    size_t  sanitizedAveragingWindow() const;
-    int32_t pushAndAverage(int32_t rawWeightG);
     bool    refreshMeasurement(int32_t& weightG, int32_t& fillPct);
 
     mutable std::mutex m_mutex;
@@ -58,11 +52,6 @@ private:
     float   m_lastCalibrationGap = 1.0f;
     int32_t m_lastWeightG        = 0;
     int32_t m_lastFillPct        = 0;
-
-    std::array<int32_t, kAvgWindowMax> m_recentWeights{};
-    size_t m_recentCount  = 0;
-    size_t m_recentHead   = 0;
-    size_t m_recentWindow = 0;
 };
 
 /** Instance globale utilisee par les taches runtime et APIs. */

@@ -14,6 +14,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
+
+class TwoWire;
 
 namespace sf_interfaces {
 
@@ -57,8 +60,10 @@ enum class InterfaceSensor : uint8_t {
 struct InterfaceDefinition {
     InterfaceName Name;
     InterfaceType Type;
-    int8_t        pinYellow;  ///< SDA (I2C) or RX (UART); -1 if not applicable
-    int8_t        pinWhite;   ///< SCL (I2C) or TX (UART); -1 if not applicable
+    uint8_t       I2cAddress;   ///< I2C device address; 0 if not applicable
+    uint32_t      recurrenceMs; ///< Suggested task recurrence for this sensor
+    int8_t        pinYellow;    ///< SDA (I2C) or RX (UART); -1 if not applicable
+    int8_t        pinWhite;     ///< SCL (I2C) or TX (UART); -1 if not applicable
     InterfaceSensor Sensor;
     const char* DeviceName;
 };
@@ -69,6 +74,8 @@ const InterfaceDefinition* findBySensor(InterfaceSensor sensor);
 InterfaceName getName(InterfaceSensor sensor);
 InterfaceType getType(InterfaceSensor sensor);
 String getDeviceName(InterfaceSensor sensor);
+uint8_t getAddress(InterfaceSensor sensor);
+uint32_t getRecurrenceMs(InterfaceSensor sensor);
 
 int8_t getSDA(InterfaceSensor sensor);  ///< Returns pinYellow if I2C, else -1
 int8_t getSCL(InterfaceSensor sensor);  ///< Returns pinWhite  if I2C, else -1
@@ -97,5 +104,11 @@ bool i2cDeviceExistsOnConfiguredPort(sf_interfaces::InterfaceSensor sensor,
 /** @brief Publish configuration metadata for one logical I2C device. */
 void i2cPublishConfiguration(sf_interfaces::InterfaceSensor sensor,
                              uint8_t address);
+
+/** @brief Return the TwoWire bus instance used by a configured I2C sensor. */
+TwoWire& i2cGetWire(sf_interfaces::InterfaceSensor sensor);
+
+/** @brief Shared lock for Wire1 route switching and transactions. */
+std::recursive_mutex& i2cMutex();
 
 }  // namespace sf_i2c

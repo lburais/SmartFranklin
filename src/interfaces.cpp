@@ -21,19 +21,19 @@ namespace sf_interfaces {
 namespace {
 
 constexpr InterfaceDefinition kInterfaceDefinitions[] = {
-   //name                      type                  yellow  white sesnor                 device
-    {InterfaceName::PortA1,    InterfaceType::I2C,   21,     22,   InterfaceSensor::Gaz,  "M5Stack Weight I2C Unit"},
-    {InterfaceName::PortA2,    InterfaceType::I2C,   21,     22,   InterfaceSensor::Tank, "M5Stack Unit Ultrasonic I2C (RCWL-9600)"},
-    {InterfaceName::PortB1,    InterfaceType::I2C,   21,     22,   InterfaceSensor::Gps,  "DFRobot Gravity GNSS (DFR1103)"},
-    {InterfaceName::PortB2,    InterfaceType::UART,  -1,     -1,   InterfaceSensor::Lin,  "LIN Bus"},
-    {InterfaceName::PortC1,    InterfaceType::UART,  -1,     -1,   InterfaceSensor::Lte,  "M5Stack NB-IOT2"},
-    {InterfaceName::PortC2,    InterfaceType::UART,  -1,     -1,   InterfaceSensor::Lora, "M5Stack C6L"},
-    {InterfaceName::Internal,  InterfaceType::I2C,   21,     22,   InterfaceSensor::Imu,  "MPU6886"},
-    {InterfaceName::Internal,  InterfaceType::I2C,   21,     22,   InterfaceSensor::Rtc,  "BM8563"},
-    {InterfaceName::Internal,  InterfaceType::I2C,   21,     22,   InterfaceSensor::Ina,  "INA3221"},
-    {InterfaceName::Internal,  InterfaceType::I2C,   21,     22,   InterfaceSensor::Axp,  "AXP192"},
-    {InterfaceName::Bluetooth, InterfaceType::BLE,   -1,     -1,   InterfaceSensor::Bat,  "Battery"},
-    {InterfaceName::Bluetooth, InterfaceType::BLE,   -1,     -1,   InterfaceSensor::Obd,  "OBD"},
+   //name                      type                addr    recur  yellow white sensor                 device
+    {InterfaceName::PortA1,    InterfaceType::I2C, 0x26,   1000, 32,    33,   InterfaceSensor::Gaz,  "M5Stack Weight I2C Unit"},
+    {InterfaceName::PortA2,    InterfaceType::I2C, 0x57,   1000, 32,    33,   InterfaceSensor::Tank, "M5Stack Unit Ultrasonic I2C (RCWL-9600)"},
+    {InterfaceName::PortB1,    InterfaceType::UART,0x00,   1000, 25,    35,   InterfaceSensor::Lte,  "M5Stack NB-IOT2"},
+    {InterfaceName::PortB2,    InterfaceType::UART,0x00,   1000, 26,    36,   InterfaceSensor::Lin,  "LIN Bus"},
+    {InterfaceName::PortC1,    InterfaceType::I2C, 0x66,  30000, 14,    13,   InterfaceSensor::Gps,  "DFRobot Gravity GNSS (DFR1103)"},
+    {InterfaceName::PortC2,    InterfaceType::UART,0x00,   1000, 17,    16,   InterfaceSensor::Lora, "M5Stack C6L"},
+    {InterfaceName::Internal,  InterfaceType::I2C, 0x68,   1000, 21,    22,   InterfaceSensor::Imu,  "MPU6886"},
+    {InterfaceName::Internal,  InterfaceType::I2C, 0x51,   1000, 21,    22,   InterfaceSensor::Rtc,  "BM8563"},
+    {InterfaceName::Internal,  InterfaceType::I2C, 0x40,   1000, 21,    22,   InterfaceSensor::Ina,  "INA3221"},
+    {InterfaceName::Internal,  InterfaceType::I2C, 0x34,   1000, 21,    22,   InterfaceSensor::Axp,  "AXP192"},
+    {InterfaceName::Bluetooth, InterfaceType::BLE, 0x00,   1000, -1,    -1,   InterfaceSensor::Bat,  "Battery"},
+    {InterfaceName::Bluetooth, InterfaceType::BLE, 0x00,   1000, -1,    -1,   InterfaceSensor::Obd,  "OBD"},
 };
 
 }  // namespace
@@ -119,6 +119,18 @@ String getDeviceName(const InterfaceSensor sensor)
     return iface ? iface->DeviceName : "Unknown";
 }
 
+uint8_t getAddress(const InterfaceSensor sensor)
+{
+    const InterfaceDefinition* iface = findBySensor(sensor);
+    return iface ? iface->I2cAddress : 0;
+}
+
+uint32_t getRecurrenceMs(const InterfaceSensor sensor)
+{
+    const InterfaceDefinition* iface = findBySensor(sensor);
+    return iface ? iface->recurrenceMs : 0;
+}
+
 int8_t getSDA(const InterfaceSensor sensor)
 {
     const InterfaceDefinition* iface = findBySensor(sensor);
@@ -147,9 +159,15 @@ int8_t getTX(const InterfaceSensor sensor)
 
 namespace sf_i2c {
 
-std::mutex g_i2cRouteMutex;
-bool g_wireInitialized = false;
-uint32_t g_activeWireClockHz = 0;
+// Wire (bus 0, SDA=21/SCL=22) is reserved for M5Unified internal devices.
+// All external Grove ports use Wire1 (bus 1).  We time-multiplex Wire1 across
+// different pin pairs (PortA=32/33, PortB1=25/35) and reinitialise only when
+// the active SDA/SCL or clock frequency changes.
+
+std::recursive_mutex g_i2cRouteMutex;
+int8_t   g_activeSda     = -1;
+int8_t   g_activeScl     = -1;
+uint32_t g_activeClockHz =  0;
 
 bool i2cBeginConfiguredPort(const sf_interfaces::InterfaceSensor sensor, const uint32_t clockHz)
 {
@@ -159,33 +177,35 @@ bool i2cBeginConfiguredPort(const sf_interfaces::InterfaceSensor sensor, const u
         return false;
     }
 
-    std::lock_guard<std::mutex> lock(g_i2cRouteMutex);
+    std::lock_guard<std::recursive_mutex> lock(g_i2cRouteMutex);
 
-    int8_t sda = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_a_sda));
-    int8_t scl = static_cast<int8_t>(M5.getPin(m5::pin_name_t::port_a_scl));
-
-    // M5Station routes external Grove ports on main Wire (default 21/22).
-    if (sda < 0) {
-        sda = 21;
-    }
-    if (scl < 0) {
-        scl = 22;
+    const int8_t sda = sf_interfaces::getSDA(sensor);
+    const int8_t scl = sf_interfaces::getSCL(sensor);
+    if (sda < 0 || scl < 0) {
+        M5_LOGE("[I2C] %s: no pin assignment in interface table", sf_interfaces::toString(sensor));
+        return false;
     }
 
-    const bool wireNeedsReinit = !g_wireInitialized || g_activeWireClockHz != clockHz;
+    const bool needsReinit = (sda != g_activeSda) || (scl != g_activeScl) || (clockHz != g_activeClockHz);
 
-    if (wireNeedsReinit) {
-        Wire.end();
-        if (!Wire.begin(sda, scl, clockHz)) {
-            g_wireInitialized = false;
-            M5_LOGE( "[I2C] %s has wiring issue", sf_interfaces::toString(sensor));
+    int8_t activeSda = sda;
+    int8_t activeScl = scl;
+
+    if (needsReinit) {
+        Wire1.end();
+        M5_LOGI("[I2C] %s: (SDA=%d SCL=%d)",
+                sf_interfaces::toString(sensor),
+                sda,
+                scl);
+        if (!Wire1.begin(sda, scl, clockHz)) {
+            M5_LOGE("[I2C] %s: Wire1.begin failed");
             return false;
         }
-        g_wireInitialized = true;
-        g_activeWireClockHz = clockHz;
-    }
 
-    M5_LOGI( "[I2C] %s on %d/%d", sf_interfaces::toString(sensor), sda, scl);
+        g_activeSda     = activeSda;
+        g_activeScl     = activeScl;
+        g_activeClockHz = clockHz;
+    }
 
     return true;
 }
@@ -205,8 +225,18 @@ bool i2cDeviceExistsOnConfiguredPort(const sf_interfaces::InterfaceSensor sensor
         return false;
     }
 
-    Wire.beginTransmission(deviceAddress);
-    return Wire.endTransmission() == 0;
+    Wire1.beginTransmission(deviceAddress);
+    return Wire1.endTransmission() == 0;
+}
+
+TwoWire& i2cGetWire(const sf_interfaces::InterfaceSensor /*sensor*/)
+{
+    return Wire1;
+}
+
+std::recursive_mutex& i2cMutex()
+{
+    return g_i2cRouteMutex;
 }
 
 void i2cPublishConfiguration(const sf_interfaces::InterfaceSensor sensor, const uint8_t address)
