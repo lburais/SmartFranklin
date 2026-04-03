@@ -398,13 +398,13 @@ void taskGaz(void* pv)
             }
         }
 
-        const uint32_t recurrenceMs = sf_interfaces::getRecurrenceMs(sf_interfaces::InterfaceSensor::Gaz);
-        const int loopMs = (recurrenceMs > 0) ? static_cast<int>(recurrenceMs) : 1000;
-        vTaskDelay(pdMS_TO_TICKS(loopMs));
-
         if (initialized) {
             GAZ_TASK.process();
         }
+
+        const uint32_t recurrenceMs = sf_interfaces::getRecurrenceMs(sf_interfaces::InterfaceSensor::Gaz);
+        const int loopMs = (recurrenceMs > 0) ? static_cast<int>(recurrenceMs) : 1000;
+        vTaskDelay(pdMS_TO_TICKS(loopMs));
 
     }
 }
