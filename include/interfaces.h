@@ -57,6 +57,8 @@ enum class InterfaceSensor : uint8_t {
 struct InterfaceDefinition {
     InterfaceName Name;
     InterfaceType Type;
+    int8_t        pinYellow;  ///< SDA (I2C) or RX (UART); -1 if not applicable
+    int8_t        pinWhite;   ///< SCL (I2C) or TX (UART); -1 if not applicable
     InterfaceSensor Sensor;
     const char* DeviceName;
 };
@@ -67,6 +69,11 @@ const InterfaceDefinition* findBySensor(InterfaceSensor sensor);
 InterfaceName getName(InterfaceSensor sensor);
 InterfaceType getType(InterfaceSensor sensor);
 String getDeviceName(InterfaceSensor sensor);
+
+int8_t getSDA(InterfaceSensor sensor);  ///< Returns pinYellow if I2C, else -1
+int8_t getSCL(InterfaceSensor sensor);  ///< Returns pinWhite  if I2C, else -1
+int8_t getRX(InterfaceSensor sensor);   ///< Returns pinYellow if UART, else -1
+int8_t getTX(InterfaceSensor sensor);   ///< Returns pinWhite  if UART, else -1
 
 const char* toString(InterfaceName name);
 const char* toString(InterfaceType type);

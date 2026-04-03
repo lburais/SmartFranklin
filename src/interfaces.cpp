@@ -21,18 +21,19 @@ namespace sf_interfaces {
 namespace {
 
 constexpr InterfaceDefinition kInterfaceDefinitions[] = {
-    {InterfaceName::PortA1,    InterfaceType::I2C,  InterfaceSensor::Gaz,  "M5Stack Weight I2C Unit"},
-    {InterfaceName::PortA2,    InterfaceType::I2C,  InterfaceSensor::Tank, "M5Stack Unit Ultrasonic I2C (RCWL-9600)"},
-    {InterfaceName::PortB1,    InterfaceType::I2C,  InterfaceSensor::Gps,  "DFRobot Gravity GNSS (DFR1103)"},
-    {InterfaceName::PortB2,    InterfaceType::UART, InterfaceSensor::Lin,  "LIN Bus"},
-    {InterfaceName::PortC1,    InterfaceType::UART, InterfaceSensor::Lte,  "M5Stack NB-IOT2"},
-    {InterfaceName::PortC2,    InterfaceType::UART, InterfaceSensor::Lora, "M5Stack C6L"},
-    {InterfaceName::Internal,  InterfaceType::I2C,  InterfaceSensor::Imu,  "MPU6886"},
-    {InterfaceName::Internal,  InterfaceType::I2C,  InterfaceSensor::Rtc,  "BM8563"},
-    {InterfaceName::Internal,  InterfaceType::I2C,  InterfaceSensor::Ina,  "INA3221"},
-    {InterfaceName::Internal,  InterfaceType::I2C,  InterfaceSensor::Axp,  "AXP192"},
-    {InterfaceName::Bluetooth, InterfaceType::BLE,  InterfaceSensor::Bat,  "Battery"},
-    {InterfaceName::Bluetooth, InterfaceType::BLE,  InterfaceSensor::Obd,  "OBD"},
+   //name                      type                  yellow  white sesnor                 device
+    {InterfaceName::PortA1,    InterfaceType::I2C,   21,     22,   InterfaceSensor::Gaz,  "M5Stack Weight I2C Unit"},
+    {InterfaceName::PortA2,    InterfaceType::I2C,   21,     22,   InterfaceSensor::Tank, "M5Stack Unit Ultrasonic I2C (RCWL-9600)"},
+    {InterfaceName::PortB1,    InterfaceType::I2C,   21,     22,   InterfaceSensor::Gps,  "DFRobot Gravity GNSS (DFR1103)"},
+    {InterfaceName::PortB2,    InterfaceType::UART,  -1,     -1,   InterfaceSensor::Lin,  "LIN Bus"},
+    {InterfaceName::PortC1,    InterfaceType::UART,  -1,     -1,   InterfaceSensor::Lte,  "M5Stack NB-IOT2"},
+    {InterfaceName::PortC2,    InterfaceType::UART,  -1,     -1,   InterfaceSensor::Lora, "M5Stack C6L"},
+    {InterfaceName::Internal,  InterfaceType::I2C,   21,     22,   InterfaceSensor::Imu,  "MPU6886"},
+    {InterfaceName::Internal,  InterfaceType::I2C,   21,     22,   InterfaceSensor::Rtc,  "BM8563"},
+    {InterfaceName::Internal,  InterfaceType::I2C,   21,     22,   InterfaceSensor::Ina,  "INA3221"},
+    {InterfaceName::Internal,  InterfaceType::I2C,   21,     22,   InterfaceSensor::Axp,  "AXP192"},
+    {InterfaceName::Bluetooth, InterfaceType::BLE,   -1,     -1,   InterfaceSensor::Bat,  "Battery"},
+    {InterfaceName::Bluetooth, InterfaceType::BLE,   -1,     -1,   InterfaceSensor::Obd,  "OBD"},
 };
 
 }  // namespace
@@ -116,6 +117,30 @@ String getDeviceName(const InterfaceSensor sensor)
 {
     const InterfaceDefinition* iface = findBySensor(sensor);
     return iface ? iface->DeviceName : "Unknown";
+}
+
+int8_t getSDA(const InterfaceSensor sensor)
+{
+    const InterfaceDefinition* iface = findBySensor(sensor);
+    return (iface && iface->Type == InterfaceType::I2C) ? iface->pinYellow : -1;
+}
+
+int8_t getSCL(const InterfaceSensor sensor)
+{
+    const InterfaceDefinition* iface = findBySensor(sensor);
+    return (iface && iface->Type == InterfaceType::I2C) ? iface->pinWhite : -1;
+}
+
+int8_t getRX(const InterfaceSensor sensor)
+{
+    const InterfaceDefinition* iface = findBySensor(sensor);
+    return (iface && iface->Type == InterfaceType::UART) ? iface->pinYellow : -1;
+}
+
+int8_t getTX(const InterfaceSensor sensor)
+{
+    const InterfaceDefinition* iface = findBySensor(sensor);
+    return (iface && iface->Type == InterfaceType::UART) ? iface->pinWhite : -1;
 }
 
 }  // namespace sf_interfaces
