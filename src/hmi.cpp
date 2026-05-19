@@ -118,7 +118,7 @@ static constexpr uint16_t COLOR_CONTENT_BG = 0x0000;
 static constexpr uint8_t TITLE_TEXT_SIZE = 2;
 
 /** @brief Content text scale factor for most pages. */
-static constexpr uint8_t CONTENT_TEXT_SIZE = 2;
+static constexpr uint8_t CONTENT_TEXT_SIZE = 1;
 
 /** @brief Startup splash background color. */
 static constexpr uint16_t COLOR_SPLASH_BG = 0xFD20;
@@ -523,65 +523,11 @@ void HMI::drawGazScreen(const DisplaySnapshot& snapshot) const
 {
     M5GFX& lcd = M5.Display;
     drawTitleBox("Gaz");
-
-    const int16_t bottleW = 86;
-    const int16_t bottleH = 126;
-    const int16_t bottleX = static_cast<int16_t>((lcd.width() - bottleW) / 2);
-    const int16_t bottleY = CONTENT_Y + 4;
-
-    drawGazBottle(bottleX, bottleY, bottleW, bottleH, snapshot.fill_gaz);
-
-    lcd.setTextSize(1);
-    lcd.setTextColor(COLOR_CONTENT_TEXT, COLOR_CONTENT_BG);
-    char weightText[32];
-    snprintf(weightText, sizeof(weightText), "%d g", snapshot.weight_gaz);
-    lcd.drawCenterString(weightText, static_cast<int16_t>(lcd.width() / 2), static_cast<int16_t>(bottleY + bottleH + 4));
-
-    const int16_t footerY = static_cast<int16_t>(lcd.height() - lcd.fontHeight() - 3);
-    lcd.drawCenterString("calibrate", static_cast<int16_t>(lcd.width() / 2), footerY);
-}
-
-void HMI::drawGazBottle(int16_t x, int16_t y, int16_t w, int16_t h, int32_t fillPct) const
-{
-    M5GFX& lcd = M5.Display;
-
-    const int32_t clampedFill = std::max<int32_t>(0, std::min<int32_t>(100, fillPct));
-
-    const int16_t neckW = static_cast<int16_t>(w / 3);
-    const int16_t neckH = 14;
-    const int16_t neckX = static_cast<int16_t>(x + (w - neckW) / 2);
-    const int16_t neckY = y;
-    const int16_t bodyY = static_cast<int16_t>(y + neckH - 2);
-    const int16_t bodyH = static_cast<int16_t>(h - neckH + 2);
-
-    const uint16_t bottleBorder = 0xFFFF;
-    const uint16_t bottleBody = 0x6B4D;
-    const uint16_t fillColor = 0x07E0;
-
-    lcd.fillRoundRect(x, bodyY, w, bodyH, 20, bottleBody);
-    lcd.drawRoundRect(x, bodyY, w, bodyH, 20, bottleBorder);
-    lcd.fillRoundRect(neckX, neckY, neckW, neckH, 4, bottleBody);
-    lcd.drawRoundRect(neckX, neckY, neckW, neckH, 4, bottleBorder);
-
-    const int16_t innerPad = 6;
-    const int16_t innerX = static_cast<int16_t>(x + innerPad);
-    const int16_t innerY = static_cast<int16_t>(bodyY + innerPad);
-    const int16_t innerW = static_cast<int16_t>(w - 2 * innerPad);
-    const int16_t innerH = static_cast<int16_t>(bodyH - 2 * innerPad);
-
-    const int16_t fillH = static_cast<int16_t>((innerH * clampedFill) / 100);
-    const int16_t fillY = static_cast<int16_t>(innerY + innerH - fillH);
-
-    lcd.drawRoundRect(innerX, innerY, innerW, innerH, 10, 0xC618);
-    if (fillH > 0) {
-        lcd.fillRect(innerX + 1, fillY, innerW - 2, fillH, fillColor);
-    }
-
-    char pct[8];
-    snprintf(pct, sizeof(pct), "%ld%%", static_cast<long>(clampedFill));
-    lcd.setTextSize(2);
-    lcd.setTextColor(COLOR_CONTENT_TEXT, COLOR_CONTENT_BG);
-    lcd.drawCenterString(pct, static_cast<int16_t>(x + (w / 2)), static_cast<int16_t>(innerY + (innerH / 2) - 8));
+    beginContentArea();
+    lcd.printf("Weight: %d g\n", snapshot.weight_gaz);
+    lcd.printf("Fill: %d%%\n", snapshot.fill_gaz);
+    lcd.println("Hold touch 5s:");
+    lcd.println("calibration");
 }
 
 /** @brief Draw helper for battery/BMS telemetry page. */

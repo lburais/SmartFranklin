@@ -77,9 +77,6 @@ bool GPS::readRegisters(const uint8_t reg, uint8_t* out, const size_t len) const
     if (readCount < len) {
         M5_LOGE("[GPS] readCount %d/%d", readCount, len);
         return false;
-    } else {
-        M5_LOGI("[GPS] readCount %d/%d", readCount, len);
-
     }
 
     for (size_t i = 0; i < len; ++i) {
@@ -204,9 +201,6 @@ void GPS::publishFix(const char* dateBuf, const char* utcBuf) const
 
 bool GPS::init()
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    std::lock_guard<std::recursive_mutex> i2cLock(sf_i2c::i2cMutex());
-
     const uint8_t i2cAddress = sf_interfaces::getAddress(sf_interfaces::InterfaceSensor::Gps);
     if (i2cAddress == 0) {
         M5_LOGW("[GPS] address not defined in interfaces");
@@ -216,19 +210,15 @@ bool GPS::init()
     m_initialized = false;
     m_lastProcessMs = 0;
 
-    if (!sf_i2c::i2cBeginConfiguredPort(sf_interfaces::InterfaceSensor::Gps, kGpsI2cClockHz)) {
-        M5_LOGW("[GPS] I2C bus init failed");
+    if (!sf_interfaces::configure(sf_interfaces::InterfaceSensor::Gps)) {
+        M5_LOGW("[GPS] configure failed");
         return false;
     }
 
-    if (!sf_i2c::i2cDeviceExistsOnConfiguredPort(sf_interfaces::InterfaceSensor::Gps,
-                                                  i2cAddress,
-                                                  kGpsI2cClockHz)) {
+    if (!sf_interfaces::configured(sf_interfaces::InterfaceSensor::Gps)) {
         M5_LOGW("[GPS] device (0x%02X) not found", i2cAddress);
         return false;
     }
-
-    sf_i2c::i2cPublishConfiguration(sf_interfaces::InterfaceSensor::Gps, i2cAddress);
 
     uint8_t probe = 0;
     if (!readRegisters(REG_USE_STAR, &probe, 1U)) {
@@ -256,52 +246,52 @@ void GPS::process()
 
     const uint32_t nowMs = millis();
 
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        std::lock_guard<std::recursive_mutex> i2cLock(sf_i2c::i2cMutex());
-        if (!m_initialized) {
-            return;
-        }
-
-        if ((nowMs - m_lastProcessMs) < kProcessPeriodMs) {
-            return;
-        }
-        m_lastProcessMs = nowMs;
-
-        if (!sf_i2c::i2cBeginConfiguredPort(sf_interfaces::InterfaceSensor::Gps, kGpsI2cClockHz)) {
-            M5_LOGW("[GPS] I2C route setup failed");
-            return;
-        }
-
-        if (!readPoseAndTimeLocked()) {
-            M5_LOGW("[GPS] sample read failed");
-            return;
-        }
-
-        snprintf(dateBuf, sizeof(dateBuf), "%04u-%02u-%02u",
-                 static_cast<unsigned>(m_year),
-                 static_cast<unsigned>(m_month),
-                 static_cast<unsigned>(m_day));
-        snprintf(utcBuf, sizeof(utcBuf), "%02u:%02u:%02u",
-                 static_cast<unsigned>(m_hour),
-                 static_cast<unsigned>(m_minute),
-                 static_cast<unsigned>(m_second));
-
-        {
-            std::lock_guard<std::mutex> dataLock(DATA_MUTEX);
-            DATA.gps_has_fix = m_hasFix;
-            DATA.gps_latitude_deg = m_latitudeDeg;
-            DATA.gps_longitude_deg = m_longitudeDeg;
-            DATA.gps_altitude_m = m_altitudeM;
-            DATA.gps_speed_knots = m_speedKnots;
-            DATA.gps_course_deg = m_courseDeg;
-            DATA.gps_satellites = m_satellites;
-            DATA.gps_date = dateBuf;
-            DATA.gps_utc = utcBuf;
-        }
-
-        publishFix(dateBuf, utcBuf);
+    if (!m_initialized) {
+        return;
     }
+
+    if ((nowMs - m_lastProcessMs) < kProcessPeriodMs) {
+        return;
+    }
+    m_lastProcessMs = nowMs;
+
+    if (!sf_interfaces::configure(sf_interfaces::InterfaceSensor::Gps)) {
+        M5_LOGW("[GPS] configure failed during process");
+        hmiSetPortLedStatus(sf_interfaces::InterfaceSensor::Gps, m_initialized, true);
+        return;
+    }
+
+    if (!readPoseAndTimeLocked()) {
+        M5_LOGW("[GPS] sample read failed");
+        hmiSetPortLedStatus(sf_interfaces::InterfaceSensor::Gps, m_initialized, true);
+        return;
+    }
+
+    snprintf(dateBuf, sizeof(dateBuf), "%04u-%02u-%02u",
+             static_cast<unsigned>(m_year),
+             static_cast<unsigned>(m_month),
+             static_cast<unsigned>(m_day));
+    snprintf(utcBuf, sizeof(utcBuf), "%02u:%02u:%02u",
+             static_cast<unsigned>(m_hour),
+             static_cast<unsigned>(m_minute),
+             static_cast<unsigned>(m_second));
+
+    {
+        std::lock_guard<std::mutex> dataLock(DATA_MUTEX);
+        DATA.gps_has_fix = m_hasFix;
+        DATA.gps_latitude_deg = m_latitudeDeg;
+        DATA.gps_longitude_deg = m_longitudeDeg;
+        DATA.gps_altitude_m = m_altitudeM;
+        DATA.gps_speed_knots = m_speedKnots;
+        DATA.gps_course_deg = m_courseDeg;
+        DATA.gps_satellites = m_satellites;
+        DATA.gps_date = dateBuf;
+        DATA.gps_utc = utcBuf;
+    }
+
+    publishFix(dateBuf, utcBuf);
+
+    hmiSetPortLedStatus(sf_interfaces::InterfaceSensor::Gps, m_initialized, false);
 }
 
 void taskGps(void* pv)
@@ -317,7 +307,7 @@ void taskGps(void* pv)
     };
 
     auto scheduleRetry = [](uint32_t& nextAttemptMs, uint32_t nowMs) {
-        nextAttemptMs = nowMs + sf_i2c::kI2cInitRetryMs;
+        nextAttemptMs = nowMs + 10000UL;  // 10 second retry interval
     };
 
     for (;;) {

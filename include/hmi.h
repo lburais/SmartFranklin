@@ -163,9 +163,6 @@ private:
     /** @brief Draws weight screen (Gaz). */
     void drawGazScreen(const DisplaySnapshot& snapshot) const;
 
-    /** @brief Draws bottle gauge for Gaz screen. */
-    void drawGazBottle(int16_t x, int16_t y, int16_t w, int16_t h, int32_t fillPct) const;
-
     /** @brief Draws battery/BMS telemetry screen. */
     void drawBatteryScreen(const DisplaySnapshot& snapshot) const;
 

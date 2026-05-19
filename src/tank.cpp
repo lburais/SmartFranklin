@@ -11,6 +11,7 @@
 #include "tank.h"
 
 #include <M5Unified.h>
+#include <Wire.h>
 
 #include <cmath>
 #include <cstdio>
@@ -123,15 +124,11 @@ Tank TANK_TASK;
 
 bool Tank::isInitialized() const
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
     return m_initialized;
 }
 
 bool Tank::init()
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    std::lock_guard<std::recursive_mutex> i2cLock(sf_i2c::i2cMutex());
-
     const uint8_t i2cAddress = sf_interfaces::getAddress(sf_interfaces::InterfaceSensor::Tank);
     if (i2cAddress == 0) {
         M5_LOGW("[TANK] address not defined in interfaces");
@@ -141,12 +138,16 @@ bool Tank::init()
     m_initialized = false;
     m_activeConfiguredPort = "";
 
-    if (!sf_i2c::i2cBeginConfiguredPort(sf_interfaces::InterfaceSensor::Tank) ||
-        !sf_i2c::i2cDeviceExistsOnConfiguredPort(sf_interfaces::InterfaceSensor::Tank, i2cAddress)) {
+    if (!sf_interfaces::configure(sf_interfaces::InterfaceSensor::Tank)) {
+        M5_LOGW("[TANK] configure failed");
         return false;
     }
 
-    sf_i2c::i2cPublishConfiguration(sf_interfaces::InterfaceSensor::Tank, i2cAddress);
+    if (!sf_interfaces::configured(sf_interfaces::InterfaceSensor::Tank)) {
+        M5_LOGW("[TANK] device (0x%02X) not found", i2cAddress);
+        return false;
+    }
+
     m_activeConfiguredPort = sf_interfaces::toString(sf_interfaces::getName(sf_interfaces::InterfaceSensor::Tank));
     m_initialized = true;
 
@@ -159,27 +160,32 @@ void Tank::process()
     int32_t distanceMm = 0;
     int32_t fillPct = 0;
 
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        std::lock_guard<std::recursive_mutex> i2cLock(sf_i2c::i2cMutex());
-        const uint8_t i2cAddress = sf_interfaces::getAddress(sf_interfaces::InterfaceSensor::Tank);
-        if (i2cAddress == 0) {
-            M5_LOGW("[TANK] address not defined in interfaces");
-            return;
-        }
-
-        if (!m_initialized || m_activeConfiguredPort.isEmpty()) {
-            return;
-        }
-
-        sf_i2c::i2cBeginConfiguredPort(sf_interfaces::InterfaceSensor::Tank);
-        if (!readDistanceMm(i2cAddress, distanceMm)) {
-            M5_LOGW("[TANK] No measurement");
-            return;
-        }
-
-        fillPct = distanceToFillPct(distanceMm);
+    const uint8_t i2cAddress = sf_interfaces::getAddress(sf_interfaces::InterfaceSensor::Tank);
+    if (i2cAddress == 0) {
+        M5_LOGW("[TANK] address not defined in interfaces");
+        return;
     }
+
+    if (!m_initialized || m_activeConfiguredPort.isEmpty()) {
+        return;
+    }
+
+    if (!sf_interfaces::configure(sf_interfaces::InterfaceSensor::Tank)) {
+        M5_LOGW("[TANK] configure failed during process");
+        return;
+    }
+
+    Wire1.beginTransmission(i2cAddress);
+    if (Wire1.endTransmission() != 0) {
+        M5_LOGW("[TANK] sensor not reachable on bus");
+        return;
+    }
+    if (!readDistanceMm(i2cAddress, distanceMm)) {
+        M5_LOGW("[TANK] No measurement");
+        return;
+    }
+
+    fillPct = distanceToFillPct(distanceMm);
 
     {
         std::lock_guard<std::mutex> lock(DATA_MUTEX);
@@ -205,7 +211,7 @@ void taskTank(void* pv)
     };
 
     auto scheduleRetry = [](uint32_t& nextAttemptMs, uint32_t nowMs) {
-        nextAttemptMs = nowMs + sf_i2c::kI2cInitRetryMs;
+        nextAttemptMs = nowMs + 10000UL;  // 10 second retry interval
     };
 
     for (;;) {

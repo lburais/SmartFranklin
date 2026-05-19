@@ -6,6 +6,8 @@
  * File:        tank.h
  * Project:     SmartFranklin - ESP32 IoT Water Tank Monitor
  * Description: Public API for the M5Stack Unit Ultrasonic I2C water level
+ *              Uses Wire1 directly with SDA/SCL pins and I2C address from
+ *              sf_interfaces.
  *
  * Hardware:    M5Stack Unit Ultrasonic I2C (RCWL-9600)
  *

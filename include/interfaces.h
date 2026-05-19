@@ -1,9 +1,9 @@
 /**
  * @file interfaces.h
- * @brief Centralized interface (port/sensor) definitions and I2C bus helpers.
+ * @brief Centralized interface (port/sensor) definitions and interface helpers.
  *
- * Unifies the sf_interfaces namespace (hardware interface definitions) and the
- * sf_i2c namespace (I2C bus helpers) into a single header.
+ * Provides hardware interface definitions and connector helpers in a single
+ * namespace.
  *
  * SPDX-License-Identifier: MIT
  */
@@ -17,6 +17,9 @@
 #include <mutex>
 
 class TwoWire;
+class SoftWire;
+class HardwareSerial;
+class EspSoftwareSerial;
 
 namespace sf_interfaces {
 
@@ -34,7 +37,9 @@ enum class InterfaceName : uint8_t {
 
 enum class InterfaceType : uint8_t {
     I2C = 0,
+    I2CSoftware,
     UART,
+    UARTSoftware,
     BLE,
     Unused,
     Unknown,
@@ -57,19 +62,41 @@ enum class InterfaceSensor : uint8_t {
     Unknown,
 };
 
-struct InterfaceDefinition {
-    InterfaceName Name;
-    InterfaceType Type;
-    uint8_t       I2cAddress;   ///< I2C device address; 0 if not applicable
-    uint32_t      recurrenceMs; ///< Suggested task recurrence for this sensor
-    int8_t        pinYellow;    ///< SDA (I2C) or RX (UART); -1 if not applicable
-    int8_t        pinWhite;     ///< SCL (I2C) or TX (UART); -1 if not applicable
-    InterfaceSensor Sensor;
-    const char* DeviceName;
+struct InterfaceConnector {
+    union Ptr {
+        void* raw;
+        TwoWire* twoWire;
+        SoftWire* softWire;
+        HardwareSerial* hardwareSerial;
+        EspSoftwareSerial* softwareSerial;
+
+        constexpr Ptr() : raw(nullptr) {}
+    } ptr{};
 };
 
-const InterfaceDefinition* allInterfaceDefinitions(size_t& count);
-const InterfaceDefinition* findBySensor(InterfaceSensor sensor);
+struct InterfacePort {
+    InterfaceName      Name;
+    InterfaceType      Type;
+    uint8_t            Channel;
+    int8_t             pinYellow;  ///< SDA (I2C) or RX (UART); -1 if not applicable
+    int8_t             pinWhite;   ///< SCL (I2C) or TX (UART); -1 if not applicable
+    uint32_t           Clock;      ///< I2C clock frequency in Hz or UART bauds; 0 if not applicable
+    bool               configured;
+    bool               locked;
+    InterfaceConnector connector;
+};
+
+struct InterfaceSensorMap {
+    InterfaceSensor Sensor;
+    InterfaceName   Port;
+    uint8_t         I2cAddress;    ///< I2C device address; 0 if not applicable
+    uint32_t        recurrenceMs;  ///< Suggested task recurrence for this sensor
+    bool            available;     ///< Last availability state set by configure(sensor)
+    const char*     DeviceName;
+};
+
+const InterfacePort* findPort(InterfaceName name);
+const InterfaceSensorMap* findSensor(InterfaceSensor sensor);
 
 InterfaceName getName(InterfaceSensor sensor);
 InterfaceType getType(InterfaceSensor sensor);
@@ -77,38 +104,27 @@ String getDeviceName(InterfaceSensor sensor);
 uint8_t getAddress(InterfaceSensor sensor);
 uint32_t getRecurrenceMs(InterfaceSensor sensor);
 
-int8_t getSDA(InterfaceSensor sensor);  ///< Returns pinYellow if I2C, else -1
-int8_t getSCL(InterfaceSensor sensor);  ///< Returns pinWhite  if I2C, else -1
-int8_t getRX(InterfaceSensor sensor);   ///< Returns pinYellow if UART, else -1
-int8_t getTX(InterfaceSensor sensor);   ///< Returns pinWhite  if UART, else -1
+uint32_t getClock(InterfaceSensor sensor);  ///< Returns I2C clock frequency in Hz, or 0 if not I2C
+int8_t getSDA(InterfaceSensor sensor);      ///< Returns pinYellow if I2C, else -1
+int8_t getSCL(InterfaceSensor sensor);      ///< Returns pinWhite  if I2C, else -1
+int8_t getRX(InterfaceSensor sensor);       ///< Returns pinYellow if UART, else -1
+int8_t getTX(InterfaceSensor sensor);       ///< Returns pinWhite  if UART, else -1
 
 const char* toString(InterfaceName name);
 const char* toString(InterfaceType type);
 const char* toString(InterfaceSensor sensor);
 
+constexpr uint32_t kInterfaceInitRetryMs = 10000UL;
+
+bool configure_all_ports();
+bool configure_all();
+bool configure(InterfaceSensor sensor);
+bool configured(InterfaceSensor sensor);
+
+bool seize(InterfaceSensor sensor);
+void release(InterfaceSensor sensor);
+bool status(InterfaceSensor sensor);
+
+InterfaceConnector getPort(InterfaceSensor sensor);
+
 }  // namespace sf_interfaces
-
-namespace sf_i2c {
-
-constexpr uint32_t kI2cInitRetryMs = 10000UL;
-
-/** @brief Initialize the bus selected by a configured interface sensor. */
-bool i2cBeginConfiguredPort(sf_interfaces::InterfaceSensor sensor,
-                            uint32_t clockHz = 400000U);
-
-/** @brief Check whether a device is reachable on a configured interface. */
-bool i2cDeviceExistsOnConfiguredPort(sf_interfaces::InterfaceSensor sensor,
-                                     uint8_t deviceAddress,
-                                     uint32_t clockHz = 400000U);
-
-/** @brief Publish configuration metadata for one logical I2C device. */
-void i2cPublishConfiguration(sf_interfaces::InterfaceSensor sensor,
-                             uint8_t address);
-
-/** @brief Return the TwoWire bus instance used by a configured I2C sensor. */
-TwoWire& i2cGetWire(sf_interfaces::InterfaceSensor sensor);
-
-/** @brief Shared lock for Wire1 route switching and transactions. */
-std::recursive_mutex& i2cMutex();
-
-}  // namespace sf_i2c

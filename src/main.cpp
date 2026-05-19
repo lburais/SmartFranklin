@@ -62,6 +62,7 @@
 #include "web_dashboard.h"
 #include "config_store.h"
 #include "captive_portal.h"
+#include "interfaces.h"
 
 // ============================================================================
 // Task Handle Declarations
@@ -201,6 +202,14 @@ void setup() {
 
     // Start web-based management interface
     web_dashboard_init();
+
+    // =========================================================================
+    // Interfaces Initialization
+    // =========================================================================
+
+    // Configure all interfaces
+    sf_interfaces::configure_all();
+    delay(10000);
 
     // =========================================================================
     // FreeRTOS Task Creation

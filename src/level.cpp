@@ -277,7 +277,7 @@ void taskLevel(void* pv)
     };
 
     auto scheduleRetry = [](uint32_t& nextAttemptMs, uint32_t nowMs) {
-        nextAttemptMs = nowMs + sf_i2c::kI2cInitRetryMs;
+        nextAttemptMs = nowMs + sf_interfaces::kInterfaceInitRetryMs;
     };
 
     for (;;) {

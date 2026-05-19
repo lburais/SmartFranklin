@@ -3,6 +3,7 @@
  * @brief Public interface for GNSS acquisition in SmartFranklin.
  *
  * This module abstracts GPS sensor initialization and periodic processing.
+ * It uses Wire1 directly with SDA/SCL pins and I2C address from sf_interfaces.
  * It exposes source selection and diagnostics helpers so upper layers can
  * report detected hardware and runtime state.
  *

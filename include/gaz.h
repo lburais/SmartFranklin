@@ -2,8 +2,8 @@
  * @file gaz.h
  * @brief Mesure du poids de bouteille de gaz : acquisition capteur poids I2C, calibration, publication MQTT.
  *
- * Le port I2C utilise est resolu depuis CONFIG via le port dont le capteur est "gaz".
- * Aucune source externe ni abstraction de routage n'est exposee dans l'API publique.
+ * Utilise Wire1 directement avec les parametres (pins SDA/SCL, adresse I2C) provenant de sf_interfaces.
+ * Aucune abstraction de routage n'est exposee dans l'API publique.
  *
  * SPDX-License-Identifier: MIT
  */
