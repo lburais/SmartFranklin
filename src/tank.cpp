@@ -24,102 +24,6 @@
 #include "interfaces.h"
 #include "mqtt.h"
 
-namespace {
-
-constexpr uint8_t TANK_DISTANCE_REGISTER = 0x01;
-constexpr uint32_t TANK_CONVERSION_DELAY_MS = 120U;
-
-constexpr int32_t TANK_DISTANCE_MIN_MM = 20;
-constexpr int32_t TANK_DISTANCE_MAX_MM = 4500;
-
-constexpr int32_t TANK_FULL_DISTANCE_MM = 300;
-constexpr int32_t TANK_EMPTY_DISTANCE_MM = 1500;
-
-int32_t clampDistanceMm(const int32_t distanceMm)
-{
-    if (distanceMm < TANK_DISTANCE_MIN_MM) {
-        return TANK_DISTANCE_MIN_MM;
-    }
-    if (distanceMm > TANK_DISTANCE_MAX_MM) {
-        return TANK_DISTANCE_MAX_MM;
-    }
-    return distanceMm;
-}
-
-int32_t distanceToFillPct(const int32_t distanceMm)
-{
-    if (distanceMm <= TANK_FULL_DISTANCE_MM) {
-        return 100;
-    }
-
-    if (distanceMm >= TANK_EMPTY_DISTANCE_MM) {
-        return 0;
-    }
-
-    const float span = static_cast<float>(TANK_EMPTY_DISTANCE_MM - TANK_FULL_DISTANCE_MM);
-    if (span <= 0.0f) {
-        return 0;
-    }
-
-    const float numerator = static_cast<float>(TANK_EMPTY_DISTANCE_MM - distanceMm);
-    const int32_t pct = static_cast<int32_t>(lroundf((numerator / span) * 100.0f));
-
-    if (pct < 0) {
-        return 0;
-    }
-    if (pct > 100) {
-        return 100;
-    }
-    return pct;
-}
-
-bool readDistanceMm(const uint8_t i2cAddress, int32_t& distanceMm)
-{
-    Wire1.beginTransmission(i2cAddress);
-    Wire1.write(TANK_DISTANCE_REGISTER);
-    if (Wire1.endTransmission() != 0) {
-        return false;
-    }
-
-    delay(TANK_CONVERSION_DELAY_MS);
-
-    const uint8_t readCount = Wire1.requestFrom(i2cAddress, static_cast<uint8_t>(3));
-    if (readCount < 3) {
-        return false;
-    }
-
-    uint32_t rawDistance = 0;
-    rawDistance = static_cast<uint32_t>(Wire1.read());
-    rawDistance <<= 8;
-    rawDistance |= static_cast<uint32_t>(Wire1.read());
-    rawDistance <<= 8;
-    rawDistance |= static_cast<uint32_t>(Wire1.read());
-
-    const float distanceRawMm = static_cast<float>(rawDistance) / 1000.0f;
-    if (!std::isfinite(distanceRawMm)) {
-        M5_LOGW("[TANK] non-finite distance sample ignored");
-        return false;
-    }
-
-    distanceMm = clampDistanceMm(static_cast<int32_t>(lroundf(distanceRawMm)));
-    return true;
-}
-
-void publishDistance(const int32_t distanceMm, const int32_t fillPct)
-{
-    char mmBuf[24] = {0};
-    snprintf(mmBuf, sizeof(mmBuf), "%d", distanceMm);
-    sf_mqtt::publish("smartfranklin/tank/mm", mmBuf);
-
-    char pctBuf[16] = {0};
-    snprintf(pctBuf, sizeof(pctBuf), "%d", fillPct);
-    sf_mqtt::publish("smartfranklin/tank/fill", pctBuf, 1, true);
-
-    M5_LOGI("[TANK] Distance: %d mm     Fill level: %d%%", distanceMm, fillPct);
-}
-
-}  // namespace
-
 Tank TANK_TASK;
 
 bool Tank::isInitialized() const
@@ -129,63 +33,92 @@ bool Tank::isInitialized() const
 
 bool Tank::init()
 {
-    const uint8_t i2cAddress = sf_interfaces::getAddress(sf_interfaces::InterfaceSensor::Tank);
-    if (i2cAddress == 0) {
-        M5_LOGW("[TANK] address not defined in interfaces");
-        return false;
-    }
-
     m_initialized = false;
-    m_activeConfiguredPort = "";
 
-    if (!sf_interfaces::configure(sf_interfaces::InterfaceSensor::Tank)) {
-        M5_LOGW("[TANK] configure failed");
+    const bool configured = sf_interfaces::configured(m_sensor);
+
+    if (!configured) {
+        if (!sf_interfaces::configure(m_sensor)) {
+            M5_LOGW("[%s] configure failed", m_tag);
+            return false;
+        }
+    }
+
+    TwoWire* connector = sf_interfaces::getPort(m_sensor).ptr.twoWire;
+    if (connector == nullptr) {
+        M5_LOGW("[%s] connector unavailable", m_tag);
         return false;
     }
 
-    if (!sf_interfaces::configured(sf_interfaces::InterfaceSensor::Tank)) {
-        M5_LOGW("[TANK] device (0x%02X) not found", i2cAddress);
-        return false;
+    if (connector == &Wire1) {
+        M5_LOGI("[%s] connector is on Wire1", m_tag);
+    } else if (connector == &Wire) {
+        M5_LOGI("[%s] connector is on Wire", m_tag);
+    } else {
+        M5_LOGI("[%s] connector is custom bus ptr=%p", m_tag, connector);
     }
 
-    m_activeConfiguredPort = sf_interfaces::toString(sf_interfaces::getName(sf_interfaces::InterfaceSensor::Tank));
+    const bool ok = m_units.add(m_unit, *connector) && m_units.begin();
+    if (!ok) {
+        M5_LOGW("[%s] %s m_unit not added", m_tag, m_device);
+        return false;
+    } else {
+        M5_LOGI("[%s] %s m_unit added", m_tag, m_device);
+    }
+
     m_initialized = true;
+    hmiSetPortLedStatus(m_sensor, m_initialized, false);
 
-    M5_LOGI("[TANK] initialized on port '%s' (0x%02X)", m_activeConfiguredPort.c_str(), i2cAddress);
+    M5_LOGI("[%s] (0x%02X) initialized", m_tag, sf_interfaces::getAddress(m_sensor));
     return true;
 }
 
-void Tank::process()
+bool Tank::process()
 {
     int32_t distanceMm = 0;
     int32_t fillPct = 0;
 
-    const uint8_t i2cAddress = sf_interfaces::getAddress(sf_interfaces::InterfaceSensor::Tank);
-    if (i2cAddress == 0) {
-        M5_LOGW("[TANK] address not defined in interfaces");
-        return;
+    if (!m_initialized) {
+        if (!init()) {
+            M5_LOGW("[%s] not configured", m_tag);
+            hmiSetPortLedStatus(m_sensor, m_initialized, true);
+            return false;
+        }
     }
 
-    if (!m_initialized || m_activeConfiguredPort.isEmpty()) {
-        return;
+    m_units.update();
+
+    if (!m_unit.updated()) {
+        return false;
     }
 
-    if (!sf_interfaces::configure(sf_interfaces::InterfaceSensor::Tank)) {
-        M5_LOGW("[TANK] configure failed during process");
-        return;
+    const float rawDistanceCm = m_unit.distance();
+    if (!std::isfinite(rawDistanceCm)) {
+        M5_LOGW("[%s] non-finite distance sample ignored", m_tag);
+        return false;
     }
 
-    Wire1.beginTransmission(i2cAddress);
-    if (Wire1.endTransmission() != 0) {
-        M5_LOGW("[TANK] sensor not reachable on bus");
-        return;
+    distanceMm = static_cast<int32_t>(lroundf(rawDistanceCm * 10));
+
+    if (distanceMm < TANK_DISTANCE_MIN_MM) {
+        distanceMm = TANK_DISTANCE_MIN_MM;
     }
-    if (!readDistanceMm(i2cAddress, distanceMm)) {
-        M5_LOGW("[TANK] No measurement");
-        return;
+    if (distanceMm > TANK_DISTANCE_MAX_MM) {
+        distanceMm = TANK_DISTANCE_MAX_MM;
     }
 
-    fillPct = distanceToFillPct(distanceMm);
+    if (distanceMm <= TANK_FULL_DISTANCE_MM) {
+        return 100;
+    }
+
+    if (distanceMm >= TANK_EMPTY_DISTANCE_MM) {
+        return 0;
+    }
+
+    const float TANK_SPAN_DISTANCE_MM = static_cast<float>(TANK_EMPTY_DISTANCE_MM - TANK_FULL_DISTANCE_MM);
+    const float numerator = static_cast<float>(TANK_EMPTY_DISTANCE_MM - distanceMm);
+    
+    fillPct = static_cast<int32_t>(lroundf((numerator / TANK_SPAN_DISTANCE_MM) * 100.0f));
 
     {
         std::lock_guard<std::mutex> lock(DATA_MUTEX);
@@ -193,7 +126,17 @@ void Tank::process()
         DATA.fill_tank = fillPct;
     }
 
-    publishDistance(distanceMm, fillPct);
+    char mmBuf[24] = {0};
+    snprintf(mmBuf, sizeof(mmBuf), "%d", distanceMm);
+    sf_mqtt::publish("smartfranklin/tank/mm", mmBuf);
+
+    char pctBuf[16] = {0};
+    snprintf(pctBuf, sizeof(pctBuf), "%d", fillPct);
+    sf_mqtt::publish("smartfranklin/tank/fill", pctBuf, 1, true);
+
+    M5_LOGI("[%s] Distance: %d mm     Fill level: %d%%", m_tag, distanceMm, fillPct);
+
+    return true;
 }
 
 // ---- FreeRTOS task ----

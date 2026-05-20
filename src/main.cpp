@@ -208,8 +208,7 @@ void setup() {
     // =========================================================================
 
     // Configure all interfaces
-    sf_interfaces::configure_all();
-    delay(10000);
+    sf_interfaces::configure_all_sensors();
 
     // =========================================================================
     // FreeRTOS Task Creation

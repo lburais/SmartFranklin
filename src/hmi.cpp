@@ -182,8 +182,25 @@ bool initBoardLeds()
     return g_hmiLedConfigured;
 }
 
-void setPortLedInitResultLocked(const sf_interfaces::InterfaceSensor sensor, const bool initialized)
+
+}  // namespace
+
+void hmiSetAllBoardLedsWhite()
 {
+    std::lock_guard<std::mutex> lock(g_hmiLedMutex);
+
+    if (!initBoardLeds()) {
+        return;
+    }
+
+    strip.fill(strip.Color(255, 255, 255), 0, kBoardLedCount);
+    strip.show();
+}
+
+void hmiSetPortLedStatus(const sf_interfaces::InterfaceSensor sensor, const bool initialized, const bool error)
+{
+    std::lock_guard<std::mutex> lock(g_hmiLedMutex);
+
     if (!initBoardLeds()) {
         return;
     }
@@ -208,25 +225,9 @@ void setPortLedInitResultLocked(const sf_interfaces::InterfaceSensor sensor, con
     }
     strip.show();
 }
-
-}  // namespace
-
-void hmiSetAllBoardLedsWhite()
+void hmiSetPortLedStatus(const sf_interfaces::InterfaceSensor sensor, const PortStatus status)
 {
-    std::lock_guard<std::mutex> lock(g_hmiLedMutex);
-
-    if (!initBoardLeds()) {
-        return;
-    }
-
-    strip.fill(strip.Color(255, 255, 255), 0, kBoardLedCount);
-    strip.show();
-}
-
-void hmiSetPortLedStatus(const sf_interfaces::InterfaceSensor sensor, const bool initialized, const bool error)
-{
-    std::lock_guard<std::mutex> lock(g_hmiLedMutex);
-    setPortLedInitResultLocked(sensor, initialized);
+    hmiSetPortLedStatus(sensor, status == PortStatus::Ok, false);
 }
 
 /**
@@ -392,17 +393,11 @@ void HMI::handleCalibrationButton(bool btnB_rising)
         return;
     }
 
-    const float raw = scale_get_raw();
-    if (raw != 0.0f) {
-        const float knownWeightG = calib_known_weight_ * 1000.0f;
-        const float factor = raw / knownWeightG;
-        if (scale_set_cal_factor(factor)) {
-            CONFIG.gaz_calibration_factor = factor;
-            config_save();
-        } else {
-            M5_LOGW("[HMI] scale calibration apply failed");
-        }
+    const float knownWeightG = calib_known_weight_ * 1000.0f;
+    if (!scale_calibrate(knownWeightG)) {
+        M5_LOGW("[HMI] scale calibration apply failed");
     }
+
     calib_in_progress_ = false;
     draw();
 }

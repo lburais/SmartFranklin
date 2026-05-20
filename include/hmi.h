@@ -48,16 +48,19 @@
 #include "interfaces.h"
 
 /**
- * @brief Sets all 7 board RGB LEDs to white (startup splash state).
- */
-// oid hmiSetAllBoardLedsWhite();
-
-/**
  * @brief Updates one port LED to reflect init result.
  * @param configuredPort Port name (A1/A2/B1/B2/C1/C2, case-insensitive).
  * @param initialized True when port init succeeded, false when it failed.
  */
+enum class PortStatus : uint8_t {
+    Ok = 0,
+    Configured,
+    NoData,
+    Error,
+    Unknown,
+};
 void hmiSetPortLedStatus(sf_interfaces::InterfaceSensor sensor, bool initialized, bool error);
+void hmiSetPortLedStatus(sf_interfaces::InterfaceSensor sensor, PortStatus status);
 
 /**
  * @brief Human-Machine Interface runtime for display and local controls.

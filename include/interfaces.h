@@ -95,9 +95,6 @@ struct InterfaceSensorMap {
     const char*     DeviceName;
 };
 
-const InterfacePort* findPort(InterfaceName name);
-const InterfaceSensorMap* findSensor(InterfaceSensor sensor);
-
 InterfaceName getName(InterfaceSensor sensor);
 InterfaceType getType(InterfaceSensor sensor);
 String getDeviceName(InterfaceSensor sensor);
@@ -113,17 +110,13 @@ int8_t getTX(InterfaceSensor sensor);       ///< Returns pinWhite  if UART, else
 const char* toString(InterfaceName name);
 const char* toString(InterfaceType type);
 const char* toString(InterfaceSensor sensor);
+String toUpperString(InterfaceSensor sensor);
 
 constexpr uint32_t kInterfaceInitRetryMs = 10000UL;
 
-bool configure_all_ports();
-bool configure_all();
+bool configure_all_sensors();
 bool configure(InterfaceSensor sensor);
 bool configured(InterfaceSensor sensor);
-
-bool seize(InterfaceSensor sensor);
-void release(InterfaceSensor sensor);
-bool status(InterfaceSensor sensor);
 
 InterfaceConnector getPort(InterfaceSensor sensor);
 

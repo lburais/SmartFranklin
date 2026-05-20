@@ -1774,19 +1774,14 @@ void web_dashboard_init()
             return;
         }
 
-        CONFIG.gaz_calibration_factor = 1.0f;
-        const bool saved = config_save();
-
         JsonDocument doc;
-        doc["saved"] = saved;
         doc["gaz_calibration_factor"] = CONFIG.gaz_calibration_factor;
-        doc["scale_cal_factor"] = CONFIG.gaz_calibration_factor;
         {
             std::lock_guard<std::mutex> lock(DATA_MUTEX);
             doc["fill_gaz"] = DATA.fill_gaz;
             doc["weight_gaz"] = DATA.weight_gaz;
         }
-        sendJson(request, doc, saved ? 200 : 500);
+        sendJson(request, doc, 200);
     });
 
     server.on("/api/gaz_calibration_apply", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -1818,70 +1813,15 @@ void web_dashboard_init()
             return;
         }
 
-        const float rawWeightG = scale_get_raw();
-        if (!std::isfinite(rawWeightG) || std::fabs(rawWeightG) < 1.0f) {
-            request->send(400, "application/json", "{\"error\":\"invalid_raw_measurement\"}");
-            return;
-        }
-
-        float currentGap = CONFIG.gaz_calibration_factor;
-        if (!scale_get_cal_factor(currentGap) || !std::isfinite(currentGap) || std::fabs(currentGap) < 1e-6f) {
-            currentGap = CONFIG.gaz_calibration_factor;
-        }
-
-        const float newFactor = currentGap * (rawWeightG / knownWeightG);
-        if (!std::isfinite(newFactor) || std::fabs(newFactor) < 1e-6f || std::fabs(newFactor) > 1000.0f) {
-            request->send(400, "application/json", "{\"error\":\"invalid_calibration_factor\"}");
-            return;
-        }
-
-        if (!scale_set_cal_factor(newFactor)) {
+        if (!scale_calibrate(knownWeightG)) {
             request->send(500, "application/json", "{\"error\":\"apply_calibration_failed\"}");
             return;
         }
 
-        float sensorGapAfter = 0.0f;
-        const bool sensorGapAfterReadOk = scale_get_cal_factor(sensorGapAfter);
-        const bool saved = config_save();
-
         JsonDocument doc;
-        doc["saved"] = saved;
         doc["known_weight_g"] = knownWeightG;
-        doc["raw_weight_g"] = rawWeightG;
-        doc["sensor_gap_before"] = currentGap;
-        doc["sensor_gap_after_read_ok"] = sensorGapAfterReadOk;
-        if (sensorGapAfterReadOk) {
-            doc["sensor_gap_after"] = sensorGapAfter;
-        }
         doc["gaz_calibration_factor"] = CONFIG.gaz_calibration_factor;
-        doc["scale_cal_factor"] = CONFIG.gaz_calibration_factor;
-        sendJson(request, doc, saved ? 200 : 500);
-    });
-
-    server.on("/api/gaz_calibration_debug", HTTP_GET, [](AsyncWebServerRequest *request){
-        JsonDocument doc;
-
-        float sensorGap = 0.0f;
-        int32_t rawAdc = 0;
-        const float sampleWeightG = scale_get_raw();
-        const bool gapReadOk = scale_get_cal_factor(sensorGap);
-        const bool rawAdcReadOk = scale_get_raw_adc(rawAdc);
-
-        doc["gaz_calibration_factor_config"] = CONFIG.gaz_calibration_factor;
-        doc["scale_cal_factor_config"] = CONFIG.gaz_calibration_factor;
-        doc["gaz_weight_average_window"] = CONFIG.gaz_weight_average_window;
-        doc["sample_weight_g"] = sampleWeightG;
-        doc["sensor_gap_read_ok"] = gapReadOk;
-        doc["raw_adc_read_ok"] = rawAdcReadOk;
-
-        if (gapReadOk) {
-            doc["sensor_gap"] = sensorGap;
-        }
-        if (rawAdcReadOk) {
-            doc["raw_adc"] = rawAdc;
-        }
-
-        sendJson(request, doc);
+        sendJson(request, doc, 200);
     });
 
     server.on("/api/config", HTTP_GET, [](AsyncWebServerRequest *request){

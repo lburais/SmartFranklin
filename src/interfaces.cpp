@@ -13,7 +13,9 @@
 #include <HardwareSerial.h>
 #include <Wire.h>
 
+#include <cctype>
 #include <cstddef>
+#include <cstring>
 
 namespace sf_interfaces {
 
@@ -33,24 +35,12 @@ InterfacePort kPorts[] = {
 
 InterfaceSensorMap kSensors[] = {
 //   sensor                 port                      addr  recur  avail? device name
-    #ifndef DISABLE_GAZ
     {InterfaceSensor::Gaz,  InterfaceName::PortA1,    0x26,  1000, false, "M5Stack Weight I2C Unit"},
-    #endif
-    #ifndef DISABLE_TANK
     {InterfaceSensor::Tank, InterfaceName::PortA2,    0x57,  1000, false, "M5Stack Unit Ultrasonic I2C (RCWL-9600)"},
-    #endif
-    #ifndef DISABLE_GPS
     {InterfaceSensor::Gps,  InterfaceName::PortC1,    0x66, 30000, false, "DFRobot Gravity GNSS (DFR1103)"},
-    #endif
-    #ifndef DISABLE_LTE
     {InterfaceSensor::Lte,  InterfaceName::PortB1,    0x00,  1000, false, "M5Stack NB-IOT2"},
-    #endif
-    #ifndef DISABLE_LORA
     {InterfaceSensor::Lora, InterfaceName::PortC2,    0x00,  1000, false, "M5Stack C6L"},
-    #endif
-    #ifndef DISABLE_LIN
     {InterfaceSensor::Lin,  InterfaceName::PortB2,    0x00,  1000, false, "LIN Bus"},
-    #endif
     {InterfaceSensor::Imu,  InterfaceName::Internal,  0x68,  1000, false, "MPU6886"},
     {InterfaceSensor::Rtc,  InterfaceName::Internal,  0x51,  1000, false, "BM8563"},
     {InterfaceSensor::Ina,  InterfaceName::Internal,  0x40,  1000, false, "INA3221"},
@@ -59,7 +49,7 @@ InterfaceSensorMap kSensors[] = {
     {InterfaceSensor::Obd,  InterfaceName::Bluetooth, 0x00,  1000, false, "OBD"},
 };
 
-InterfacePort* findMutablePort(const InterfaceName name)
+InterfacePort* findPortMutable(const InterfaceName name)
 {
     const size_t count = sizeof(kPorts) / sizeof(kPorts[0]);
     for (size_t i = 0; i < count; ++i) {
@@ -72,7 +62,7 @@ InterfacePort* findMutablePort(const InterfaceName name)
 
 const InterfacePort* findPortConst(const InterfaceName name)
 {
-    return findMutablePort(name);
+    return findPortMutable(name);
 }
 
 const InterfaceSensorMap* findSensorConst(const InterfaceSensor sensor)
@@ -97,15 +87,19 @@ InterfaceSensorMap* findSensorMutable(const InterfaceSensor sensor)
     return nullptr;
 }
 
-void clearConnector(InterfacePort& port)
+int findPortIndex(const InterfaceName name)
 {
-    M5_LOGI("[IFACE] clearConnector(%s)", toString(port.Name));
-    port.connector.ptr.raw = nullptr;
+    const size_t count = sizeof(kPorts) / sizeof(kPorts[0]);
+    for (size_t i = 0; i < count; ++i) {
+        if (kPorts[i].Name == name) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
 }
 
 InterfaceConnector getPort(const InterfaceName name)
 {
-    M5_LOGI("[IFACE] getPort(%s)", toString(name));
     const InterfacePort* port = findPortConst(name);
     if (port == nullptr) {
         M5_LOGE("[IFACE] getPort(%s) -> null", toString(name));
@@ -116,16 +110,13 @@ InterfaceConnector getPort(const InterfaceName name)
 
 bool configured(const InterfaceName name)
 {
-    M5_LOGI("[IFACE] configured(port=%s)", toString(name));
     const InterfacePort* port = findPortConst(name);
     const bool result = (port != nullptr) && port->configured;
-    M5_LOGI("[IFACE] configured(port=%s) -> %d", toString(name), result);
     return result;
 }
 
 void publishConfiguration(const InterfaceSensor sensor)
 {
-    M5_LOGI("[IFACE] publishConfiguration(%s)", toString(sensor));
     char addressBuf[8] = {0};
     char topicBuf[96] = {0};
     const char* topicTag = toString(sensor);
@@ -145,12 +136,10 @@ void publishConfiguration(const InterfaceSensor sensor)
     sf_mqtt::publish(topicBuf, type.c_str(), 1, true);
     snprintf(topicBuf, sizeof(topicBuf), "smartfranklin/system/interface/%s/device_name", topicTag);
     sf_mqtt::publish(topicBuf, deviceName.c_str(), 1, true);
-    M5_LOGI("[IFACE] publishConfiguration(%s) -> done", topicTag);
 }
 
 bool configureI2c(InterfacePort& port)
 {
-    M5_LOGI("[IFACE] configureI2c(%s)", toString(port.Name));
     const int8_t sda = port.pinYellow;
     const int8_t scl = port.pinWhite;
     const uint32_t clockHz = port.Clock;
@@ -183,13 +172,11 @@ bool configureI2c(InterfacePort& port)
 
     port.connector.ptr.twoWire = bus;
 
-    M5_LOGI("[IFACE] configureI2c(%s) -> ok", toString(port.Name));
     return true;
 }
 
 bool configureUart(InterfacePort& port)
 {
-    M5_LOGI("[IFACE] configureUart(%s)", toString(port.Name));
     const InterfaceName name = port.Name;
     HardwareSerial* serial = nullptr;
     if (name == InterfaceName::PortB1) {
@@ -208,14 +195,12 @@ bool configureUart(InterfacePort& port)
 
     serial->begin(baud, SERIAL_8N1, rx, tx);
     port.connector.ptr.hardwareSerial = serial;
-    M5_LOGI("[IFACE] configureUart(%s) -> ok", toString(name));
     return true;
 }
 
 bool configure(const InterfaceName name)
 {
-    M5_LOGI("[IFACE] configure(port=%s)", toString(name));
-    InterfacePort* port = findMutablePort(name);
+    InterfacePort* port = findPortMutable(name);
     if (port == nullptr) {
         M5_LOGE("[IFACE] configure(port=%s) -> not found", toString(name));
         return false;
@@ -225,12 +210,12 @@ bool configure(const InterfaceName name)
         return false;
     }
     if (port->configured) {
-        M5_LOGI("[IFACE] configure(port=%s) -> already configured", toString(name));
+        M5_LOGW("[IFACE] configure(port=%s) -> already configured", toString(name));
         return true;
     }
 
     bool ok = false;
-    clearConnector(*port);
+    port->connector.ptr.raw = nullptr; //clearConnector(*port);
     switch (port->Type) {
     case InterfaceType::I2C:
         ok = configureI2c(*port);
@@ -253,40 +238,7 @@ bool configure(const InterfaceName name)
     }
 
     port->configured = ok;
-    M5_LOGI("[IFACE] configure(port=%s) -> %d", toString(name), ok);
     return ok;
-}
-
-bool sensorAvailable(const InterfaceSensorMap& sensor)
-{
-    M5_LOGI("[IFACE] sensorAvailable(%s)", toString(sensor.Sensor));
-    const InterfacePort* port = findPortConst(sensor.Port);
-    if (port == nullptr) {
-        M5_LOGE("[IFACE] sensorAvailable(%s) -> port not found", toString(sensor.Sensor));
-        return false;
-    }
-
-    if (port->Type == InterfaceType::I2C) {
-        TwoWire* bus = port->connector.ptr.twoWire;
-        if (bus == nullptr || sensor.I2cAddress == 0U) {
-            M5_LOGE("[IFACE] sensorAvailable(%s) -> no bus or address", toString(sensor.Sensor));
-            return false;
-        }
-        M5_LOGI("[IFACE] sensorAvailable(%s) -> bus=%p", toString(sensor.Sensor), bus);
-        bus->beginTransmission(sensor.I2cAddress);
-        const bool ack = bus->endTransmission() == 0;
-        M5_LOGW("[IFACE] sensorAvailable(%s) -> I2C ACK=%d", toString(sensor.Sensor), ack);
-        return ack;
-    }
-
-    if (port->Type == InterfaceType::UART) {
-        const bool ok = port->connector.ptr.hardwareSerial != nullptr;
-        M5_LOGI("[IFACE] sensorAvailable(%s) -> UART=%d", toString(sensor.Sensor), ok);
-        return ok;
-    }
-
-    M5_LOGI("[IFACE] sensorAvailable(%s) -> ok", toString(sensor.Sensor));
-    return true;
 }
 
 }  // namespace
@@ -340,17 +292,22 @@ const char* toString(const InterfaceSensor sensor)
     }
 }
 
-const InterfacePort* findPort(const InterfaceName name)
+String toUpperString(const InterfaceSensor sensor)
 {
-    const InterfacePort* result = findPortConst(name);
-    return result;
+    const char* source = sf_interfaces::toString(sensor);
+    char buffer[32] = {0};
+
+    if (source != nullptr) {
+        strncpy(buffer, source, sizeof(buffer) - 1);
+    }
+
+    for (char* p = buffer; *p != '\0'; ++p) {
+        *p = static_cast<char>(toupper(static_cast<unsigned char>(*p)));
+    }
+
+    return String(buffer);
 }
 
-const InterfaceSensorMap* findSensor(const InterfaceSensor sensor)
-{
-    const InterfaceSensorMap* result = findSensorConst(sensor);
-    return result;
-}
 
 InterfaceName getName(const InterfaceSensor sensor)
 {
@@ -424,87 +381,72 @@ int8_t getTX(const InterfaceSensor sensor)
     return result;
 }
 
-bool configure_all_ports()
+bool configure_all_sensors()
 {
-    M5_LOGI("[IFACE] configure_all_ports()");
-    bool allOk = true;
-    const size_t count = sizeof(kPorts) / sizeof(kPorts[0]);
-    for (size_t i = 0; i < count; ++i) {
-        allOk = configure(kPorts[i].Name) && allOk;
-    }
-    M5_LOGI("[IFACE] configure_all_ports() -> %d", allOk);
-    return allOk;
-}
-
-bool configure_all()
-{
-    M5_LOGI("[IFACE] configure_all()");
     bool allOk = true;
     const size_t count = sizeof(kSensors) / sizeof(kSensors[0]);
     for (size_t i = 0; i < count; ++i) {
         allOk = configure(kSensors[i].Sensor) && allOk;
     }
-    M5_LOGI("[IFACE] configure_all() -> %d", allOk);
     return allOk;
 }
 
 bool configure(const InterfaceSensor sensor)
 {
-    M5_LOGI("[IFACE] configure(%s)", toString(sensor));
     InterfaceSensorMap* map = findSensorMutable(sensor);
     if (map == nullptr) {
-        M5_LOGE("[IFACE] configure(%s) -> sensor not found", toString(sensor));
+        M5_LOGW("[IFACE] configure(%s) -> sensor not found", toString(sensor));
         return false;
     }
 
     if (!configure(map->Port)) {
-        M5_LOGE("[IFACE] configure(%s) -> port failed", toString(sensor));
+        M5_LOGW("[IFACE] configure(%s) -> port %s failed", toString(sensor), toString(map->Port));
         return false;
     }
 
     const InterfacePort* port = findPortConst(map->Port);
 
     if (port->Type == InterfaceType::I2C) {
+
         TwoWire* bus = port->connector.ptr.twoWire;
         if (bus == nullptr || map->I2cAddress == 0U) {
             M5_LOGE("[IFACE] configure(%s) -> no bus or i2c address", toString(sensor));
             return false;
         }
-        M5_LOGI("[IFACE] configure(%s) -> i2c bus=%p", toString(sensor), bus);
+
         bus->beginTransmission(map->I2cAddress);
         const bool ack = bus->endTransmission() == 0;
-        M5_LOGI("[IFACE] configure(%s) -> I2C ACK=%d", toString(sensor), ack);
         map->available = ack;
+
     }
 
     if (port->Type == InterfaceType::UART) {
         const bool ok = port->connector.ptr.hardwareSerial != nullptr;
-        M5_LOGI("[IFACE] sensorAvailable(%s) -> UART=%d", toString(sensor), ok);
         map->available = ok;
     }
 
     if (!map->available) {
         M5_LOGW("[IFACE] configure(%s) -> sensor not available", toString(sensor));
         return false;
+    } else {
+        M5_LOGI("[IFACE] configure(%s) -> sensor ready", toString(sensor));
     }
 
     publishConfiguration(sensor);
-    M5_LOGI("[IFACE] configure(%s) port configured and sensor available", toString(sensor));
+
     return true;
 }
 
 bool configured(const InterfaceSensor sensor)
 {
-    M5_LOGI("[IFACE] configured(%s)", toString(sensor));
     const InterfaceSensorMap* map = findSensorConst(sensor);
     if (map == nullptr) {
-        M5_LOGE("[IFACE] configured(%s) -> sensor not found", toString(sensor));
+        M5_LOGW("[IFACE] configured(%s) -> sensor not found", toString(sensor));
         return false;
     }
 
-//    if (!configured(map->Port) && !configure(sensor)) {
     if (!configured(map->Port)) {
-        M5_LOGE("[IFACE] configured(%s) -> port not configured", toString(sensor));
+        M5_LOGW("[IFACE] configured(%s) -> port %s not configured", toString(sensor), toString(map->Port));
         return false;
     }
 
@@ -513,49 +455,14 @@ bool configured(const InterfaceSensor sensor)
         return false;
     }
 
-    M5_LOGI("[IFACE] configured(%s) -> ok", toString(sensor));
     return true;
-}
-
-bool seize(const InterfaceSensor sensor)
-{
-    const InterfaceSensorMap* map = findSensorConst(sensor);
-    InterfacePort* port = (map != nullptr) ? findMutablePort(map->Port) : nullptr;
-    if (port == nullptr || port->locked) {
-        M5_LOGI("[IFACE] seize(%s) -> failed (null or already locked)", toString(sensor));
-        return false;
-    }
-    port->locked = true;
-    return true;
-}
-
-void release(const InterfaceSensor sensor)
-{
-    const InterfaceSensorMap* map = findSensorConst(sensor);
-    InterfacePort* port = (map != nullptr) ? findMutablePort(map->Port) : nullptr;
-    if (port == nullptr) {
-        M5_LOGI("[IFACE] release(%s) -> port not found", toString(sensor));
-        return;
-    }
-    port->locked = false;
-}
-
-bool status(const InterfaceSensor sensor)
-{
-    const InterfaceSensorMap* map = findSensorConst(sensor);
-    const InterfacePort* port = (map != nullptr) ? findPortConst(map->Port) : nullptr;
-    if (port == nullptr) {
-        M5_LOGI("[IFACE] status(%s) -> port not found", toString(sensor));
-        return false;
-    }
-    return port->locked;
 }
 
 InterfaceConnector getPort(const InterfaceSensor sensor)
 {
     const InterfaceSensorMap* map = findSensorConst(sensor);
     if (map == nullptr) {
-        M5_LOGI("[IFACE] getPort(%s) -> sensor not found", toString(sensor));
+        M5_LOGW("[IFACE] getPort(%s) -> sensor not found", toString(sensor));
         return InterfaceConnector{};
     }
     return getPort(map->Port);

@@ -35,8 +35,13 @@
 #pragma once
 
 #include <Arduino.h>
+#include <M5UnitUnified.h>
+#include <M5UnitUnifiedDISTANCE.h>
 
 #include <mutex>
+
+#include "interfaces.h"
+
 
 /**
  * @brief Tank ultrasonic water level runtime.
@@ -47,15 +52,32 @@ public:
 	bool init();
 
 	/** Run one acquisition and publication cycle. */
-	void process();
+	bool process();
 
 	/** Return true when module initialization is complete. */
 	bool isInitialized() const;
 
 private:
 	mutable std::mutex m_mutex;
-	bool m_initialized = false;
-	String m_activeConfiguredPort;
+
+    m5::unit::UnitUnified       m_units;
+    m5::unit::UnitUltraSonicI2C m_unit;
+
+	bool    m_initialized = false;
+
+	const sf_interfaces::InterfaceSensor m_sensor = sf_interfaces::InterfaceSensor::Tank;
+	const String m_tag = sf_interfaces::toUpperString(m_sensor);
+	const String m_device = sf_interfaces::getDeviceName(m_sensor);
+
+	const uint8_t TANK_DISTANCE_REGISTER = 0x01;
+	const uint32_t TANK_CONVERSION_DELAY_MS = 120U;
+
+	const int32_t TANK_DISTANCE_MIN_MM = 20;
+	const int32_t TANK_DISTANCE_MAX_MM = 4500;
+
+	const int32_t TANK_FULL_DISTANCE_MM = 300;
+	const int32_t TANK_EMPTY_DISTANCE_MM = 1500;
+
 };
 
 /** Global singleton used by taskTank, mirroring LEVEL_TASK pattern. */
