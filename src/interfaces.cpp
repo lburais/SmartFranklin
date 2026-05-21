@@ -22,15 +22,15 @@ namespace sf_interfaces {
 namespace {
 
 InterfacePort kPorts[] = {
-//   name                      type                 ch  ye  wh  clock     conf?  lock?  connector
-    {InterfaceName::PortA1,    InterfaceType::I2C,   0, 32, 33, 100000UL, false, false, {}},
-    {InterfaceName::PortA2,    InterfaceType::I2C,   0, 32, 33, 100000UL, false, false, {}},
-    {InterfaceName::PortB1,    InterfaceType::UART,  1, 35, 25, 115200UL, false, false, {}},
-    {InterfaceName::PortB2,    InterfaceType::UART,  2, 36, 26, 115200UL, false, false, {}},
-    {InterfaceName::PortC1,    InterfaceType::I2C,   2, 14, 13, 400000UL, false, false, {}},
-    {InterfaceName::PortC2,    InterfaceType::UART,  3, 17, 16, 115200UL, false, false, {}},
-    {InterfaceName::Internal,  InterfaceType::I2C,   1, 21, 22, 400000UL, false, false, {}},
-    {InterfaceName::Bluetooth, InterfaceType::BLE,   0, -1, -1,      0UL, false, false, {}},
+//   name                      type                 ch  ye  wh  clock     Lock conf?  lock?  connector
+    {InterfaceName::PortA1,    InterfaceType::I2C,   0, 32, 33, 100000UL, {}, false, false, {}},
+    {InterfaceName::PortA2,    InterfaceType::I2C,   0, 32, 33, 100000UL, {}, false, false, {}},
+    {InterfaceName::PortB1,    InterfaceType::UART,  1, 35, 25, 115200UL, {}, false, false, {}},
+    {InterfaceName::PortB2,    InterfaceType::UART,  2, 36, 26, 115200UL, {}, false, false, {}},
+    {InterfaceName::PortC1,    InterfaceType::I2C,   2, 14, 13, 400000UL, {}, false, false, {}},
+    {InterfaceName::PortC2,    InterfaceType::UART,  3, 17, 16, 115200UL, {}, false, false, {}},
+    {InterfaceName::Internal,  InterfaceType::I2C,   1, 21, 22, 400000UL, {}, false, false, {}},
+    {InterfaceName::Bluetooth, InterfaceType::BLE,   0, -1, -1,      0UL, {}, false, false, {}},
 };
 
 InterfaceSensorMap kSensors[] = {
@@ -48,6 +48,14 @@ InterfaceSensorMap kSensors[] = {
     {InterfaceSensor::Bat,  InterfaceName::Bluetooth, 0x00,  1000, false, "Battery"},
     {InterfaceSensor::Obd,  InterfaceName::Bluetooth, 0x00,  1000, false, "OBD"},
 };
+
+inline bool seizePort(SemaphoreHandle_t lock){
+    return xSemaphoreTake(lock, pdMS_TO_TICKS(200));
+}
+
+inline void releasePort(SemaphoreHandle_t lock){
+    xSemaphoreGive(lock);
+}
 
 InterfacePort* findPortMutable(const InterfaceName name)
 {
@@ -162,12 +170,16 @@ bool configureI2c(InterfacePort& port)
         return false;
     }
 
-    bus->end();        
-    if (!bus->begin(sda, scl, clockHz)) {
-        M5_LOGE("[IFACE] %s: begin failed", toString(port.Name));
-        return false;
-    } else {
-        M5_LOGI("[IFACE] %s: begin channel %d", toString(port.Name), channel);
+    if (seizePort(port.Lock)) {
+        bus->end();        
+        if (!bus->begin(sda, scl, clockHz)) {
+            M5_LOGE("[IFACE] %s: begin failed", toString(port.Name));
+            releasePort(port.Lock);
+            return false;
+        } else {
+            M5_LOGI("[IFACE] %s: begin channel %d", toString(port.Name), channel);
+        }
+        releasePort(port.Lock);
     }
 
     port.connector.ptr.twoWire = bus;
@@ -213,6 +225,8 @@ bool configure(const InterfaceName name)
         M5_LOGW("[IFACE] configure(port=%s) -> already configured", toString(name));
         return true;
     }
+
+    port->Lock = xSemaphoreCreateMutex();
 
     bool ok = false;
     port->connector.ptr.raw = nullptr; //clearConnector(*port);
@@ -414,9 +428,14 @@ bool configure(const InterfaceSensor sensor)
             return false;
         }
 
-        bus->beginTransmission(map->I2cAddress);
-        const bool ack = bus->endTransmission() == 0;
-        map->available = ack;
+        if (seize(sensor)) {
+            bus->beginTransmission(map->I2cAddress);
+            const bool ack = bus->endTransmission() == 0;
+            release(sensor);
+            map->available = ack;
+        } else {
+            map->available = false;
+        }
 
     }
 
@@ -466,6 +485,45 @@ InterfaceConnector getPort(const InterfaceSensor sensor)
         return InterfaceConnector{};
     }
     return getPort(map->Port);
+}
+
+bool seize(InterfaceSensor sensor){
+    const InterfaceSensorMap* map = findSensorConst(sensor);
+    if (map == nullptr) {
+        M5_LOGW("[IFACE] seize(%s) -> sensor not found", toString(sensor));
+        return false;
+    }
+    
+    InterfacePort* port = findPortMutable(map->Port);
+    if (port == nullptr) {
+        M5_LOGE("[IFACE] seize(port=%s) -> not found", toString(map->Port));
+        return false;
+    }
+
+    if (!port->configured) {
+        M5_LOGW("[IFACE] seize(port=%s) -> not configured", toString(map->Port));
+        return false;
+    }
+
+    return seizePort(port->Lock);
+}
+
+void release(InterfaceSensor sensor){
+    const InterfaceSensorMap* map = findSensorConst(sensor);
+    if (map == nullptr) {
+        M5_LOGW("[IFACE] release(%s) -> sensor not found", toString(sensor));
+    }
+    
+    InterfacePort* port = findPortMutable(map->Port);
+    if (port == nullptr) {
+        M5_LOGE("[IFACE] release(port=%s) -> not found", toString(map->Port));
+    }
+    
+    if (!port->configured) {
+        M5_LOGW("[IFACE] release(port=%s) -> not configured", toString(map->Port));
+    }
+
+    releasePort(port->Lock);
 }
 
 }  // namespace sf_interfaces

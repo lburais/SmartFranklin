@@ -14,7 +14,7 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <mutex>
+#include "freertos/semphr.h"
 
 class TwoWire;
 class SoftWire;
@@ -81,6 +81,7 @@ struct InterfacePort {
     int8_t             pinYellow;  ///< SDA (I2C) or RX (UART); -1 if not applicable
     int8_t             pinWhite;   ///< SCL (I2C) or TX (UART); -1 if not applicable
     uint32_t           Clock;      ///< I2C clock frequency in Hz or UART bauds; 0 if not applicable
+    SemaphoreHandle_t  Lock;
     bool               configured;
     bool               locked;
     InterfaceConnector connector;
@@ -117,6 +118,9 @@ constexpr uint32_t kInterfaceInitRetryMs = 10000UL;
 bool configure_all_sensors();
 bool configure(InterfaceSensor sensor);
 bool configured(InterfaceSensor sensor);
+
+bool seize(InterfaceSensor sensor);
+void release(InterfaceSensor sensor);
 
 InterfaceConnector getPort(InterfaceSensor sensor);
 
