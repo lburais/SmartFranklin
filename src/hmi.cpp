@@ -151,20 +151,6 @@ constexpr size_t kBoardLedPin = 4;
 std::mutex g_hmiLedMutex;
 bool g_hmiLedConfigured = false;
 
-size_t ledIndexForPortName(const sf_interfaces::InterfaceName name)
-{
-    switch (name) {
-    case sf_interfaces::InterfaceName::PortA1: return 0;
-    case sf_interfaces::InterfaceName::PortA2: return 6;
-    case sf_interfaces::InterfaceName::PortB1: return 1;
-    case sf_interfaces::InterfaceName::PortB2: return 5;
-    case sf_interfaces::InterfaceName::PortC1: return 2;
-    case sf_interfaces::InterfaceName::PortC2: return 4;
-    case sf_interfaces::InterfaceName::Internal: return 3;
-    default: return -1;
-    }
-}
-
 Adafruit_NeoPixel strip(kBoardLedCount, kBoardLedPin, NEO_GRB + NEO_KHZ800);
 
 bool initBoardLeds()
@@ -197,7 +183,7 @@ void hmiSetAllBoardLedsWhite()
     strip.show();
 }
 
-void hmiSetPortLedStatus(const sf_interfaces::InterfaceSensor sensor, const bool initialized, const bool error)
+void HMI::setLed(const sf_interfaces::InterfaceSensor sensor, const PortStatus status)
 {
     std::lock_guard<std::mutex> lock(g_hmiLedMutex);
 
@@ -205,29 +191,35 @@ void hmiSetPortLedStatus(const sf_interfaces::InterfaceSensor sensor, const bool
         return;
     }
 
-    sf_interfaces::InterfaceName portName = sf_interfaces::getName(sensor);
-    const size_t index = ledIndexForPortName(portName);
+    const size_t index = sf_interfaces::getLed(sensor);
     if (index == -1) {
         return;
     }
 
-    if (!initialized) {
-        strip.setPixelColor(index, strip.Color(255, 0, 0));
-        strip.show();
-        return;
+    switch (status) {
+        case PortStatus::Unset:
+            strip.setPixelColor(index, strip.Color(255, 255, 255));
+            break;
+        case PortStatus::Ok:
+        case PortStatus::Initialized:
+            if (sf_interfaces::getType(sensor) == sf_interfaces::InterfaceType::I2C) {
+                strip.setPixelColor(index, strip.Color(0, 255, 0));
+            } else {
+                strip.setPixelColor(index, strip.Color(0, 128, 0));
+            }
+            break;
+        case PortStatus::NoData:
+            strip.setPixelColor(index, strip.Color(0, 0, 255));
+            break;
+        case PortStatus::Error:
+            strip.setPixelColor(index, strip.Color(255, 0, 0));
+            break;
+        default:
+            strip.setPixelColor(index, strip.Color(255, 255, 255));
+            break;
     }
 
-    const sf_interfaces::InterfaceType type = sf_interfaces::getType(sensor);
-    if (type == sf_interfaces::InterfaceType::I2C) {
-        strip.setPixelColor(index, strip.Color(0, 255, 0));
-    } else {
-        strip.setPixelColor(index, strip.Color(0, 0, 255));
-    }
     strip.show();
-}
-void hmiSetPortLedStatus(const sf_interfaces::InterfaceSensor sensor, const PortStatus status)
-{
-    hmiSetPortLedStatus(sensor, status == PortStatus::Ok, false);
 }
 
 /**

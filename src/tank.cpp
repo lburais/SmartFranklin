@@ -40,6 +40,7 @@ bool Tank::init()
     if (!configured) {
         if (!sf_interfaces::configure(m_sensor)) {
             M5_LOGW("[%s] configure failed", m_tag);
+            HMI::setLed(m_sensor, PortStatus::Error);
             return false;
         }
     }
@@ -47,6 +48,7 @@ bool Tank::init()
     TwoWire* connector = sf_interfaces::getPort(m_sensor).ptr.twoWire;
     if (connector == nullptr) {
         M5_LOGW("[%s] connector unavailable", m_tag);
+        HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
@@ -60,6 +62,7 @@ bool Tank::init()
 
     if (!seize(m_sensor)) {
         M5_LOGW("[%s] unable to lock port", m_tag);
+        HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
@@ -69,13 +72,14 @@ bool Tank::init()
 
     if (!ok) {
         M5_LOGW("[%s] %s m_unit not added", m_tag, m_device);
+        HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     } else {
         M5_LOGI("[%s] %s m_unit added", m_tag, m_device);
     }
 
     m_initialized = true;
-    hmiSetPortLedStatus(m_sensor, m_initialized, false);
+    HMI::setLed(m_sensor, PortStatus::Initialized);
 
     M5_LOGI("[%s] (0x%02X) initialized", m_tag, sf_interfaces::getAddress(m_sensor));
     return true;
@@ -89,13 +93,14 @@ bool Tank::process()
     if (!m_initialized) {
         if (!init()) {
             M5_LOGW("[%s] not configured", m_tag);
-            hmiSetPortLedStatus(m_sensor, m_initialized, true);
+            HMI::setLed(m_sensor, PortStatus::Error);
             return false;
         }
     }
 
     if (!seize(m_sensor)) {
         M5_LOGW("[%s] unable to lock port", m_tag);
+        HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
@@ -103,6 +108,7 @@ bool Tank::process()
 
     if (!m_unit.updated()) {
         release(m_sensor);
+        HMI::setLed(m_sensor, PortStatus::NoData);
         return false;
     }
 
@@ -112,6 +118,7 @@ bool Tank::process()
 
     if (!std::isfinite(rawDistanceMm)) {
         M5_LOGW("[%s] non-finite distance sample ignored", m_tag);
+        HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
@@ -151,6 +158,8 @@ bool Tank::process()
 
     M5_LOGI("[%s] Raw: %.2f cm    Distance: %d mm     Fill level: %d%%", m_tag, rawDistanceMm, distanceMm, fillPct);
 
+    HMI::setLed(m_sensor, PortStatus::Ok);
+
     return true;
 }
 
@@ -177,9 +186,9 @@ void taskTank(void* pv)
 
         if (!initialized && isRetryDue(nowMs, nextInitAttemptMs)) {
             initialized = TANK_TASK.init();
-            hmiSetPortLedStatus(sf_interfaces::InterfaceSensor::Tank, initialized, false);
             if (!initialized) {
                 M5_LOGW("[TANK] Init failed");
+                HMI::setLed(m_sensor, PortStatus::Error);
                 scheduleRetry(nextInitAttemptMs, nowMs);
             }
         }

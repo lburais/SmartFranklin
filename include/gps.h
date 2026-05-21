@@ -41,15 +41,8 @@ public:
     bool isInitialized() const;
 
 private:
-    static constexpr uint32_t kProcessPeriodMs = 1000UL;
-
-    bool writeRegister(uint8_t reg, uint8_t value) const;
-    bool readRegisters(uint8_t reg, uint8_t* out, size_t len) const;
-    bool readPoseAndTimeLocked();
-    void publishFix(const char* dateBuf, const char* utcBuf) const;
-    static double decodeUnsigned_2_1_100(uint8_t b0, uint8_t b1, uint8_t b2);
-
     mutable std::mutex m_mutex;
+
     bool m_initialized = false;
 
     double m_latitudeDeg = 0.0;
@@ -66,6 +59,19 @@ private:
     uint8_t m_minute = 0;
     uint8_t m_second = 0;
     uint32_t m_lastProcessMs = 0;
+
+	const sf_interfaces::InterfaceSensor m_sensor = sf_interfaces::InterfaceSensor::Gps;
+	const String m_tag = sf_interfaces::toUpperString(m_sensor);
+	const String m_device = sf_interfaces::getDeviceName(m_sensor);
+
+    static constexpr uint32_t kProcessPeriodMs = 1000UL;
+
+    bool writeRegister(uint8_t reg, uint8_t value) const;
+    bool readRegisters(uint8_t reg, uint8_t* out, size_t len) const;
+    bool readPoseAndTimeLocked();
+    void publishFix(const char* dateBuf, const char* utcBuf) const;
+    static double decodeUnsigned_2_1_100(uint8_t b0, uint8_t b1, uint8_t b2);
+
 };
 
 /** Global singleton instance used by runtime tasks. */

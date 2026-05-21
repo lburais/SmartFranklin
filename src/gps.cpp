@@ -257,13 +257,13 @@ void GPS::process()
 
     if (!sf_interfaces::configure(sf_interfaces::InterfaceSensor::Gps)) {
         M5_LOGW("[GPS] configure failed during process");
-        hmiSetPortLedStatus(sf_interfaces::InterfaceSensor::Gps, m_initialized, true);
+        HMI::setLed(sf_interfaces::InterfaceSensor::Gps, PortStatus::Error);
         return;
     }
 
     if (!readPoseAndTimeLocked()) {
         M5_LOGW("[GPS] sample read failed");
-        hmiSetPortLedStatus(sf_interfaces::InterfaceSensor::Gps, m_initialized, true);
+        HMI::setLed(sf_interfaces::InterfaceSensor::Gps, PortStatus::NoData);
         return;
     }
 
@@ -291,7 +291,7 @@ void GPS::process()
 
     publishFix(dateBuf, utcBuf);
 
-    hmiSetPortLedStatus(sf_interfaces::InterfaceSensor::Gps, m_initialized, false);
+    HMI::setLed(sf_interfaces::InterfaceSensor::Gps, PortStatus::Ok);
 }
 
 void taskGps(void* pv)
@@ -315,7 +315,8 @@ void taskGps(void* pv)
 
         if (!initialized && isRetryDue(nowMs, nextInitAttemptMs)) {
             initialized = GPS_TASK.init();
-            hmiSetPortLedStatus(sf_interfaces::InterfaceSensor::Gps, initialized, false);
+            HMI::setLed(sf_interfaces::InterfaceSensor::Gps,
+                        initialized ? PortStatus::Initialized : PortStatus::Error);
             if (!initialized) {
                 M5_LOGW("[GPS] Init failed");
                 scheduleRetry(nextInitAttemptMs, nowMs);

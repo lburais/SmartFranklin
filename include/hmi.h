@@ -48,19 +48,15 @@
 #include "interfaces.h"
 
 /**
- * @brief Updates one port LED to reflect init result.
- * @param configuredPort Port name (A1/A2/B1/B2/C1/C2, case-insensitive).
- * @param initialized True when port init succeeded, false when it failed.
+ * @brief Status values for one interface LED.
  */
 enum class PortStatus : uint8_t {
-    Ok = 0,
-    Configured,
+    Unset = 0,
+    Initialized,
     NoData,
     Error,
-    Unknown,
+    Ok,
 };
-void hmiSetPortLedStatus(sf_interfaces::InterfaceSensor sensor, bool initialized, bool error);
-void hmiSetPortLedStatus(sf_interfaces::InterfaceSensor sensor, PortStatus status);
 
 /**
  * @brief Human-Machine Interface runtime for display and local controls.
@@ -96,13 +92,16 @@ public:
      */
     bool isInitialized() const;
 
+    /** @brief Updates one interface LED from the current port status. */
+    static void setLed(sf_interfaces::InterfaceSensor sensor, PortStatus status = PortStatus::Unset);
+
+private:
     /**
      * @brief Returns the active HMI screen name.
      * @return Stable lowercase screen name string.
      */
     const char* currentScreenName() const;
 
-private:
     /** @brief Number of available UI screens. */
     static constexpr int kScreenCount = 6;
 

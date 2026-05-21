@@ -24,8 +24,7 @@ class EspSoftwareSerial;
 namespace sf_interfaces {
 
 enum class InterfaceName : uint8_t {
-    PortA1 = 0,
-    PortA2,
+    PortA = 0,
     PortB1,
     PortB2,
     PortC1,
@@ -83,13 +82,13 @@ struct InterfacePort {
     uint32_t           Clock;      ///< I2C clock frequency in Hz or UART bauds; 0 if not applicable
     SemaphoreHandle_t  Lock;
     bool               configured;
-    bool               locked;
     InterfaceConnector connector;
 };
 
 struct InterfaceSensorMap {
     InterfaceSensor Sensor;
     InterfaceName   Port;
+    int8_t         led;           ///< led number; -1 if not applicable
     uint8_t         I2cAddress;    ///< I2C device address; 0 if not applicable
     uint32_t        recurrenceMs;  ///< Suggested task recurrence for this sensor
     bool            available;     ///< Last availability state set by configure(sensor)
@@ -101,6 +100,7 @@ InterfaceType getType(InterfaceSensor sensor);
 String getDeviceName(InterfaceSensor sensor);
 uint8_t getAddress(InterfaceSensor sensor);
 uint32_t getRecurrenceMs(InterfaceSensor sensor);
+int8_t getLed(InterfaceSensor sensor);
 
 uint32_t getClock(InterfaceSensor sensor);  ///< Returns I2C clock frequency in Hz, or 0 if not I2C
 int8_t getSDA(InterfaceSensor sensor);      ///< Returns pinYellow if I2C, else -1

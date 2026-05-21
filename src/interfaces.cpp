@@ -22,31 +22,30 @@ namespace sf_interfaces {
 namespace {
 
 InterfacePort kPorts[] = {
-//   name                      type                 ch  ye  wh  clock     Lock conf?  lock?  connector
-    {InterfaceName::PortA1,    InterfaceType::I2C,   0, 32, 33, 100000UL, {}, false, false, {}},
-    {InterfaceName::PortA2,    InterfaceType::I2C,   0, 32, 33, 100000UL, {}, false, false, {}},
-    {InterfaceName::PortB1,    InterfaceType::UART,  1, 35, 25, 115200UL, {}, false, false, {}},
-    {InterfaceName::PortB2,    InterfaceType::UART,  2, 36, 26, 115200UL, {}, false, false, {}},
-    {InterfaceName::PortC1,    InterfaceType::I2C,   2, 14, 13, 400000UL, {}, false, false, {}},
-    {InterfaceName::PortC2,    InterfaceType::UART,  3, 17, 16, 115200UL, {}, false, false, {}},
-    {InterfaceName::Internal,  InterfaceType::I2C,   1, 21, 22, 400000UL, {}, false, false, {}},
-    {InterfaceName::Bluetooth, InterfaceType::BLE,   0, -1, -1,      0UL, {}, false, false, {}},
+//   name                      type                 ch  ye  wh  clock     Lock conf? connector
+    {InterfaceName::PortA,     InterfaceType::I2C,   0, 32, 33, 100000UL, {}, false, {}},
+    {InterfaceName::PortB1,    InterfaceType::UART,  1, 35, 25, 115200UL, {}, false, {}},
+    {InterfaceName::PortB2,    InterfaceType::UART,  2, 36, 26, 115200UL, {}, false, {}},
+    {InterfaceName::PortC1,    InterfaceType::I2C,   2, 14, 13, 400000UL, {}, false, {}},
+    {InterfaceName::PortC2,    InterfaceType::UART,  3, 17, 16, 115200UL, {}, false, {}},
+    {InterfaceName::Internal,  InterfaceType::I2C,   1, 21, 22, 400000UL, {}, false, {}},
+    {InterfaceName::Bluetooth, InterfaceType::BLE,   0, -1, -1,      0UL, {}, false, {}},
 };
 
 InterfaceSensorMap kSensors[] = {
-//   sensor                 port                      addr  recur  avail? device name
-    {InterfaceSensor::Gaz,  InterfaceName::PortA1,    0x26,  1000, false, "M5Stack Weight I2C Unit"},
-    {InterfaceSensor::Tank, InterfaceName::PortA2,    0x57,  1000, false, "M5Stack Unit Ultrasonic I2C (RCWL-9600)"},
-    {InterfaceSensor::Gps,  InterfaceName::PortC1,    0x66, 30000, false, "DFRobot Gravity GNSS (DFR1103)"},
-    {InterfaceSensor::Lte,  InterfaceName::PortB1,    0x00,  1000, false, "M5Stack NB-IOT2"},
-    {InterfaceSensor::Lora, InterfaceName::PortC2,    0x00,  1000, false, "M5Stack C6L"},
-    {InterfaceSensor::Lin,  InterfaceName::PortB2,    0x00,  1000, false, "LIN Bus"},
-    {InterfaceSensor::Imu,  InterfaceName::Internal,  0x68,  1000, false, "MPU6886"},
-    {InterfaceSensor::Rtc,  InterfaceName::Internal,  0x51,  1000, false, "BM8563"},
-    {InterfaceSensor::Ina,  InterfaceName::Internal,  0x40,  1000, false, "INA3221"},
-    {InterfaceSensor::Axp,  InterfaceName::Internal,  0x34,  1000, false, "AXP192"},
-    {InterfaceSensor::Bat,  InterfaceName::Bluetooth, 0x00,  1000, false, "Battery"},
-    {InterfaceSensor::Obd,  InterfaceName::Bluetooth, 0x00,  1000, false, "OBD"},
+//   sensor                 port                      led addr  recur  avail? device name
+    {InterfaceSensor::Gaz,  InterfaceName::PortA,      0, 0x26,  1000, false, "M5Stack Weight I2C Unit"},
+    {InterfaceSensor::Tank, InterfaceName::PortA,      6, 0x57,  1000, false, "M5Stack Unit Ultrasonic I2C (RCWL-9600)"},
+    {InterfaceSensor::Gps,  InterfaceName::PortC1,     2, 0x66, 30000, false, "DFRobot Gravity GNSS (DFR1103)"},
+    {InterfaceSensor::Lte,  InterfaceName::PortB1,     1, 0x00,  1000, false, "M5Stack NB-IOT2"},
+    {InterfaceSensor::Lora, InterfaceName::PortC2,     4, 0x00,  1000, false, "M5Stack C6L"},
+    {InterfaceSensor::Lin,  InterfaceName::PortB2,     5, 0x00,  1000, false, "LIN Bus"},
+    {InterfaceSensor::Imu,  InterfaceName::Internal,  -1, 0x68,  1000, false, "MPU6886"},
+    {InterfaceSensor::Rtc,  InterfaceName::Internal,  -1, 0x51,  1000, false, "BM8563"},
+    {InterfaceSensor::Ina,  InterfaceName::Internal,  -1, 0x40,  1000, false, "INA3221"},
+    {InterfaceSensor::Axp,  InterfaceName::Internal,  -1, 0x34,  1000, false, "AXP192"},
+    {InterfaceSensor::Bat,  InterfaceName::Bluetooth, -1, 0x00,  1000, false, "Battery"},
+    {InterfaceSensor::Obd,  InterfaceName::Bluetooth, -1, 0x00,  1000, false, "OBD"},
 };
 
 inline bool seizePort(SemaphoreHandle_t lock){
@@ -217,10 +216,6 @@ bool configure(const InterfaceName name)
         M5_LOGE("[IFACE] configure(port=%s) -> not found", toString(name));
         return false;
     }
-    if (port->locked) {
-        M5_LOGW("[IFACE] configure(port=%s) -> locked", toString(name));
-        return false;
-    }
     if (port->configured) {
         M5_LOGW("[IFACE] configure(port=%s) -> already configured", toString(name));
         return true;
@@ -273,8 +268,7 @@ const char* toString(const InterfaceType type)
 const char* toString(const InterfaceName id)
 {
     switch (id) {
-    case InterfaceName::PortA1:     return "a1";
-    case InterfaceName::PortA2:     return "a2";
+    case InterfaceName::PortA:     return "a";
     case InterfaceName::PortB1:     return "b1";
     case InterfaceName::PortB2:     return "b2";
     case InterfaceName::PortC1:     return "c1";
@@ -348,6 +342,13 @@ uint8_t getAddress(const InterfaceSensor sensor)
 {
     const InterfaceSensorMap* iface = findSensorConst(sensor);
     const uint8_t result = iface ? iface->I2cAddress : 0;
+    return result;
+}
+
+int8_t getLed(const InterfaceSensor sensor)
+{
+    const InterfaceSensorMap* iface = findSensorConst(sensor);
+    const int8_t result = iface ? iface->led : -1;
     return result;
 }
 
