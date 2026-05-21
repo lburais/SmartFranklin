@@ -58,7 +58,15 @@ bool Tank::init()
         M5_LOGI("[%s] connector is custom bus ptr=%p", m_tag, connector);
     }
 
+    if (!seize(m_sensor)) {
+        M5_LOGW("[%s] unable to lock port", m_tag);
+        return false;
+    }
+
     const bool ok = m_units.add(m_unit, *connector) && m_units.begin();
+
+    release(m_sensor);
+
     if (!ok) {
         M5_LOGW("[%s] %s m_unit not added", m_tag, m_device);
         return false;
@@ -86,19 +94,28 @@ bool Tank::process()
         }
     }
 
-    m_units.update();
-
-    if (!m_unit.updated()) {
+    if (!seize(m_sensor)) {
+        M5_LOGW("[%s] unable to lock port", m_tag);
         return false;
     }
 
-    const float rawDistanceCm = m_unit.distance();
-    if (!std::isfinite(rawDistanceCm)) {
+    m_units.update();
+
+    if (!m_unit.updated()) {
+        release(m_sensor);
+        return false;
+    }
+
+    const float rawDistanceMm = m_unit.distance();
+
+    release(m_sensor);
+
+    if (!std::isfinite(rawDistanceMm)) {
         M5_LOGW("[%s] non-finite distance sample ignored", m_tag);
         return false;
     }
 
-    distanceMm = static_cast<int32_t>(lroundf(rawDistanceCm * 10));
+    distanceMm = static_cast<int32_t>(lroundf(rawDistanceMm));
 
     if (distanceMm < TANK_DISTANCE_MIN_MM) {
         distanceMm = TANK_DISTANCE_MIN_MM;
@@ -108,17 +125,15 @@ bool Tank::process()
     }
 
     if (distanceMm <= TANK_FULL_DISTANCE_MM) {
-        return 100;
+        fillPct = 0;
+    } else if (distanceMm >= TANK_EMPTY_DISTANCE_MM) {
+        fillPct = 100;
+    } else {
+        const float TANK_SPAN_DISTANCE_MM = static_cast<float>(TANK_EMPTY_DISTANCE_MM - TANK_FULL_DISTANCE_MM);
+        const float numerator = static_cast<float>(TANK_EMPTY_DISTANCE_MM - distanceMm);
+        
+        fillPct = static_cast<int32_t>(lroundf((numerator / TANK_SPAN_DISTANCE_MM) * 100.0f));
     }
-
-    if (distanceMm >= TANK_EMPTY_DISTANCE_MM) {
-        return 0;
-    }
-
-    const float TANK_SPAN_DISTANCE_MM = static_cast<float>(TANK_EMPTY_DISTANCE_MM - TANK_FULL_DISTANCE_MM);
-    const float numerator = static_cast<float>(TANK_EMPTY_DISTANCE_MM - distanceMm);
-    
-    fillPct = static_cast<int32_t>(lroundf((numerator / TANK_SPAN_DISTANCE_MM) * 100.0f));
 
     {
         std::lock_guard<std::mutex> lock(DATA_MUTEX);
@@ -134,7 +149,7 @@ bool Tank::process()
     snprintf(pctBuf, sizeof(pctBuf), "%d", fillPct);
     sf_mqtt::publish("smartfranklin/tank/fill", pctBuf, 1, true);
 
-    M5_LOGI("[%s] Distance: %d mm     Fill level: %d%%", m_tag, distanceMm, fillPct);
+    M5_LOGI("[%s] Raw: %.2f cm    Distance: %d mm     Fill level: %d%%", m_tag, rawDistanceMm, distanceMm, fillPct);
 
     return true;
 }

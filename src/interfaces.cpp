@@ -50,7 +50,7 @@ InterfaceSensorMap kSensors[] = {
 };
 
 inline bool seizePort(SemaphoreHandle_t lock){
-    return xSemaphoreTake(lock, pdMS_TO_TICKS(200));
+    return xSemaphoreTake(lock, pdMS_TO_TICKS(500));
 }
 
 inline void releasePort(SemaphoreHandle_t lock){

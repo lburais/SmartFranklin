@@ -69,9 +69,6 @@ private:
 	const String m_tag = sf_interfaces::toUpperString(m_sensor);
 	const String m_device = sf_interfaces::getDeviceName(m_sensor);
 
-	const uint8_t TANK_DISTANCE_REGISTER = 0x01;
-	const uint32_t TANK_CONVERSION_DELAY_MS = 120U;
-
 	const int32_t TANK_DISTANCE_MIN_MM = 20;
 	const int32_t TANK_DISTANCE_MAX_MM = 4500;
 

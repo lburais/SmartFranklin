@@ -43,13 +43,22 @@ float Gaz::sanitizedGap(const float gap)
 
 bool Gaz::refreshMeasurement(int32_t& weightG, int32_t& fillPct)
 {
+    if (!seize(m_sensor)) {
+        M5_LOGW("[%s] unable to lock port", m_tag);
+        return false;
+    }
+
     m_units.update();
 
     if (!m_unit.updated()) {
+        release(m_sensor);
         return false;
     }
 
     const float rawWeight = m_unit.weight();
+
+    release(m_sensor);
+
     if (!std::isfinite(rawWeight)) {
         M5_LOGW("[%s] non-finite weight sample ignored", m_tag);
         return false;
@@ -94,14 +103,32 @@ bool Gaz::calibrate(float weightG)
         return false;
     }
 
+    if (!seize(m_sensor)) {
+        M5_LOGW("[%s] unable to lock port", m_tag);
+        return false;
+    }
+
     int32_t raw = 0;
-    if (!m_unit.readRawADC (raw)) {
+    bool ok = m_unit.readRawADC (raw);
+
+    release(m_sensor);
+
+    if (!ok) {
         M5_LOGE("[%s] unable to readADC", m_tag);
         return false;
     }
 
-    const float factor = raw / weightG;;
-    if (!m_unit.writeGap(factor)) {
+    if (!seize(m_sensor)) {
+        M5_LOGW("[%s] unable to lock port", m_tag);
+        return false;
+    }
+
+    const float factor = raw / weightG;
+    ok = m_unit.writeGap(factor);
+
+    release(m_sensor);
+
+    if (!ok) {
         M5_LOGW("[%s] failed to reset calibration gap during calibrate", m_tag);
         return false;
     }
@@ -122,20 +149,31 @@ bool Gaz::tare()
         return false;
     }
 
-    if (m_unit.resetOffset()) {
+    if (!seize(m_sensor)) {
+        M5_LOGW("[%s] unable to lock port", m_tag);
+        return false;
+    }
 
+    bool ok = m_unit.resetOffset();
+
+    release(m_sensor);
+
+    if (!ok) {
+        return false;
+    }
+
+    {
         std::lock_guard<std::mutex> lock(DATA_MUTEX);
         DATA.weight_gaz = 0;
         DATA.fill_gaz   = 0;
-
-        CONFIG.gaz_calibration_factor = 1.0f;
-        config_save();   
-        
-        m_calibration_in_progress = true;
-
-        return true;
     }
-    return false;
+
+    CONFIG.gaz_calibration_factor = 1.0f;
+    config_save();   
+    
+    m_calibration_in_progress = true;
+
+    return true;
 }
 
 // ---- public interface ----
@@ -173,7 +211,15 @@ bool Gaz::init()
         M5_LOGI("[%s] connector is custom bus ptr=%p", m_tag, connector);
     }
 
-    const bool ok = m_units.add(m_unit, *connector) && m_units.begin();
+    if (!seize(m_sensor)) {
+        M5_LOGW("[%s] unable to lock port", m_tag);
+        return false;
+    }
+
+    bool ok = m_units.add(m_unit, *connector) && m_units.begin();
+
+    release(m_sensor);
+
     if (!ok) {
         M5_LOGW("[%s] %s m_unit not added", m_tag, m_device);
         return false;
@@ -182,7 +228,17 @@ bool Gaz::init()
     }
 
     const float effectiveGap = sanitizedGap(CONFIG.gaz_calibration_factor);
-    if (!m_unit.writeGap(effectiveGap)) {
+
+    if (!seize(m_sensor)) {
+        M5_LOGW("[%s] unable to lock port", m_tag);
+        return false;
+    }
+
+    ok = m_unit.writeGap(effectiveGap);
+
+    release(m_sensor);
+
+    if (!ok) {
         M5_LOGW("[%s] failed to apply calibration gap %.6f during init", m_tag, effectiveGap);
     }
     CONFIG.gaz_calibration_factor = effectiveGap;
