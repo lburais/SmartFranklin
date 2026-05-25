@@ -208,7 +208,7 @@ void setup() {
     // =========================================================================
 
     // Configure all interfaces
-    sf_interfaces::configure_all_sensors();
+    // sf_interfaces::configure_all_sensors();
 
     // =========================================================================
     // FreeRTOS Task Creation
@@ -217,39 +217,39 @@ void setup() {
     // Stack sizes: 2048-8192 bytes (larger for BLE/mesh operations)
     // Priority levels: 1 (low) to 3 (high); higher = more CPU scheduling time
     
-    #ifndef DISABLE_HMI
+    #ifdef ENABLE_HMI
     xTaskCreatePinnedToCore(taskHmi,              "HMI",      8192, nullptr, 3,  &taskHmiHandle,            1);
     #endif
 
-    #ifndef DISABLE_GAZ
+    #ifdef ENABLE_GAZ
     xTaskCreatePinnedToCore(taskGaz,              "GAZ",      4096, nullptr, 2, &taskGazHandle,       1);
     #endif
 
-    #ifndef DISABLE_TANK
+    #ifdef ENABLE_TANK
     xTaskCreatePinnedToCore(taskTank,             "TANK",     4096, nullptr, 2, &taskTankHandle,      1);
     #endif
 
-    #ifndef DISABLE_LEVEL
+    #ifdef ENABLE_LEVEL
     xTaskCreatePinnedToCore(taskLevel,            "LEVEL",    4096, nullptr, 2, &taskLevelHandle,     1);
     #endif
 
-    #ifndef DISABLE_RTC
+    #ifdef ENABLE_RTC
     xTaskCreatePinnedToCore(taskRtc,              "RTC",      4096, nullptr, 2, &taskRtcHandle,       1);
     #endif
 
-    #ifndef DISABLE_GPS
+    #ifdef ENABLE_GPS
     xTaskCreatePinnedToCore(taskGps,              "GPS",      4096, nullptr, 2, &taskGpsHandle,       1);
     #endif
 
-    #ifndef DISABLE_BATTERY
+    #ifdef ENABLE_BATTERY
     xTaskCreatePinnedToCore(taskBattery,          "BATERY",   8192, nullptr, 2, &taskBatteryHandle,   0);
     #endif
 
-    #ifndef DISABLE_HW_MONITOR
+    #ifdef ENABLE_HW_MONITOR
     xTaskCreatePinnedToCore(taskHwMonitor,        "HW_MON",   4096, nullptr, 1, nullptr,              0);
     #endif
 
-    #ifndef DISABLE_WATCHDOG
+    #ifdef ENBLE_WATCHDOG
     xTaskCreatePinnedToCore(taskWatchdog,         "WATCHDOG", 2048, nullptr, 3, nullptr,              0);
     #endif
 

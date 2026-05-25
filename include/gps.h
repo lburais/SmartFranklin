@@ -31,8 +31,9 @@ public:
      *
      * Intended to be called from a periodic task. Reads samples and publishes
      * updated position/time into the shared runtime model.
+     * @return True when process succeeds.
      */
-    void process();
+    bool process();
 
     /**
      * @brief Check whether GPS is initialized and operational.
@@ -43,35 +44,33 @@ public:
 private:
     mutable std::mutex m_mutex;
 
-    bool m_initialized = false;
+    bool    m_initialized = false;
 
-    double m_latitudeDeg = 0.0;
-    double m_longitudeDeg = 0.0;
-    double m_altitudeM = 0.0;
-    double m_speedKnots = 0.0;
-    double m_courseDeg = 0.0;
-    uint8_t m_satellites = 0;
-    bool m_hasFix = false;
+    bool     m_hasFix = false;
+    double   m_latitudeDeg = 0.0;
+    double   m_longitudeDeg = 0.0;
+    double   m_altitudeM = 0.0;
+    double   m_speedKnots = 0.0;
+    double   m_courseDeg = 0.0;
+    uint8_t  m_satellites = 0;
     uint16_t m_year = 0;
-    uint8_t m_month = 0;
-    uint8_t m_day = 0;
-    uint8_t m_hour = 0;
-    uint8_t m_minute = 0;
-    uint8_t m_second = 0;
+    uint8_t  m_month = 0;
+    uint8_t  m_day = 0;
+    uint8_t  m_hour = 0;
+    uint8_t  m_minute = 0;
+    uint8_t  m_second = 0;
     uint32_t m_lastProcessMs = 0;
 
 	const sf_interfaces::InterfaceSensor m_sensor = sf_interfaces::InterfaceSensor::Gps;
-	const String m_tag = sf_interfaces::toUpperString(m_sensor);
-	const String m_device = sf_interfaces::getDeviceName(m_sensor);
+    const char* const m_tag = sf_interfaces::toString(m_sensor, true);
+    const char* const m_device = sf_interfaces::getDeviceName(m_sensor);
 
-    static constexpr uint32_t kProcessPeriodMs = 1000UL;
+    const uint8_t m_i2cAddress = sf_interfaces::getAddress(m_sensor);
 
+    bool readPoseAndTimeLocked();
     bool writeRegister(uint8_t reg, uint8_t value) const;
     bool readRegisters(uint8_t reg, uint8_t* out, size_t len) const;
-    bool readPoseAndTimeLocked();
-    void publishFix(const char* dateBuf, const char* utcBuf) const;
     static double decodeUnsigned_2_1_100(uint8_t b0, uint8_t b1, uint8_t b2);
-
 };
 
 /** Global singleton instance used by runtime tasks. */

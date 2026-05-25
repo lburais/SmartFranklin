@@ -202,11 +202,7 @@ void HMI::setLed(const sf_interfaces::InterfaceSensor sensor, const PortStatus s
             break;
         case PortStatus::Ok:
         case PortStatus::Initialized:
-            if (sf_interfaces::getType(sensor) == sf_interfaces::InterfaceType::I2C) {
-                strip.setPixelColor(index, strip.Color(0, 255, 0));
-            } else {
-                strip.setPixelColor(index, strip.Color(0, 128, 0));
-            }
+            strip.setPixelColor(index, strip.Color(0, 255, 0));
             break;
         case PortStatus::NoData:
             strip.setPixelColor(index, strip.Color(0, 0, 255));

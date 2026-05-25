@@ -37,15 +37,13 @@ private:
     bool    m_calibration_in_progress = false;
     
 	const sf_interfaces::InterfaceSensor m_sensor = sf_interfaces::InterfaceSensor::Gaz;
-	const String m_tag = sf_interfaces::toUpperString(m_sensor);
-	const String m_device = sf_interfaces::getDeviceName(m_sensor);
+    const char* const m_tag = sf_interfaces::toString(m_sensor, true);
+    const char* const m_device = sf_interfaces::getDeviceName(m_sensor);
 
     static constexpr int32_t  GAZ_BOTTLE_FULL_G  = 6450;
     static constexpr int32_t  GAZ_BOTTLE_EMPTY_G = 3700;
 
     static float   sanitizedGap(float gap);
-    bool           refreshMeasurement(int32_t& weightG, int32_t& fillPct);
-
 };
 
 /** Instance globale utilisee par les taches runtime et APIs. */

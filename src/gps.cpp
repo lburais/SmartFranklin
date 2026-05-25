@@ -12,6 +12,7 @@
 #include "gps.h"
 
 #include <M5Unified.h>
+#include <M5Utility.h>
 #include <Wire.h>
 
 #include <cmath>
@@ -43,44 +44,49 @@ GPS GPS_TASK;
 
 bool GPS::writeRegister(const uint8_t reg, const uint8_t value) const
 {
-    const uint8_t i2cAddress = sf_interfaces::getAddress(sf_interfaces::InterfaceSensor::Gps);
-    if (i2cAddress == 0) {
+    const sf_interfaces::InterfaceConnector connection = sf_interfaces::getConnector(m_sensor);
+
+    TwoWire* connector = connection.ptr.twoWire;
+    if (connector == nullptr) {
+        HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
-    Wire1.beginTransmission(i2cAddress);
-    Wire1.write(reg);
-    Wire1.write(value);
-    return Wire1.endTransmission() == 0;
+    connector->beginTransmission(m_i2cAddress);
+    connector->write(reg);
+    connector->write(value);
+    bool ok = connector->endTransmission() == 0;
+
+    return ok;
 }
 
 bool GPS::readRegisters(const uint8_t reg, uint8_t* out, const size_t len) const
 {
     if (out == nullptr || len == 0U) {
-        M5_LOGE("[GPS] params %d", len);
         return false;
     }
 
-    const uint8_t i2cAddress = sf_interfaces::getAddress(sf_interfaces::InterfaceSensor::Gps);
-    if (i2cAddress == 0) {
+    const sf_interfaces::InterfaceConnector connection = sf_interfaces::getConnector(m_sensor);
+
+    TwoWire* connector = connection.ptr.twoWire;
+    if (connector == nullptr) {
+        HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
-    Wire1.beginTransmission(i2cAddress);
-    Wire1.write(reg);
-    if (Wire1.endTransmission(false) != 0) {
-        M5_LOGE("[GPS] endTransmission");
+    connector->beginTransmission(m_i2cAddress);
+    connector->write(reg);
+    if (connector->endTransmission(false) != 0) {
         return false;
     }
 
-    const size_t readCount = Wire1.requestFrom(i2cAddress, static_cast<uint8_t>(len));
+    const size_t readCount = connector->requestFrom(m_i2cAddress, static_cast<uint8_t>(len));
     if (readCount < len) {
-        M5_LOGE("[GPS] readCount %d/%d", readCount, len);
         return false;
     }
 
     for (size_t i = 0; i < len; ++i) {
-        out[i] = static_cast<uint8_t>(Wire1.read());
+        out[i] = static_cast<uint8_t>(connector->read());
     }
 
     return true;
@@ -166,8 +172,100 @@ bool GPS::readPoseAndTimeLocked()
     return true;
 }
 
-void GPS::publishFix(const char* dateBuf, const char* utcBuf) const
+bool GPS::isInitialized() const
 {
+    return m_initialized;
+}
+
+bool GPS::init()
+{
+    M5_LOGI("[%s] init", m_tag);
+
+    m_initialized        = false;
+
+    if (!sf_interfaces::configured(m_sensor)) {
+        M5_LOGW("[%s] configuration required", m_tag);
+        if (!sf_interfaces::configure(m_sensor)) {
+            M5_LOGW("[%s] configuration failed", m_tag);
+            HMI::setLed(m_sensor, PortStatus::Error);
+            return false;
+        }
+    }
+
+    if (!seize(m_sensor)) {
+        M5_LOGW("[%s] unable to lock port", m_tag);
+        HMI::setLed(m_sensor, PortStatus::Error);
+        return false;
+    }
+
+    uint8_t probe = 0;
+    if (!readRegisters(REG_USE_STAR, &probe, 1U)) {
+        M5_LOGE("[%s] cannot read register 0x%02X", m_tag, REG_USE_STAR);
+        release(m_sensor);
+        return false;
+    }
+
+    // 0x07 = GPS + BeiDou + GLONASS in DFRobot firmware.
+    static_cast<void>(writeRegister(34U, 0x07));
+
+    m_initialized = true;
+
+    M5_LOGI("[%s] (0x%02X) initialized", m_tag, sf_interfaces::getAddress(m_sensor));
+
+    release(m_sensor);
+
+    return true;
+}
+
+bool GPS::process()
+{
+    char dateBuf[16] = {0};
+    char utcBuf[16] = {0};
+
+    if (!m_initialized) {
+        if (!init()) {
+            M5_LOGW("[%s] not configured", m_tag);
+            HMI::setLed(m_sensor, PortStatus::Error);
+            return false;
+        }
+    }
+
+    if (!seize(m_sensor)) {
+        M5_LOGW("[%s] unable to lock port", m_tag);
+        HMI::setLed(m_sensor, PortStatus::Error);
+        return false;
+    }
+
+    if (!readPoseAndTimeLocked()) {
+        M5_LOGW("[%s] sample read failed", m_tag);
+        HMI::setLed(m_sensor, PortStatus::NoData);
+        release(m_sensor);
+        return false;
+    }    
+
+    snprintf(dateBuf, sizeof(dateBuf), "%04u-%02u-%02u",
+             static_cast<unsigned>(m_year),
+             static_cast<unsigned>(m_month),
+             static_cast<unsigned>(m_day));
+    snprintf(utcBuf, sizeof(utcBuf), "%02u:%02u:%02u",
+             static_cast<unsigned>(m_hour),
+             static_cast<unsigned>(m_minute),
+             static_cast<unsigned>(m_second));
+
+    {
+        std::lock_guard<std::mutex> dataLock(DATA_MUTEX);
+        DATA.gps_has_fix = m_hasFix;
+        DATA.gps_latitude_deg = m_latitudeDeg;
+        DATA.gps_longitude_deg = m_longitudeDeg;
+        DATA.gps_altitude_m = m_altitudeM;
+        DATA.gps_speed_knots = m_speedKnots;
+        DATA.gps_course_deg = m_courseDeg;
+        DATA.gps_satellites = m_satellites;
+        DATA.gps_date = dateBuf;
+        DATA.gps_utc = utcBuf;
+    }
+
+    // publishFix(dateBuf, utcBuf);
     char latBuf[24] = {0};
     char lonBuf[24] = {0};
     char altBuf[24] = {0};
@@ -193,105 +291,16 @@ void GPS::publishFix(const char* dateBuf, const char* utcBuf) const
     sf_mqtt::publish("smartfranklin/gps/utc", utcBuf);
 
     if (m_hasFix) {
-        M5_LOGI("[GPS] sat=%s lat=%s lon=%s alt=%s date=%s utc=%s", satsBuf, latBuf, lonBuf, altBuf, dateBuf, utcBuf);
+        M5_LOGI("[%s] sat=%s lat=%s lon=%s alt=%s date=%s utc=%s", m_tag, satsBuf, latBuf, lonBuf, altBuf, dateBuf, utcBuf);
     } else {
-        M5_LOGI("[GPS] no fix");
-    }
-}
-
-bool GPS::init()
-{
-    const uint8_t i2cAddress = sf_interfaces::getAddress(sf_interfaces::InterfaceSensor::Gps);
-    if (i2cAddress == 0) {
-        M5_LOGW("[GPS] address not defined in interfaces");
-        return false;
+        M5_LOGI("[%s] no fix", m_tag);
     }
 
-    m_initialized = false;
-    m_lastProcessMs = 0;
+    HMI::setLed(m_sensor, PortStatus::Ok);
 
-    if (!sf_interfaces::configure(sf_interfaces::InterfaceSensor::Gps)) {
-        M5_LOGW("[GPS] configure failed");
-        return false;
-    }
+    release(m_sensor);
 
-    if (!sf_interfaces::configured(sf_interfaces::InterfaceSensor::Gps)) {
-        M5_LOGW("[GPS] device (0x%02X) not found", i2cAddress);
-        return false;
-    }
-
-    uint8_t probe = 0;
-    if (!readRegisters(REG_USE_STAR, &probe, 1U)) {
-        M5_LOGE("[GPS] cannot read register address:0x%02X port:%s",
-                i2cAddress,
-                sf_interfaces::toString(sf_interfaces::getName(sf_interfaces::InterfaceSensor::Gps)));
-        return false;
-    }
-
-    // 0x07 = GPS + BeiDou + GLONASS in DFRobot firmware.
-    static_cast<void>(writeRegister(34U, 0x07));
-
-    m_initialized = true;
-
-    M5_LOGI("[GPS] initialized address:0x%02X port:%s",
-            i2cAddress,
-            sf_interfaces::toString(sf_interfaces::getName(sf_interfaces::InterfaceSensor::Gps)));
     return true;
-}
-
-void GPS::process()
-{
-    char dateBuf[16] = {0};
-    char utcBuf[16] = {0};
-
-    const uint32_t nowMs = millis();
-
-    if (!m_initialized) {
-        return;
-    }
-
-    if ((nowMs - m_lastProcessMs) < kProcessPeriodMs) {
-        return;
-    }
-    m_lastProcessMs = nowMs;
-
-    if (!sf_interfaces::configure(sf_interfaces::InterfaceSensor::Gps)) {
-        M5_LOGW("[GPS] configure failed during process");
-        HMI::setLed(sf_interfaces::InterfaceSensor::Gps, PortStatus::Error);
-        return;
-    }
-
-    if (!readPoseAndTimeLocked()) {
-        M5_LOGW("[GPS] sample read failed");
-        HMI::setLed(sf_interfaces::InterfaceSensor::Gps, PortStatus::NoData);
-        return;
-    }
-
-    snprintf(dateBuf, sizeof(dateBuf), "%04u-%02u-%02u",
-             static_cast<unsigned>(m_year),
-             static_cast<unsigned>(m_month),
-             static_cast<unsigned>(m_day));
-    snprintf(utcBuf, sizeof(utcBuf), "%02u:%02u:%02u",
-             static_cast<unsigned>(m_hour),
-             static_cast<unsigned>(m_minute),
-             static_cast<unsigned>(m_second));
-
-    {
-        std::lock_guard<std::mutex> dataLock(DATA_MUTEX);
-        DATA.gps_has_fix = m_hasFix;
-        DATA.gps_latitude_deg = m_latitudeDeg;
-        DATA.gps_longitude_deg = m_longitudeDeg;
-        DATA.gps_altitude_m = m_altitudeM;
-        DATA.gps_speed_knots = m_speedKnots;
-        DATA.gps_course_deg = m_courseDeg;
-        DATA.gps_satellites = m_satellites;
-        DATA.gps_date = dateBuf;
-        DATA.gps_utc = utcBuf;
-    }
-
-    publishFix(dateBuf, utcBuf);
-
-    HMI::setLed(sf_interfaces::InterfaceSensor::Gps, PortStatus::Ok);
 }
 
 void taskGps(void* pv)
@@ -299,7 +308,6 @@ void taskGps(void* pv)
     (void)pv;
     M5_LOGI("[GPS] Task started");
 
-    bool     initialized       = false;
     uint32_t nextInitAttemptMs = 0;
 
     auto isRetryDue = [](uint32_t nowMs, uint32_t nextAttemptMs) {
@@ -313,17 +321,14 @@ void taskGps(void* pv)
     for (;;) {
         const uint32_t nowMs = millis();
 
-        if (!initialized && isRetryDue(nowMs, nextInitAttemptMs)) {
-            initialized = GPS_TASK.init();
-            HMI::setLed(sf_interfaces::InterfaceSensor::Gps,
-                        initialized ? PortStatus::Initialized : PortStatus::Error);
-            if (!initialized) {
+        if (!GPS_TASK.isInitialized() && isRetryDue(nowMs, nextInitAttemptMs)) {
+            if (!GPS_TASK.init()) {
                 M5_LOGW("[GPS] Init failed");
                 scheduleRetry(nextInitAttemptMs, nowMs);
             }
         }
 
-        if (initialized) {
+        if (GPS_TASK.isInitialized()) {
             GPS_TASK.process();
         }
 

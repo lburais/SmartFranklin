@@ -33,6 +33,8 @@ bool Tank::isInitialized() const
 
 bool Tank::init()
 {
+    M5_LOGI("[%s] init", m_tag);
+
     m_initialized = false;
 
     const bool configured = sf_interfaces::configured(m_sensor);
@@ -45,19 +47,11 @@ bool Tank::init()
         }
     }
 
-    TwoWire* connector = sf_interfaces::getPort(m_sensor).ptr.twoWire;
+    TwoWire* connector = sf_interfaces::getConnector(m_sensor).ptr.twoWire;
     if (connector == nullptr) {
         M5_LOGW("[%s] connector unavailable", m_tag);
         HMI::setLed(m_sensor, PortStatus::Error);
         return false;
-    }
-
-    if (connector == &Wire1) {
-        M5_LOGI("[%s] connector is on Wire1", m_tag);
-    } else if (connector == &Wire) {
-        M5_LOGI("[%s] connector is on Wire", m_tag);
-    } else {
-        M5_LOGI("[%s] connector is custom bus ptr=%p", m_tag, connector);
     }
 
     if (!seize(m_sensor)) {
@@ -66,20 +60,22 @@ bool Tank::init()
         return false;
     }
 
-    const bool ok = m_units.add(m_unit, *connector) && m_units.begin();
+    m_units.add(m_unit, *connector);
 
-    release(m_sensor);
-
+    const bool ok = m_units.begin();
     if (!ok) {
-        M5_LOGW("[%s] %s m_unit not added", m_tag, m_device);
+        M5_LOGW("[%s] %s m_unit not started", m_tag, m_device);
         HMI::setLed(m_sensor, PortStatus::Error);
+        release(m_sensor);
         return false;
     } else {
-        M5_LOGI("[%s] %s m_unit added", m_tag, m_device);
+        M5_LOGI("[%s] %s m_unit started", m_tag, m_device);
     }
 
     m_initialized = true;
     HMI::setLed(m_sensor, PortStatus::Initialized);
+
+    release(m_sensor);
 
     M5_LOGI("[%s] (0x%02X) initialized", m_tag, sf_interfaces::getAddress(m_sensor));
     return true;
@@ -188,7 +184,6 @@ void taskTank(void* pv)
             initialized = TANK_TASK.init();
             if (!initialized) {
                 M5_LOGW("[TANK] Init failed");
-                HMI::setLed(m_sensor, PortStatus::Error);
                 scheduleRetry(nextInitAttemptMs, nowMs);
             }
         }

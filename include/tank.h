@@ -66,8 +66,8 @@ private:
 	bool    m_initialized = false;
 
 	const sf_interfaces::InterfaceSensor m_sensor = sf_interfaces::InterfaceSensor::Tank;
-	const String m_tag = sf_interfaces::toUpperString(m_sensor);
-	const String m_device = sf_interfaces::getDeviceName(m_sensor);
+	const char* const m_tag = sf_interfaces::toString(m_sensor, true);
+	const char* const m_device = sf_interfaces::getDeviceName(m_sensor);
 
 	const int32_t TANK_DISTANCE_MIN_MM = 20;
 	const int32_t TANK_DISTANCE_MAX_MM = 4500;

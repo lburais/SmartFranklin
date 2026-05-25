@@ -23,7 +23,7 @@ class EspSoftwareSerial;
 
 namespace sf_interfaces {
 
-enum class InterfaceName : uint8_t {
+enum class InterfacePortName : uint8_t {
     PortA = 0,
     PortB1,
     PortB2,
@@ -34,11 +34,12 @@ enum class InterfaceName : uint8_t {
     Unknown,
 };
 
-enum class InterfaceType : uint8_t {
+enum class InterfacePortType : uint8_t {
     I2C = 0,
-    I2CSoftware,
     UART,
-    UARTSoftware,
+    UART1,
+    UART2,
+    UART3,
     BLE,
     Unused,
     Unknown,
@@ -67,61 +68,57 @@ struct InterfaceConnector {
         TwoWire* twoWire;
         SoftWire* softWire;
         HardwareSerial* hardwareSerial;
-        EspSoftwareSerial* softwareSerial;
 
         constexpr Ptr() : raw(nullptr) {}
     } ptr{};
 };
 
-struct InterfacePort {
-    InterfaceName      Name;
-    InterfaceType      Type;
-    uint8_t            Channel;
-    int8_t             pinYellow;  ///< SDA (I2C) or RX (UART); -1 if not applicable
-    int8_t             pinWhite;   ///< SCL (I2C) or TX (UART); -1 if not applicable
-    uint32_t           Clock;      ///< I2C clock frequency in Hz or UART bauds; 0 if not applicable
+struct InterfacePortMap {
+    InterfacePortType  Type;
     SemaphoreHandle_t  Lock;
     bool               configured;
-    InterfaceConnector connector;
+    InterfaceConnector connector;      ///< TwoWire or HardwareSerial
+};
+
+struct InterfacePort {
+    InterfacePortName Name;
+    InterfacePortType Type;
+    int8_t            pinYellow;  ///< SDA (I2C) or RX (UART); -1 if not applicable
+    int8_t            pinWhite;   ///< SCL (I2C) or TX (UART); -1 if not applicable
 };
 
 struct InterfaceSensorMap {
-    InterfaceSensor Sensor;
-    InterfaceName   Port;
-    int8_t         led;           ///< led number; -1 if not applicable
-    uint8_t         I2cAddress;    ///< I2C device address; 0 if not applicable
-    uint32_t        recurrenceMs;  ///< Suggested task recurrence for this sensor
-    bool            available;     ///< Last availability state set by configure(sensor)
-    const char*     DeviceName;
+    InterfaceSensor   Sensor;
+    InterfacePortName Port;
+    int8_t            led;           ///< led number; -1 if not applicable
+    uint8_t           I2cAddress;    ///< I2C device address; 0 if not applicable
+    uint32_t          Clock;         ///< I2C clock frequency in Hz or UART bauds; 0 if not applicable
+    uint32_t          recurrenceMs;  ///< Suggested task recurrence for this sensor
+    bool              available;     ///< Last availability state set by configure(sensor)
+    const char*       DeviceName;
 };
 
-InterfaceName getName(InterfaceSensor sensor);
-InterfaceType getType(InterfaceSensor sensor);
-String getDeviceName(InterfaceSensor sensor);
-uint8_t getAddress(InterfaceSensor sensor);
-uint32_t getRecurrenceMs(InterfaceSensor sensor);
-int8_t getLed(InterfaceSensor sensor);
+// global
 
-uint32_t getClock(InterfaceSensor sensor);  ///< Returns I2C clock frequency in Hz, or 0 if not I2C
-int8_t getSDA(InterfaceSensor sensor);      ///< Returns pinYellow if I2C, else -1
-int8_t getSCL(InterfaceSensor sensor);      ///< Returns pinWhite  if I2C, else -1
-int8_t getRX(InterfaceSensor sensor);       ///< Returns pinYellow if UART, else -1
-int8_t getTX(InterfaceSensor sensor);       ///< Returns pinWhite  if UART, else -1
+const InterfaceConnector getConnector(InterfaceSensor sensor);
+const char*              getDeviceName(InterfaceSensor sensor);
+uint8_t                  getAddress(InterfaceSensor sensor);
+uint32_t                 getRecurrenceMs(InterfaceSensor sensor);
+int8_t                   getLed(InterfaceSensor sensor);
 
-const char* toString(InterfaceName name);
-const char* toString(InterfaceType type);
-const char* toString(InterfaceSensor sensor);
-String toUpperString(InterfaceSensor sensor);
+// strings
+const char* toString(InterfacePortName name);
+const char* toString(InterfacePortType type);
+const char* toString(InterfaceSensor sensor, bool upper = false);
 
 constexpr uint32_t kInterfaceInitRetryMs = 10000UL;
 
 bool configure_all_sensors();
 bool configure(InterfaceSensor sensor);
 bool configured(InterfaceSensor sensor);
+bool isAvailable(InterfaceSensor sensor);
 
 bool seize(InterfaceSensor sensor);
 void release(InterfaceSensor sensor);
-
-InterfaceConnector getPort(InterfaceSensor sensor);
 
 }  // namespace sf_interfaces

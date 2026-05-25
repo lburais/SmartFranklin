@@ -29,58 +29,6 @@
 
 Gaz GAZ_TASK;
 
-// ---- static utilities ----
-
-float Gaz::sanitizedGap(const float gap)
-{
-    if (!std::isfinite(gap) || gap == 0.0f) {
-        return 1.0f;
-    }
-    return gap;
-}
-
-// ---- instance methods ----
-
-bool Gaz::refreshMeasurement(int32_t& weightG, int32_t& fillPct)
-{
-    if (!seize(m_sensor)) {
-        M5_LOGW("[%s] unable to lock port", m_tag);
-        HMI::setLed(m_sensor, PortStatus::Error);
-        return false;
-    }
-
-    m_units.update();
-
-    if (!m_unit.updated()) {
-        release(m_sensor);
-        HMI::setLed(m_sensor, PortStatus::NoData);
-        return false;
-    }
-
-    const float rawWeight = m_unit.weight();
-
-    release(m_sensor);
-
-    if (!std::isfinite(rawWeight)) {
-        M5_LOGW("[%s] non-finite weight sample ignored", m_tag);
-        HMI::setLed(m_sensor, PortStatus::Error);
-        return false;
-    }
-
-    weightG = static_cast<int32_t>(lroundf(rawWeight));
-
-    if (weightG <= GAZ_BOTTLE_EMPTY_G) { 
-        fillPct = 0; 
-    } else if (weightG >= GAZ_BOTTLE_FULL_G)  {
-        fillPct = 100; 
-    } else {
-        fillPct = (100.0f * (weightG - GAZ_BOTTLE_EMPTY_G) / (GAZ_BOTTLE_FULL_G - GAZ_BOTTLE_EMPTY_G));
-    }
-
-    HMI::setLed(m_sensor, PortStatus::Ok);
-    return true;
-}
-
 // ---- free functions for web_dashboard calibration API ----
 
 bool scale_tare()
@@ -196,8 +144,6 @@ bool Gaz::isInitialized() const
 
 bool Gaz::init()
 {
-    M5_LOGI("[%s] init", m_tag);
-
     m_initialized        = false;
 
     if (!sf_interfaces::configured(m_sensor)) {
@@ -209,62 +155,52 @@ bool Gaz::init()
         }
     }
 
-    TwoWire* connector = sf_interfaces::getPort(m_sensor).ptr.twoWire;
+    TwoWire* connector = sf_interfaces::getConnector(m_sensor).ptr.twoWire;
     if (connector == nullptr) {
         M5_LOGW("[%s] connector unavailable", m_tag);
         HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
-    if (connector == &Wire1) {
-        M5_LOGI("[%s] connector is Wire1", m_tag);
-    } else if (connector == &Wire) {
-        M5_LOGI("[%s] connector is Wire", m_tag);
-    } else {
-        M5_LOGI("[%s] connector is custom bus ptr=%p", m_tag, connector);
-    }
-
     if (!seize(m_sensor)) {
         M5_LOGW("[%s] unable to lock port", m_tag);
         HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
+    
+    m_units.add(m_unit, *connector);
 
-    bool ok = m_units.add(m_unit, *connector) && m_units.begin();
-
-    release(m_sensor);
+    bool ok = m_units.begin();
 
     if (!ok) {
-        M5_LOGW("[%s] %s m_unit not added", m_tag, m_device);
+        M5_LOGW("[%s] %s m_unit not started", m_tag, m_device);
         HMI::setLed(m_sensor, PortStatus::Error);
+        release(m_sensor);
         return false;
     } else {
-        M5_LOGI("[%s] %s m_unit added", m_tag, m_device);
+        M5_LOGI("[%s] %s m_unit started", m_tag, m_device);
     }
 
-    const float effectiveGap = sanitizedGap(CONFIG.gaz_calibration_factor);
-
-    if (!seize(m_sensor)) {
-        M5_LOGW("[%s] unable to lock port", m_tag);
-        HMI::setLed(m_sensor, PortStatus::Error);
-        return false;
+    float effectiveGap = CONFIG.gaz_calibration_factor;
+    if (!std::isfinite(effectiveGap) || effectiveGap == 0.0f) {
+        effectiveGap = 1.0f;
     }
 
-    ok = m_unit.writeGap(effectiveGap);
-
-    release(m_sensor);
-
-    if (!ok) {
+    if (!m_unit.writeGap(effectiveGap)) {
         M5_LOGW("[%s] failed to apply calibration gap %.6f during init", m_tag, effectiveGap);
         HMI::setLed(m_sensor, PortStatus::Error);
     }
+
     CONFIG.gaz_calibration_factor = effectiveGap;
     config_save();
 
     m_initialized = true;
     HMI::setLed(m_sensor, PortStatus::Initialized);
 
+    release(m_sensor);
+
     M5_LOGI("[%s] (0x%02X) initialized", m_tag, sf_interfaces::getAddress(m_sensor));
+
     return true;
 }
 
@@ -274,18 +210,49 @@ bool Gaz::process()
     int32_t fillPct        = 0;
 
     if (!m_initialized) {
+        M5_LOGI("[%s] initialization required", m_tag);
         if (!init()) {
-            M5_LOGW("[%s] not configured", m_tag);
+            M5_LOGW("[%s] not initialized", m_tag);
             HMI::setLed(m_sensor, PortStatus::Error);
             return false;
         }
     }
 
-    if (!refreshMeasurement(weightG, fillPct)) {
+    if (!seize(m_sensor)) {
+        M5_LOGW("[%s] unable to lock port", m_tag);
+        HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
-    HMI::setLed(m_sensor, PortStatus::Ok);
+    m_units.update();
+
+    if (!m_unit.updated()) {
+        HMI::setLed(m_sensor, PortStatus::NoData);
+        release(m_sensor);
+        return false;
+    }
+
+    const float rawWeight = m_unit.weight();
+
+    release(m_sensor);
+
+    if (!std::isfinite(rawWeight)) {
+        M5_LOGW("[%s] non-finite weight sample ignored", m_tag);
+        HMI::setLed(m_sensor, PortStatus::Error);
+        return false;
+    } else {
+        HMI::setLed(m_sensor, PortStatus::Ok);
+    }
+
+    weightG = static_cast<int32_t>(lroundf(rawWeight));
+
+    if (weightG <= GAZ_BOTTLE_EMPTY_G) { 
+        fillPct = 0; 
+    } else if (weightG >= GAZ_BOTTLE_FULL_G)  {
+        fillPct = 100; 
+    } else {
+        fillPct = (100.0f * (weightG - GAZ_BOTTLE_EMPTY_G) / (GAZ_BOTTLE_FULL_G - GAZ_BOTTLE_EMPTY_G));
+    }
 
     {
         std::lock_guard<std::mutex> lock(DATA_MUTEX);
@@ -313,8 +280,6 @@ void taskGaz(void* pv)
     (void)pv;
     M5_LOGI("[GAZ] Task started");
 
-    bool     initialized       = false;
-    bool     processed         = false;
     uint32_t nextInitAttemptMs = 0;
 
     auto isRetryDue = [](uint32_t nowMs, uint32_t nextAttemptMs) {
@@ -329,16 +294,14 @@ void taskGaz(void* pv)
         const uint32_t nowMs = millis();
 
         if (!GAZ_TASK.isInitialized() && isRetryDue(nowMs, nextInitAttemptMs)) {
-            initialized = GAZ_TASK.init();
-            if (!initialized) {
+            if (!GAZ_TASK.init()) {
                 M5_LOGW("[GAZ] Init failed");
-                HMI::setLed(m_sensor, PortStatus::Error);
                 scheduleRetry(nextInitAttemptMs, nowMs);
             }
         }
 
-        if (initialized) {
-            processed = GAZ_TASK.process();
+        if (GAZ_TASK.isInitialized()) {
+            GAZ_TASK.process();
         }
 
         const uint32_t recurrenceMs = sf_interfaces::getRecurrenceMs(sf_interfaces::InterfaceSensor::Gaz);
