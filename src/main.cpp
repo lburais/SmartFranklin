@@ -78,6 +78,7 @@ TaskHandle_t taskTankHandle             = nullptr;  // Tank ultrasonic reading
 TaskHandle_t taskLevelHandle            = nullptr;  // Level/accelerometer sensor reading
 TaskHandle_t taskRtcHandle              = nullptr;  // RTC reading
 TaskHandle_t taskGpsHandle              = nullptr;  // GPS/GNSS reading
+TaskHandle_t taskI2cHandle              = nullptr;  // Unified I2C sensors task
 TaskHandle_t taskBatteryHandle          = nullptr;  // BLE battery management system
 TaskHandle_t taskHmiHandle              = nullptr;  // HMI/display task
 
@@ -195,24 +196,8 @@ void setup() {
     xTaskCreatePinnedToCore(taskHmi,              "HMI",      8192, nullptr, 3,  &taskHmiHandle,      0);
     #endif
 
-    #ifdef ENABLE_GAZ
-    xTaskCreatePinnedToCore(taskGaz,              "GAZ",      4096, nullptr, 2, &taskGazHandle,       1);
-    #endif
-
-    #ifdef ENABLE_TANK
-    xTaskCreatePinnedToCore(taskTank,             "TANK",     4096, nullptr, 2, &taskTankHandle,      1);
-    #endif
-
-    #ifdef ENABLE_LEVEL
-    xTaskCreatePinnedToCore(taskLevel,            "LEVEL",    4096, nullptr, 2, &taskLevelHandle,     1);
-    #endif
-
-    #ifdef ENABLE_RTC
-    xTaskCreatePinnedToCore(taskRtc,              "RTC",      4096, nullptr, 2, &taskRtcHandle,       1);
-    #endif
-
-    #ifdef ENABLE_GPS
-    xTaskCreatePinnedToCore(taskGps,              "GPS",      4096, nullptr, 2, &taskGpsHandle,       1);
+    #if defined(ENABLE_GAZ) || defined(ENABLE_TANK) || defined(ENABLE_LEVEL) || defined(ENABLE_RTC) || defined(ENABLE_GPS)
+    xTaskCreatePinnedToCore(taskI2c,              "I2C",      8192, nullptr, 2, &taskI2cHandle,       1);
     #endif
 
     #ifdef ENABLE_BATTERY

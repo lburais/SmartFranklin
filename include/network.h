@@ -28,8 +28,6 @@ private:
     static constexpr unsigned long kReconnectIntervalMs = 15000;
     static constexpr unsigned long kStatusIntervalMs = 60000;
     static constexpr unsigned long kExternalCheckIntervalMs = 30000;
-
-    //bool waitForWiFiApReady(uint32_t timeoutMs);
 };
 
 extern Wifi WIFI_TASK;
