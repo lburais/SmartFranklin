@@ -195,8 +195,10 @@ static bool checkAuth(AsyncWebServerRequest *request)
     if (!request->authenticate(CONFIG.admin_user.c_str(),
                                CONFIG.admin_pass.c_str())) {
         request->requestAuthentication("SmartFranklin Config");
+        SF_LOGI("[WEB] auth failed");
         return false;
     }
+    SF_LOGI("[WEB] auth ok");
     return true;
 }
 
@@ -605,10 +607,6 @@ void web_dashboard_init()
         request->send(200, "text/html", MAIN_PAGE);
     });
 
-    server.on("/logs", HTTP_GET, [](AsyncWebServerRequest *request){
-        request->send(200, "text/html", LOGS_PAGE);
-    });
-
     server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *request){
         JsonDocument doc;
         fillDataJson(doc);
@@ -619,6 +617,49 @@ void web_dashboard_init()
         JsonDocument doc;
         fillDataJson(doc);
         sendJson(request, doc);
+    });
+
+    server.on("/config", HTTP_GET, [](AsyncWebServerRequest *request){
+        if (!checkAuth(request)) {
+            return;
+        }
+        request->send(200, "text/html", CONFIG_PAGE);
+    });
+
+    server.on("/api/config", HTTP_GET, [](AsyncWebServerRequest *request){
+        if (!checkAuth(request)) {
+            return;
+        }
+
+        JsonDocument doc;
+        fillConfigJson(doc);
+        sendJson(request, doc);
+    });
+
+    server.on("/api/set_config", HTTP_GET, [](AsyncWebServerRequest *request){
+        if (!checkAuth(request)) {
+            return;
+        }
+
+        String errorKey;
+        if (!applyConfigFromRequest(request, errorKey)) {
+            JsonDocument errorDoc;
+            errorDoc["error"] = "invalid_parameter";
+            errorDoc["parameter"] = errorKey;
+            sendJson(request, errorDoc, 400);
+            return;
+        }
+
+        const bool saved = config_save();
+        JsonDocument doc;
+        doc["saved"] = saved;
+        JsonObject config = doc["config"].to<JsonObject>();
+        fillConfigJson(config);
+        sendJson(request, doc, saved ? 200 : 500);
+    });
+
+    server.on("/logs", HTTP_GET, [](AsyncWebServerRequest *request){
+        request->send(200, "text/html", LOGS_PAGE);
     });
 
     server.on("/api/logs", HTTP_GET, [](AsyncWebServerRequest *request){

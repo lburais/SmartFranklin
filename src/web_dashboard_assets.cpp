@@ -365,6 +365,7 @@ a.button { display: inline-block; padding: 10px 15px; background: #0078ff; color
 <body>
 <h1>SmartFranklin Data</h1>
 <div class="card">
+    <a class="button" href="/config">Config</a>
     <a class="button" href="/logs">Logs</a>
 </div>
 <div class="card">
@@ -992,6 +993,7 @@ button { border: 0; border-radius: 6px; padding: 8px 12px; cursor: pointer; }
 <h1>Runtime Logs</h1>
 <div class="card">
     <a class="button" href="/">Data</a>
+    <a class="button" href="/config">Config</a>
 </div>
 <div class="card">
     <pre id="logs">Loading...</pre>
