@@ -8,6 +8,7 @@
 #include "interfaces.h"
 
 #include "mqtt.h"
+#include "log.h"
 
 #include <M5Unified.h>
 #include <HardwareSerial.h>
@@ -267,7 +268,7 @@ bool configure_all_sensors()
     bool allOk = true;
     const size_t count = sizeof(kSensors) / sizeof(kSensors[0]);
     for (size_t i = 0; i < count; ++i) {
-        M5_LOGI("[IFACE] configure_all_sensors -> %s", toString(kSensors[i].Sensor));
+        SF_LOGI("[IFACE] configure_all_sensors -> %s", toString(kSensors[i].Sensor));
         allOk = configure(kSensors[i].Sensor) && allOk;
     }
     return allOk;
@@ -277,7 +278,7 @@ bool configure(const InterfaceSensor sensor)
 {
     InterfaceSensorMap* map = findSensorMutable(sensor);
     if (map == nullptr) {
-        M5_LOGW("[IFACE] configure(%s) -> sensor not found", toString(sensor));
+        SF_LOGW("[IFACE] configure(%s) -> sensor not found", toString(sensor));
         return false;
     }
 
@@ -286,13 +287,13 @@ bool configure(const InterfaceSensor sensor)
     InterfacePortMap* connection = findConnectionMutable(sensor);
 
     if (connection == nullptr) {
-        M5_LOGE("[IFACE] configure(%s) -> missing connection", toString(sensor));
+        SF_LOGE("[IFACE] configure(%s) -> missing connection", toString(sensor));
         return false;
     }
 
     if (connection->Lock == nullptr) {
         connection->Lock = xSemaphoreCreateMutex();
-        M5_LOGI("[IFACE] configure(%s) -> Lock is 0x%X", toString(sensor), connection->Lock);
+        SF_LOGI("[IFACE] configure(%s) -> Lock is 0x%X", toString(sensor), connection->Lock);
     }
 
     if (connection->Type == InterfacePortType::I2C) {
@@ -333,7 +334,7 @@ bool configure(const InterfaceSensor sensor)
         const uint32_t baud = map->Clock;
 
         if (rx < 0 || tx < 0 || baud == 0U) {
-            M5_LOGE("[IFACE] configure(%s) -> missing UART pins/baud", toString(sensor));
+            SF_LOGE("[IFACE] configure(%s) -> missing UART pins/baud", toString(sensor));
             return false;
         }
 
@@ -345,14 +346,14 @@ bool configure(const InterfaceSensor sensor)
         map->available = ok;
 
     } else {
-        M5_LOGW("[IFACE] configure(%s) -> %s not yet implemented", toString(sensor), toString(connection->Type));
+        SF_LOGW("[IFACE] configure(%s) -> %s not yet implemented", toString(sensor), toString(connection->Type));
     }
 
     if (!map->available) {
-        M5_LOGW("[IFACE] configure(%s) -> sensor not available", toString(sensor));
+        SF_LOGW("[IFACE] configure(%s) -> sensor not available", toString(sensor));
         return false;
     } else {
-        M5_LOGI("[IFACE] configure(%s) -> sensor ready", toString(sensor));
+        SF_LOGI("[IFACE] configure(%s) -> sensor ready", toString(sensor));
     }
 
     publishConfiguration(sensor);
@@ -364,12 +365,12 @@ bool configured(const InterfaceSensor sensor)
 {
     const InterfacePortMap* map = findConnectionConst(sensor);
     if (map == nullptr) {
-        M5_LOGW("[IFACE] configured(%s) -> connector not found", toString(sensor));
+        SF_LOGW("[IFACE] configured(%s) -> connector not found", toString(sensor));
         return false;
     }
 
     if (!map->configured) {
-        M5_LOGW("[IFACE] configured(%s) -> port %s not configured", toString(sensor), toString(map->Type));
+        SF_LOGW("[IFACE] configured(%s) -> port %s not configured", toString(sensor), toString(map->Type));
         return false;
     }
 
@@ -380,7 +381,7 @@ bool isAvailable(const InterfaceSensor sensor)
 {
     const InterfaceSensorMap* map = findSensorConst(sensor);
     if (map == nullptr) {
-        M5_LOGW("[IFACE] configured(%s) -> sensor not found", toString(sensor));
+        SF_LOGW("[IFACE] configured(%s) -> sensor not found", toString(sensor));
         return false;
     }
 
@@ -391,7 +392,7 @@ const InterfaceConnector getConnector(const InterfaceSensor sensor)
 {
     const InterfacePortMap* map = findConnectionConst(sensor);
     if (map == nullptr) {
-        M5_LOGW("[IFACE] getPort(%s) -> sensor not found", toString(sensor));
+        SF_LOGW("[IFACE] getPort(%s) -> sensor not found", toString(sensor));
         return InterfaceConnector{};
     }
     return map->connector;
@@ -401,22 +402,22 @@ bool seize(InterfaceSensor sensor)
 {
     InterfacePortMap* connection = findConnectionMutable(sensor);
     if (connection == nullptr) {
-        M5_LOGW("[IFACE] seize(%s) -> connector not found", toString(sensor));
+        SF_LOGW("[IFACE] seize(%s) -> connector not found", toString(sensor));
         return false;
     }
     
     if (!connection->configured) {
-        M5_LOGW("[IFACE] seize(%s) -> port %s not configured", toString(sensor), toString(connection->Type));
+        SF_LOGW("[IFACE] seize(%s) -> port %s not configured", toString(sensor), toString(connection->Type));
         return false;
     }
 
     if (connection->Lock == nullptr) {
-        M5_LOGE("[IFACE] seize(%s) -> missing lock", toString(sensor));
+        SF_LOGE("[IFACE] seize(%s) -> missing lock", toString(sensor));
         return false;
     }
 
     if (!xSemaphoreTake(connection->Lock, pdMS_TO_TICKS(500))) {
-        M5_LOGI("[IFACE] seized(0x%X) -> failed", connection->Lock);
+        SF_LOGI("[IFACE] seized(0x%X) -> failed", connection->Lock);
         return false;
     }
 
@@ -430,7 +431,7 @@ bool seize(InterfaceSensor sensor)
 
         TwoWire* bus = connection->connector.ptr.twoWire;
         if (bus == nullptr) {
-            M5_LOGE("[IFACE] seize(%s) -> no connector", toString(connection->Type));
+            SF_LOGE("[IFACE] seize(%s) -> no connector", toString(connection->Type));
             release(sensor);
             return false;
         }
@@ -438,7 +439,7 @@ bool seize(InterfaceSensor sensor)
         bus->end();
 
         if (!bus->begin(yellow, white, clockHz)) {
-            M5_LOGE("[IFACE] seize(%s) -> begin failed", toString(connection->Type));
+            SF_LOGE("[IFACE] seize(%s) -> begin failed", toString(connection->Type));
             release(sensor);
             return false;
         }
@@ -453,12 +454,12 @@ void release(InterfaceSensor sensor)
 {
     InterfacePortMap* connection = findConnectionMutable(sensor);
     if (connection == nullptr) {
-        M5_LOGW("[IFACE] release(%s) -> connection not found", toString(sensor));
+        SF_LOGW("[IFACE] release(%s) -> connection not found", toString(sensor));
         return;
     }
     
     if (connection->Lock == nullptr) {
-        M5_LOGW("[IFACE] release(port=%s) -> missing lock", toString(connection->Type));
+        SF_LOGW("[IFACE] release(port=%s) -> missing lock", toString(connection->Type));
         return;
     }
 

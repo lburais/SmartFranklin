@@ -134,6 +134,7 @@
 #include "tasks.h"
 #include "mqtt.h"
 #include "config_store.h"
+#include "log.h"
 
 namespace {
 
@@ -171,7 +172,7 @@ void ensureLocalBrokerStarted()
     const unsigned short port = localBrokerPort();
     if (s_localBroker.init(port)) {
         s_localBrokerStarted = true;
-        M5_LOGI("[MQTT] Local broker started on port %u", port);
+        SF_LOGI("[MQTT] Local broker started on port %u", port);
 
         // Publish local broker configuration for diagnostics.
         sf_mqtt::publish("smartfranklin/system/mqtt_broker/config/host", "local");
@@ -180,7 +181,7 @@ void ensureLocalBrokerStarted()
     }
 
     nextRetryAtMs = now + 5000;
-    M5_LOGW("[MQTT] Local broker init failed on port %u, retrying in 5s", port);
+    SF_LOGW("[MQTT] Local broker init failed on port %u, retrying in 5s", port);
 }
 
 } // namespace
@@ -275,7 +276,7 @@ void taskMqtt(void *pv)
 {
     (void)pv;
 
-    M5_LOGI("[MQTT] MQTT task started");
+    SF_LOGI("[MQTT] MQTT task started");
 
     for (;;) {
         ensureLocalBrokerStarted();

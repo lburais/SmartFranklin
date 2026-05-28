@@ -25,6 +25,7 @@
 #include "hmi.h"
 #include "mqtt.h"
 #include "interfaces.h"
+#include "log.h"
 
 namespace {
 
@@ -179,28 +180,28 @@ bool GPS::isInitialized() const
 
 bool GPS::init()
 {
-    M5_LOGI("[%s] init", m_tag);
+    SF_LOGI("[%s] init", m_tag);
 
     m_initialized        = false;
 
     if (!sf_interfaces::configured(m_sensor)) {
-        M5_LOGW("[%s] configuration required", m_tag);
+        SF_LOGW("[%s] configuration required", m_tag);
         if (!sf_interfaces::configure(m_sensor)) {
-            M5_LOGW("[%s] configuration failed", m_tag);
+            SF_LOGW("[%s] configuration failed", m_tag);
             HMI::setLed(m_sensor, PortStatus::Error);
             return false;
         }
     }
 
     if (!seize(m_sensor)) {
-        M5_LOGW("[%s] unable to lock port", m_tag);
+        SF_LOGW("[%s] unable to lock port", m_tag);
         HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
     uint8_t probe = 0;
     if (!readRegisters(REG_USE_STAR, &probe, 1U)) {
-        M5_LOGE("[%s] cannot read register 0x%02X", m_tag, REG_USE_STAR);
+        SF_LOGE("[%s] cannot read register 0x%02X", m_tag, REG_USE_STAR);
         release(m_sensor);
         return false;
     }
@@ -210,7 +211,7 @@ bool GPS::init()
 
     m_initialized = true;
 
-    M5_LOGI("[%s] (0x%02X) initialized", m_tag, sf_interfaces::getAddress(m_sensor));
+    SF_LOGI("[%s] (0x%02X) initialized", m_tag, sf_interfaces::getAddress(m_sensor));
 
     release(m_sensor);
 
@@ -224,20 +225,20 @@ bool GPS::process()
 
     if (!m_initialized) {
         if (!init()) {
-            M5_LOGW("[%s] not configured", m_tag);
+            SF_LOGW("[%s] not configured", m_tag);
             HMI::setLed(m_sensor, PortStatus::Error);
             return false;
         }
     }
 
     if (!seize(m_sensor)) {
-        M5_LOGW("[%s] unable to lock port", m_tag);
+        SF_LOGW("[%s] unable to lock port", m_tag);
         HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
     if (!readPoseAndTimeLocked()) {
-        M5_LOGW("[%s] sample read failed", m_tag);
+        SF_LOGW("[%s] sample read failed", m_tag);
         HMI::setLed(m_sensor, PortStatus::NoData);
         release(m_sensor);
         return false;
@@ -291,9 +292,9 @@ bool GPS::process()
     sf_mqtt::publish("smartfranklin/gps/utc", utcBuf);
 
     if (m_hasFix) {
-        M5_LOGI("[%s] sat=%s lat=%s lon=%s alt=%s date=%s utc=%s", m_tag, satsBuf, latBuf, lonBuf, altBuf, dateBuf, utcBuf);
+        SF_LOGI("[%s] sat=%s lat=%s lon=%s alt=%s date=%s utc=%s", m_tag, satsBuf, latBuf, lonBuf, altBuf, dateBuf, utcBuf);
     } else {
-        M5_LOGI("[%s] no fix", m_tag);
+        SF_LOGI("[%s] no fix", m_tag);
     }
 
     HMI::setLed(m_sensor, PortStatus::Ok);
@@ -306,7 +307,7 @@ bool GPS::process()
 void taskGps(void* pv)
 {
     (void)pv;
-    M5_LOGI("[GPS] Task started");
+    SF_LOGI("[GPS] Task started");
 
     uint32_t nextInitAttemptMs = 0;
 
@@ -323,7 +324,7 @@ void taskGps(void* pv)
 
         if (!GPS_TASK.isInitialized() && isRetryDue(nowMs, nextInitAttemptMs)) {
             if (!GPS_TASK.init()) {
-                M5_LOGW("[GPS] Init failed");
+                SF_LOGW("[GPS] Init failed");
                 scheduleRetry(nextInitAttemptMs, nowMs);
             }
         }

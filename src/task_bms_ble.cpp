@@ -133,6 +133,7 @@
 #include "data_model.h"
 #include "mqtt.h"
 #include "config_store.h"
+#include "log.h"
 
 // ============================================================================
 // Global BLE Connection State
@@ -235,7 +236,7 @@ static void bmsNotifyCallback(NimBLERemoteCharacteristic *c,
     // Parse the incoming JBD BMS frame
     JbdFrame f;
     if (!jbd_parse_frame(data, len, f)) {
-        M5_LOGW("[BMS_BLE] Invalid frame");
+        SF_LOGW("[BMS_BLE] Invalid frame");
         return;
     }
 
@@ -319,7 +320,7 @@ static void bmsNotifyCallback(NimBLERemoteCharacteristic *c,
  */
 static bool connectToBms()
 {
-    M5_LOGI("[BMS_BLE] Scanning...");
+    SF_LOGI("[BMS_BLE] Scanning...");
 
     // Start BLE scan to find JBD-BMS device
     NimBLEScan *scan = NimBLEDevice::getScan();
@@ -338,38 +339,38 @@ static bool connectToBms()
     }
 
     if (!target) {
-        M5_LOGW("[BMS_BLE] Device not found");
+        SF_LOGW("[BMS_BLE] Device not found");
         return false;
     }
 
     // Create BLE client and attempt connection
     client = NimBLEDevice::createClient();
     if (!client->connect(target)) {
-        M5_LOGE("[BMS_BLE] Connect failed");
+        SF_LOGE("[BMS_BLE] Connect failed");
         return false;
     }
 
     // Discover JBD BMS service
     NimBLERemoteService *svc = client->getService(UUID_SERVICE);
     if (!svc) {
-        M5_LOGE("[BMS_BLE] Service missing");
+        SF_LOGE("[BMS_BLE] Service missing");
         return false;
     }
 
     // Find notification characteristic
     notifyChar = svc->getCharacteristic(UUID_NOTIFY);
     if (!notifyChar || !notifyChar->canNotify()) {
-        M5_LOGE("[BMS_BLE] Notify characteristic missing");
+        SF_LOGE("[BMS_BLE] Notify characteristic missing");
         return false;
     }
 
     // Subscribe to notifications with callback
     if (!notifyChar->subscribe(true, bmsNotifyCallback, true)) {
-        M5_LOGE("[BMS_BLE] Subscribe failed");
+        SF_LOGE("[BMS_BLE] Subscribe failed");
         return false;
     }
 
-    M5_LOGI("[BMS_BLE] Subscribed to notifications");
+    SF_LOGI("[BMS_BLE] Subscribed to notifications");
     return true;
 }
 
@@ -427,7 +428,7 @@ static bool connectToBms()
  */
 void taskBmsBle(void *pv)
 {
-    M5_LOGI("[BMS_BLE] Task started");
+    SF_LOGI("[BMS_BLE] Task started");
 
     // Initialize NimBLE BLE stack
     NimBLEDevice::init("SmartFranklin");
@@ -439,11 +440,11 @@ void taskBmsBle(void *pv)
     for (;;) {
         // Check if BLE connection is active
         if (!client || !client->isConnected()) {
-            M5_LOGI("[BMS_BLE] Connecting...");
+            SF_LOGI("[BMS_BLE] Connecting...");
             
             // Attempt to establish BLE connection
             if (!connectToBms()) {
-                M5_LOGW("[BMS_BLE] Retry in 50s");
+                SF_LOGW("[BMS_BLE] Retry in 50s");
                 // Delay before retrying connection
                 const int bmsRetryLoopMs = (CONFIG.task_bms_ble_retry_loop_ms > 0)
                     ? CONFIG.task_bms_ble_retry_loop_ms
@@ -451,7 +452,7 @@ void taskBmsBle(void *pv)
                 vTaskDelay(pdMS_TO_TICKS(bmsRetryLoopMs));
                 continue;
             }
-            M5_LOGI("[BMS_BLE] Connected");
+            SF_LOGI("[BMS_BLE] Connected");
         }
 
         // Connection active, check again in 10 second

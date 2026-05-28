@@ -26,6 +26,7 @@
 #include "hmi.h"
 #include "interfaces.h"
 #include "mqtt.h"
+#include "log.h"
 
 Gaz GAZ_TASK;
 
@@ -46,19 +47,19 @@ bool scale_calibrate(float weightG)
 bool Gaz::calibrate(float weightG)
 {
     if (!m_initialized) {
-        M5_LOGW("[%s] calibrate called before init", m_tag);
+        SF_LOGW("[%s] calibrate called before init", m_tag);
         HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
     if (!m_calibration_in_progress) {
-        M5_LOGW("[%s] calibrate called before tare", m_tag);
+        SF_LOGW("[%s] calibrate called before tare", m_tag);
         HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
     if (!seize(m_sensor)) {
-        M5_LOGW("[%s] unable to lock port", m_tag);
+        SF_LOGW("[%s] unable to lock port", m_tag);
         HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
@@ -69,13 +70,13 @@ bool Gaz::calibrate(float weightG)
     release(m_sensor);
 
     if (!ok) {
-        M5_LOGE("[%s] unable to readADC", m_tag);
+        SF_LOGE("[%s] unable to readADC", m_tag);
         HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
     if (!seize(m_sensor)) {
-        M5_LOGW("[%s] unable to lock port", m_tag);
+        SF_LOGW("[%s] unable to lock port", m_tag);
         HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
@@ -86,7 +87,7 @@ bool Gaz::calibrate(float weightG)
     release(m_sensor);
 
     if (!ok) {
-        M5_LOGW("[%s] failed to reset calibration gap during calibrate", m_tag);
+        SF_LOGW("[%s] failed to reset calibration gap during calibrate", m_tag);
         HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
@@ -108,7 +109,7 @@ bool Gaz::tare()
     }
 
     if (!seize(m_sensor)) {
-        M5_LOGW("[%s] unable to lock port", m_tag);
+        SF_LOGW("[%s] unable to lock port", m_tag);
         HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
@@ -147,9 +148,9 @@ bool Gaz::init()
     m_initialized        = false;
 
     if (!sf_interfaces::configured(m_sensor)) {
-        M5_LOGW("[%s] configuration required", m_tag);
+        SF_LOGW("[%s] configuration required", m_tag);
         if (!sf_interfaces::configure(m_sensor)) {
-            M5_LOGW("[%s] configuration failed", m_tag);
+            SF_LOGW("[%s] configuration failed", m_tag);
             HMI::setLed(m_sensor, PortStatus::Error);
             return false;
         }
@@ -157,13 +158,13 @@ bool Gaz::init()
 
     TwoWire* connector = sf_interfaces::getConnector(m_sensor).ptr.twoWire;
     if (connector == nullptr) {
-        M5_LOGW("[%s] connector unavailable", m_tag);
+        SF_LOGW("[%s] connector unavailable", m_tag);
         HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
     if (!seize(m_sensor)) {
-        M5_LOGW("[%s] unable to lock port", m_tag);
+        SF_LOGW("[%s] unable to lock port", m_tag);
         HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
@@ -173,12 +174,12 @@ bool Gaz::init()
     bool ok = m_units.begin();
 
     if (!ok) {
-        M5_LOGW("[%s] %s m_unit not started", m_tag, m_device);
+        SF_LOGW("[%s] %s m_unit not started", m_tag, m_device);
         HMI::setLed(m_sensor, PortStatus::Error);
         release(m_sensor);
         return false;
     } else {
-        M5_LOGI("[%s] %s m_unit started", m_tag, m_device);
+        SF_LOGI("[%s] %s m_unit started", m_tag, m_device);
     }
 
     float effectiveGap = CONFIG.gaz_calibration_factor;
@@ -187,7 +188,7 @@ bool Gaz::init()
     }
 
     if (!m_unit.writeGap(effectiveGap)) {
-        M5_LOGW("[%s] failed to apply calibration gap %.6f during init", m_tag, effectiveGap);
+        SF_LOGW("[%s] failed to apply calibration gap %.6f during init", m_tag, effectiveGap);
         HMI::setLed(m_sensor, PortStatus::Error);
     }
 
@@ -199,7 +200,7 @@ bool Gaz::init()
 
     release(m_sensor);
 
-    M5_LOGI("[%s] (0x%02X) initialized", m_tag, sf_interfaces::getAddress(m_sensor));
+    SF_LOGI("[%s] (0x%02X) initialized", m_tag, sf_interfaces::getAddress(m_sensor));
 
     return true;
 }
@@ -210,16 +211,16 @@ bool Gaz::process()
     int32_t fillPct        = 0;
 
     if (!m_initialized) {
-        M5_LOGI("[%s] initialization required", m_tag);
+        SF_LOGI("[%s] initialization required", m_tag);
         if (!init()) {
-            M5_LOGW("[%s] not initialized", m_tag);
+            SF_LOGW("[%s] not initialized", m_tag);
             HMI::setLed(m_sensor, PortStatus::Error);
             return false;
         }
     }
 
     if (!seize(m_sensor)) {
-        M5_LOGW("[%s] unable to lock port", m_tag);
+        SF_LOGW("[%s] unable to lock port", m_tag);
         HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
@@ -237,7 +238,7 @@ bool Gaz::process()
     release(m_sensor);
 
     if (!std::isfinite(rawWeight)) {
-        M5_LOGW("[%s] non-finite weight sample ignored", m_tag);
+        SF_LOGW("[%s] non-finite weight sample ignored", m_tag);
         HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     } else {
@@ -268,7 +269,7 @@ bool Gaz::process()
     snprintf(pctBuf, sizeof(pctBuf), "%d", fillPct);
     sf_mqtt::publish("smartfranklin/gaz/fill", pctBuf, 1, true);
 
-    M5_LOGI("[%s] Weight: %d g     Fill: %d%%", m_tag, weightG, fillPct);
+    SF_LOGI("[%s] Weight: %d g     Fill: %d%%", m_tag, weightG, fillPct);
 
     return true;
 }
@@ -278,7 +279,7 @@ bool Gaz::process()
 void taskGaz(void* pv)
 {
     (void)pv;
-    M5_LOGI("[GAZ] Task started");
+    SF_LOGI("[GAZ] Task started");
 
     uint32_t nextInitAttemptMs = 0;
 
@@ -295,7 +296,7 @@ void taskGaz(void* pv)
 
         if (!GAZ_TASK.isInitialized() && isRetryDue(nowMs, nextInitAttemptMs)) {
             if (!GAZ_TASK.init()) {
-                M5_LOGW("[GAZ] Init failed");
+                SF_LOGW("[GAZ] Init failed");
                 scheduleRetry(nextInitAttemptMs, nowMs);
             }
         }

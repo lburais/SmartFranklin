@@ -75,6 +75,7 @@
 #include "gaz.h"
 #include "mqtt.h"
 #include "interfaces.h"
+#include "log.h"
 
 namespace {
 
@@ -231,7 +232,7 @@ void HMI::setLed(const sf_interfaces::InterfaceSensor sensor, const PortStatus s
  */
 bool HMI::init()
 {
-    M5_LOGI("[HMI] init");
+    SF_LOGI("[HMI] init");
     M5GFX& lcd = M5.Display;
 
     initialized_ = false;
@@ -375,7 +376,7 @@ void HMI::handleCalibrationButton(bool btnB_rising)
         calib_in_progress_ = true;
         if (!scale_tare()) {
             calib_in_progress_ = false;
-            M5_LOGW("[HMI] scale tare failed");
+            SF_LOGW("[HMI] scale tare failed");
         }
         draw();
         return;
@@ -383,7 +384,7 @@ void HMI::handleCalibrationButton(bool btnB_rising)
 
     const float knownWeightG = calib_known_weight_ * 1000.0f;
     if (!scale_calibrate(knownWeightG)) {
-        M5_LOGW("[HMI] scale calibration apply failed");
+        SF_LOGW("[HMI] scale calibration apply failed");
     }
 
     calib_in_progress_ = false;
@@ -439,7 +440,7 @@ void HMI::draw()
     // Emit current screen when it changes so MQTT reflects UI navigation.
     if (last_published_screen_ != screen_) {
         sf_mqtt::publish("smartfranklin/hmi/screen", currentScreenName(), 1, true);
-        M5_LOGI("[HMI] %s", currentScreenName());
+        SF_LOGI("[HMI] %s", currentScreenName());
         last_published_screen_ = screen_;
     }
 }

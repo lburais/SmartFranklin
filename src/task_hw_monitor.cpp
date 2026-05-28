@@ -134,6 +134,7 @@
 #include "m5_hw.h"
 #include "mqtt.h"
 #include "config_store.h"
+#include "log.h"
 #include <M5Unified.h>
 
 // ============================================================================
@@ -208,7 +209,7 @@
  */
 void taskHwMonitor(void *pv)
 {
-    M5_LOGI("[HW] Hardware monitor started");
+    SF_LOGI("[HW] Hardware monitor started");
 
     for (;;) {
 

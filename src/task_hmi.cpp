@@ -60,6 +60,7 @@
 #include "hmi.h"
 #include "tasks.h"
 #include "config_store.h"
+#include "log.h"
 
 namespace {
 
@@ -90,10 +91,10 @@ void taskHmi(void *pv)
 {
     (void)pv;
 
-    M5_LOGI("[HMI] Task started");
+    SF_LOGI("[HMI] Task started");
 
     while (!g_hmi.init()) {
-        M5_LOGW("[HMI] init failed, retry in 1s");
+        SF_LOGW("[HMI] init failed, retry in 1s");
         const int hmiInitRetryMs = (CONFIG.task_hmi_init_retry_ms > 0) ? CONFIG.task_hmi_init_retry_ms : 1000;
         vTaskDelay(pdMS_TO_TICKS(hmiInitRetryMs));
     }
@@ -109,7 +110,7 @@ void taskHmi(void *pv)
                 rebootPressStart = millis();
             }
             if (millis() - rebootPressStart > HMI_REBOOT_HOLD_MS) {
-                M5_LOGI("----- SmartFranklin restarted -----");
+                SF_LOGI("----- SmartFranklin restarted -----");
                 ESP.restart();
             }
         } else {

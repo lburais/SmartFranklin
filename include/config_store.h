@@ -53,7 +53,7 @@ struct SmartConfig {
     String hostname = "franklin";
     String ap_ssid = "SmartFranklin-AP";
     String ap_pass = "smartfranklin";
-    String sta_ssid = "jrdl";
+    String sta_ssid = "jrdl1";
     String sta_pass = "05121996190119942106196801071964";
 
     // Gaz calibration and smoothing

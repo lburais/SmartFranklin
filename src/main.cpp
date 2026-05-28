@@ -61,8 +61,9 @@
 #include "command_handler.h"
 #include "web_dashboard.h"
 #include "config_store.h"
-#include "captive_portal.h"
 #include "interfaces.h"
+#include "log.h"
+#include "network.h"
 
 // ============================================================================
 // Task Handle Declarations
@@ -80,32 +81,10 @@ TaskHandle_t taskGpsHandle              = nullptr;  // GPS/GNSS reading
 TaskHandle_t taskBatteryHandle          = nullptr;  // BLE battery management system
 TaskHandle_t taskHmiHandle              = nullptr;  // HMI/display task
 
-static constexpr uint8_t DISPLAY_UI_ROTATION = 3;
-static constexpr uint8_t DISPLAY_UI_BRIGHTNESS = 255;
+// static constexpr uint8_t DISPLAY_UI_ROTATION = 3;
+// static constexpr uint8_t DISPLAY_UI_BRIGHTNESS = 255;
 
 namespace {
-
-bool waitForWiFiApReady(uint32_t timeoutMs)
-{
-    const uint32_t startMs = millis();
-    while ((millis() - startMs) < timeoutMs) {
-        const wifi_mode_t mode = WiFi.getMode();
-        const bool apModeActive = (mode == WIFI_AP || mode == WIFI_AP_STA);
-        const IPAddress apIp = WiFi.softAPIP();
-        const bool hasValidApIp = (apIp != INADDR_NONE) && (apIp != IPAddress(0, 0, 0, 0));
-
-        if (apModeActive && hasValidApIp) {
-            M5_LOGI("[WiFi] AP health check PASS ssid:%s ip:%s", CONFIG.ap_ssid.c_str(), apIp.toString().c_str());
-            return true;
-        }
-
-        delay(100);
-    }
-
-    const IPAddress apIp = WiFi.softAPIP();
-    M5_LOGW("[WiFi] AP health check FAIL ssid:%s mode:%d ip:%s", CONFIG.ap_ssid.c_str(), static_cast<int>(WiFi.getMode()), apIp.toString().c_str());
-    return false;
-}
 
 bool waitForLocalMqttBrokerReady(uint32_t timeoutMs)
 {
@@ -114,18 +93,18 @@ bool waitForLocalMqttBrokerReady(uint32_t timeoutMs)
         if (sf_mqtt::is_local_broker_ready()) {
             const bool probeOk = sf_mqtt::publish_local("smartfranklin/system/mqtt_broker/health", "boot_probe", 0, false);
             if (probeOk) {
-                M5_LOGI("[MQTT] Local broker health check PASS");
+                SF_LOGI("[MQTT] Local broker health check PASS");
                 return true;
             }
 
-            M5_LOGW("[MQTT] Local broker ready but health publish probe failed");
+            SF_LOGW("[MQTT] Local broker ready but health publish probe failed");
             return false;
         }
 
         delay(100);
     }
 
-    M5_LOGW("[MQTT] Local broker health check FAIL (startup timeout)");
+    SF_LOGW("[MQTT] Local broker health check FAIL (startup timeout)");
     return false;
 }
 
@@ -168,26 +147,21 @@ void setup() {
     // WiFi AP+STA FreeRTOS Task creation
     // =========================================================================
 
-    xTaskCreatePinnedToCore(taskWiFi, "WIFI", 4096, nullptr, 3,  &taskWiFiHandle, 1);
+    xTaskCreatePinnedToCore(taskWiFi, "WIFI", 8192, nullptr, 3, &taskWiFiHandle, 0);
 
-    // Validate that AP mode and AP IP are available after WiFi task startup.
-    (void)waitForWiFiApReady(5000);
-
-    // If station connection fails, start captive portal for WiFi setup
-    if (WiFi.status() != WL_CONNECTED) {
-        captive_portal_start();
+    // Wait for access point to be ready.
+    while (!WIFI_TASK.isInitialized()) {
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 
     // =========================================================================
     // MQTT broker FreeRTOS Task creation
     // =========================================================================
 
-    xTaskCreatePinnedToCore(taskMqtt, "MQTT", 4096, nullptr, 3,  &taskMqttHandle, 1);
+    xTaskCreatePinnedToCore(taskMqtt, "MQTT", 4096, nullptr, 3,  &taskMqttHandle, 0);
 
     // Validate local MQTT broker startup and local publish path.
     (void)waitForLocalMqttBrokerReady(5000);
-
-    M5_LOGI("[MQTT] External MQTT removed; local broker only");
 
     // =========================================================================
     // Command Handler Initialization
@@ -218,7 +192,7 @@ void setup() {
     // Priority levels: 1 (low) to 3 (high); higher = more CPU scheduling time
     
     #ifdef ENABLE_HMI
-    xTaskCreatePinnedToCore(taskHmi,              "HMI",      8192, nullptr, 3,  &taskHmiHandle,            1);
+    xTaskCreatePinnedToCore(taskHmi,              "HMI",      8192, nullptr, 3,  &taskHmiHandle,      0);
     #endif
 
     #ifdef ENABLE_GAZ
@@ -253,7 +227,7 @@ void setup() {
     xTaskCreatePinnedToCore(taskWatchdog,         "WATCHDOG", 2048, nullptr, 3, nullptr,              0);
     #endif
 
-    M5_LOGI("SmartFranklin setup complete.");
+    SF_LOGI("[SF] SmartFranklin setup complete.");
 }
 
 // ============================================================================

@@ -4,3 +4,4 @@
 .vscode
 docs
 *.bak
+src/web_dashboard_full.cpp

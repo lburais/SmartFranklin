@@ -19,6 +19,7 @@
 #include "data_model.h"
 #include "interfaces.h"
 #include "mqtt.h"
+#include "log.h"
 
 float Level::sanitizePositive(const float value, const float fallback, const float minValue, const float maxValue)
 {
@@ -99,7 +100,7 @@ void Level::publishLevel(const float pitchDeg,
     sf_mqtt::publish("smartfranklin/level/wheel/rl_mm", rlBuf);
     sf_mqtt::publish("smartfranklin/level/wheel/rr_mm", rrBuf);
 
-    M5_LOGI("[LEVEL] pitch:%.0f° roll:%.0f° FL:%.0fcm FR:%.0fcm RL:%.0fcm RR:%.0fcm",
+    SF_LOGI("[LEVEL] pitch:%.0f° roll:%.0f° FL:%.0fcm FR:%.0fcm RL:%.0fcm RR:%.0fcm",
             pitchDeg, rollDeg, flMm/10, frMm/10, rlMm/10, rrMm/10);
 }
 
@@ -116,7 +117,7 @@ bool Level::calibrate()
     std::lock_guard<std::mutex> lock(m_mutex);
 
     if (!m_initialized) {
-        M5_LOGW("[LEVEL] calibrate called before init");
+        SF_LOGW("[LEVEL] calibrate called before init");
         return false;
     }
 
@@ -125,18 +126,18 @@ bool Level::calibrate()
     float ay = 0.0f;
     float az = 0.0f;
     if (!M5.Imu.getAccel(&ax, &ay, &az)) {
-        M5_LOGW("[LEVEL] calibrate: accel read failed");
+        SF_LOGW("[LEVEL] calibrate: accel read failed");
         return false;
     }
 
     if (!std::isfinite(ax) || !std::isfinite(ay) || !std::isfinite(az)) {
-        M5_LOGW("[LEVEL] calibrate: non-finite accel");
+        SF_LOGW("[LEVEL] calibrate: non-finite accel");
         return false;
     }
 
     const float norm = sqrtf((ax * ax) + (ay * ay) + (az * az));
     if (!std::isfinite(norm) || norm < 0.0001f) {
-        M5_LOGW("[LEVEL] calibrate: invalid accel norm");
+        SF_LOGW("[LEVEL] calibrate: invalid accel norm");
         return false;
     }
 
@@ -147,7 +148,7 @@ bool Level::calibrate()
     CONFIG.level_zero_roll_deg  = rawRollDeg;
     config_save();
 
-    M5_LOGI("[LEVEL] calibrated: zero pitch=%.3f roll=%.3f", rawPitchDeg, rawRollDeg);
+    SF_LOGI("[LEVEL] calibrated: zero pitch=%.3f roll=%.3f", rawPitchDeg, rawRollDeg);
     return true;
 }
 
@@ -167,9 +168,9 @@ bool Level::init()
 
     if (imuReady) {
         m_initialized = true;
-        M5_LOGI("[LEVEL] initialized on internal IMU");
+        SF_LOGI("[LEVEL] initialized on internal IMU");
     } else {
-        M5_LOGE("[LEVEL] unable to initialize");
+        SF_LOGE("[LEVEL] unable to initialize");
     }
 
     return imuReady;
@@ -204,24 +205,24 @@ void Level::process()
         M5.Imu.update();
         if (!M5.Imu.getAccel(&ax, &ay, &az)) {
             if (!M5.Imu.begin()) {
-                M5_LOGW("[LEVEL] sample read failed");
+                SF_LOGW("[LEVEL] sample read failed");
                 return;
             }
             M5.Imu.update();
             if (!M5.Imu.getAccel(&ax, &ay, &az)) {
-                M5_LOGW("[LEVEL] sample read failed");
+                SF_LOGW("[LEVEL] sample read failed");
                 return;
             }
         }
 
         if (!std::isfinite(ax) || !std::isfinite(ay) || !std::isfinite(az)) {
-            M5_LOGW("[LEVEL] sample read failed");
+            SF_LOGW("[LEVEL] sample read failed");
             return;
         }
 
         const float norm = sqrtf((ax * ax) + (ay * ay) + (az * az));
         if (!std::isfinite(norm) || norm < 0.0001f) {
-            M5_LOGW("[LEVEL] invalid accel norm");
+            SF_LOGW("[LEVEL] invalid accel norm");
             return;
         }
 
@@ -234,7 +235,7 @@ void Level::process()
         rollDeg -= zeroRoll;
 
         if (!std::isfinite(pitchDeg) || !std::isfinite(rollDeg)) {
-            M5_LOGW("[LEVEL] non-finite pose");
+            SF_LOGW("[LEVEL] non-finite pose");
             return;
         }
 
@@ -267,7 +268,7 @@ void Level::process()
 void taskLevel(void* pv)
 {
     (void)pv;
-    M5_LOGI("[LEVEL] Task started");
+    SF_LOGI("[LEVEL] Task started");
 
     bool initialized = false;
     uint32_t nextInitAttemptMs = 0;
@@ -287,7 +288,7 @@ void taskLevel(void* pv)
             initialized = LEVEL_TASK.init();
 
             if (!initialized) {
-                M5_LOGW("[LEVEL] Init failed");
+                SF_LOGW("[LEVEL] Init failed");
                 scheduleRetry(nextInitAttemptMs, nowMs);
             }
         }

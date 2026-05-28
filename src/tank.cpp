@@ -23,6 +23,7 @@
 #include "hmi.h"
 #include "interfaces.h"
 #include "mqtt.h"
+#include "log.h"
 
 Tank TANK_TASK;
 
@@ -33,7 +34,7 @@ bool Tank::isInitialized() const
 
 bool Tank::init()
 {
-    M5_LOGI("[%s] init", m_tag);
+    SF_LOGI("[%s] init", m_tag);
 
     m_initialized = false;
 
@@ -41,7 +42,7 @@ bool Tank::init()
 
     if (!configured) {
         if (!sf_interfaces::configure(m_sensor)) {
-            M5_LOGW("[%s] configure failed", m_tag);
+            SF_LOGW("[%s] configure failed", m_tag);
             HMI::setLed(m_sensor, PortStatus::Error);
             return false;
         }
@@ -49,13 +50,13 @@ bool Tank::init()
 
     TwoWire* connector = sf_interfaces::getConnector(m_sensor).ptr.twoWire;
     if (connector == nullptr) {
-        M5_LOGW("[%s] connector unavailable", m_tag);
+        SF_LOGW("[%s] connector unavailable", m_tag);
         HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
     if (!seize(m_sensor)) {
-        M5_LOGW("[%s] unable to lock port", m_tag);
+        SF_LOGW("[%s] unable to lock port", m_tag);
         HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
@@ -64,12 +65,12 @@ bool Tank::init()
 
     const bool ok = m_units.begin();
     if (!ok) {
-        M5_LOGW("[%s] %s m_unit not started", m_tag, m_device);
+        SF_LOGW("[%s] %s m_unit not started", m_tag, m_device);
         HMI::setLed(m_sensor, PortStatus::Error);
         release(m_sensor);
         return false;
     } else {
-        M5_LOGI("[%s] %s m_unit started", m_tag, m_device);
+        SF_LOGI("[%s] %s m_unit started", m_tag, m_device);
     }
 
     m_initialized = true;
@@ -77,7 +78,7 @@ bool Tank::init()
 
     release(m_sensor);
 
-    M5_LOGI("[%s] (0x%02X) initialized", m_tag, sf_interfaces::getAddress(m_sensor));
+    SF_LOGI("[%s] (0x%02X) initialized", m_tag, sf_interfaces::getAddress(m_sensor));
     return true;
 }
 
@@ -88,14 +89,14 @@ bool Tank::process()
 
     if (!m_initialized) {
         if (!init()) {
-            M5_LOGW("[%s] not configured", m_tag);
+            SF_LOGW("[%s] not configured", m_tag);
             HMI::setLed(m_sensor, PortStatus::Error);
             return false;
         }
     }
 
     if (!seize(m_sensor)) {
-        M5_LOGW("[%s] unable to lock port", m_tag);
+        SF_LOGW("[%s] unable to lock port", m_tag);
         HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
@@ -113,7 +114,7 @@ bool Tank::process()
     release(m_sensor);
 
     if (!std::isfinite(rawDistanceMm)) {
-        M5_LOGW("[%s] non-finite distance sample ignored", m_tag);
+        SF_LOGW("[%s] non-finite distance sample ignored", m_tag);
         HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
@@ -152,7 +153,7 @@ bool Tank::process()
     snprintf(pctBuf, sizeof(pctBuf), "%d", fillPct);
     sf_mqtt::publish("smartfranklin/tank/fill", pctBuf, 1, true);
 
-    M5_LOGI("[%s] Raw: %.2f cm    Distance: %d mm     Fill level: %d%%", m_tag, rawDistanceMm, distanceMm, fillPct);
+    SF_LOGI("[%s] Raw: %.2f cm    Distance: %d mm     Fill level: %d%%", m_tag, rawDistanceMm, distanceMm, fillPct);
 
     HMI::setLed(m_sensor, PortStatus::Ok);
 
@@ -164,7 +165,7 @@ bool Tank::process()
 void taskTank(void* pv)
 {
     (void)pv;
-    M5_LOGI("[TANK] Task started");
+    SF_LOGI("[TANK] Task started");
 
     bool     initialized       = false;
     uint32_t nextInitAttemptMs = 0;
@@ -183,7 +184,7 @@ void taskTank(void* pv)
         if (!initialized && isRetryDue(nowMs, nextInitAttemptMs)) {
             initialized = TANK_TASK.init();
             if (!initialized) {
-                M5_LOGW("[TANK] Init failed");
+                SF_LOGW("[TANK] Init failed");
                 scheduleRetry(nextInitAttemptMs, nowMs);
             }
         }

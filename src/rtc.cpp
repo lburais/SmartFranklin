@@ -18,6 +18,7 @@
 #include "data_model.h"
 #include "interfaces.h"
 #include "mqtt.h"
+#include "log.h"
 
 bool RTC::isSystemTimeValid(const time_t t)
 {
@@ -223,7 +224,7 @@ void RTC::publishRtcTime(const DateTime& dt)
 
     sf_mqtt::publish("smartfranklin/rtc/time", timeBuf, 1, true);
 
-    M5_LOGI("[RTC] %s", timeBuf);
+    SF_LOGI("[RTC] %s", timeBuf);
 
     std::lock_guard<std::mutex> lock(DATA_MUTEX);
     DATA.rtc_time = timeBuf;
@@ -310,7 +311,7 @@ bool RTC::init()
 
     DateTime internalDt{};
     if (!readDateTimeFromInternalApi(internalDt)) {
-        M5_LOGW("[RTC] internal RTC API unavailable");
+        SF_LOGW("[RTC] internal RTC API unavailable");
         return false;
     }
 
@@ -318,7 +319,7 @@ bool RTC::init()
 
     publishTimezone();
     publishSyncSource(m_lastSyncSource);
-    M5_LOGI("[RTC] initialized with internal RTC");
+    SF_LOGI("[RTC] initialized with internal RTC");
     return true;
 }
 
@@ -377,7 +378,7 @@ void RTC::process()
 void taskRtc(void* pv)
 {
     (void)pv;
-    M5_LOGI("[RTC] Task started");
+    SF_LOGI("[RTC] Task started");
 
     bool initialized = false;
     uint32_t nextInitAttemptMs = 0;
@@ -396,7 +397,7 @@ void taskRtc(void* pv)
         if (!initialized && isRetryDue(nowMs, nextInitAttemptMs)) {
             initialized = RTC_TASK.init();
             if (!initialized) {
-                M5_LOGW("[RTC] Init failed");
+                SF_LOGW("[RTC] Init failed");
                 scheduleRetry(nextInitAttemptMs, nowMs);
             }
         }
