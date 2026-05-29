@@ -4,8 +4,8 @@
  * ============================================================================
  * 
  * Project:     SmartFranklin IoT Device Controller
- * Description: Main setup and loop for M5Stack-based IoT hub with WiFi, MQTT,
- *              BLE and NB-IoT capabilities.
+ * Description: Main setup and loop for the M5Stack-based SmartFranklin hub
+ *              with WiFi, MQTT, BLE, local HMI, and unified I2C sensor tasks.
  * 
  * Author:      Laurent Burais
  * Date:        10 March 2026
@@ -15,9 +15,8 @@
  *   - M5Stack hardware initialization (power management)
  *   - Dual WiFi mode (AP + STA) with captive portal fallback
  *   - MQTT broker integration for remote command handling
- *   - Multi-sensor support (weight, tank, level, rtc)
+ *   - Multi-sensor support (gaz, tank, level, rtc, gps)
  *   - BLE communication for battery management systems
- *   - NB-IoT connectivity
  *   - Web dashboard for device management
  *   - Configuration persistence via SPIFFS
  * 
@@ -72,14 +71,8 @@
 
 TaskHandle_t taskWiFiHandle             = nullptr;  // WiFi connectivity management
 TaskHandle_t taskMqttHandle             = nullptr;  // MQTT client+broker communication
-TaskHandle_t taskWeightHandle           = nullptr;  // Weight sensor reading
-TaskHandle_t taskGazHandle              = nullptr;  // Gaz/weight sensor reading
-TaskHandle_t taskTankHandle             = nullptr;  // Tank ultrasonic reading
-TaskHandle_t taskLevelHandle            = nullptr;  // Level/accelerometer sensor reading
-TaskHandle_t taskRtcHandle              = nullptr;  // RTC reading
-TaskHandle_t taskGpsHandle              = nullptr;  // GPS/GNSS reading
 TaskHandle_t taskI2cHandle              = nullptr;  // Unified I2C sensors task
-TaskHandle_t taskBatteryHandle          = nullptr;  // BLE battery management system
+TaskHandle_t taskBmsBleHandle           = nullptr;  // BLE battery management system
 TaskHandle_t taskHmiHandle              = nullptr;  // HMI/display task
 
 // static constexpr uint8_t DISPLAY_UI_ROTATION = 3;
@@ -196,12 +189,12 @@ void setup() {
     xTaskCreatePinnedToCore(taskHmi,              "HMI",      8192, nullptr, 3,  &taskHmiHandle,      0);
     #endif
 
-    #if defined(ENABLE_GAZ) || defined(ENABLE_TANK) || defined(ENABLE_LEVEL) || defined(ENABLE_RTC) || defined(ENABLE_GPS)
+    #if defined(ENABLE_GAZ) || defined(ENABLE_TANK) || defined(ENABLE_LEVEL) || defined(ENABLE_RTC) || defined(ENABLE_GPS) || defined(ENABLE_AXP)
     xTaskCreatePinnedToCore(taskI2c,              "I2C",      8192, nullptr, 2, &taskI2cHandle,       1);
     #endif
 
     #ifdef ENABLE_BATTERY
-    xTaskCreatePinnedToCore(taskBattery,          "BATERY",   8192, nullptr, 2, &taskBatteryHandle,   0);
+    xTaskCreatePinnedToCore(taskBmsBle,           "BMS_BLE",  8192, nullptr, 2, &taskBmsBleHandle,   0);
     #endif
 
     #ifdef ENABLE_HW_MONITOR

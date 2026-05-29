@@ -1,5 +1,6 @@
 #include "tasks.h"
 
+#include "axp.h"
 #include "gaz.h"
 #include "gps.h"
 #include "interfaces.h"
@@ -54,6 +55,10 @@ bool gpsIsInitialized() { return GPS_TASK.isInitialized(); }
 bool gpsInit() { return GPS_TASK.init(); }
 void gpsProcess() { (void)GPS_TASK.process(); }
 
+bool axpIsInitialized() { return AXP_TASK.isInitialized(); }
+bool axpInit() { return AXP_TASK.init(); }
+void axpProcess() { AXP_TASK.process(); }
+
 }  // namespace
 
 void taskI2c(void* pv)
@@ -97,6 +102,13 @@ void taskI2c(void* pv)
             false,
 #endif
             gpsIsInitialized, gpsInit, gpsProcess, 0U, 0U},
+        {"AXP",   sf_interfaces::InterfaceSensor::Axp,
+    #if defined(ENABLE_AXP)
+            true,
+    #else
+            false,
+    #endif
+            axpIsInitialized, axpInit, axpProcess, 0U, 0U},
     };
 
     for (;;) {

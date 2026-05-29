@@ -5,28 +5,16 @@
  * 
  * File:        command_handler.h
  * Project:     SmartFranklin IoT Device Controller
- * Description: Header file for MQTT command processing and display screen
+ * Description: Public entry points for JSON command handling over MQTT.
  * 
  * Author:      Laurent Burais
  * Date:        5 March 2026
  * Version:     1.0
  * 
  * Overview:
- * 
- * MQTT Command Processing:
- * 
- * Display Screen Management:
- * 
- * Command Types Supported:
- * 
- * Integration:
- * 
- * Dependencies:
- * 
- * Limitations:
- * 
- * Best Practices:
- * 
+ *   The command handler currently exposes a small JSON command surface used by
+ *   the MQTT callback path. Supported commands update simple runtime state or
+ *   publish status snapshots back to MQTT topics.
  * ============================================================================
  * MIT License
  * ============================================================================
@@ -56,23 +44,10 @@
 #include <Arduino.h>
 
 /**
- * @brief Initializes the command handler system.
- * 
- * Sets up MQTT subscriptions for command processing and initializes
- * display screen management. Must be called during system startup
- * before command processing can begin.
- * 
- * Initialization Tasks:
- * 
- * MQTT Subscriptions:
- * 
- * Display Setup:
- * 
- * Error Handling:
- * 
- * @note This function should be called once during system initialization.
- * 
- * @see command_handle() - Command processing function
+ * @brief Initializes command handling support.
+ *
+ * The current implementation is intentionally minimal and performs no setup,
+ * but the hook is kept so startup code has a stable initialization call.
  */
 void command_handler_init();
 
@@ -86,15 +61,7 @@ void command_handler_init();
  * @param topic - MQTT topic string where command was received
  * @param payload - Command payload string containing instructions
  * 
- * Command Processing Flow:
- * 
- * Supported Command Types:
- * 
- * Error Handling:
- * 
- * Security Considerations:
- * 
- * @note This function is called asynchronously by MQTT callbacks.
+ * @note Called asynchronously from the MQTT message callback path.
  * 
  * @see command_handler_init() - Initialization function
  */

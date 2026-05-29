@@ -12,10 +12,18 @@
  * Version:     1.1
  *
  * Overview:
- *
+ *   The HMI owns the local display runtime, simple navigation state, touch/
+ *   button handling, and LED status indication for interface health.
+ *   Rendering is snapshot-based: shared DATA is copied under lock and then
+ *   consumed without holding the mutex during drawing.
  *
  * Screen Map:
- *
+ *   0: tank
+ *   1: gaz
+ *   2: battery
+ *   3: gps
+ *   4: level
+ *   5: calibration
  * ============================================================================
  * MIT License
  * ============================================================================

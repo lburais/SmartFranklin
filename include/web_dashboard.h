@@ -5,26 +5,16 @@
  * 
  * File:        web_dashboard.h
  * Project:     SmartFranklin IoT Device Controller
- * Description: Header file for the embedded web-server dashboard.  Declares
+ * Description: Declaration for the embedded AsyncWebServer dashboard setup.
  * 
  * Author:      Laurent Burais
  * Date:        5 March 2026
  * Version:     1.0
  * 
  * Overview:
- * 
- * Features:
- * 
- * Integration:
- * 
- * Dependencies:
- * 
- * Limitations:
- * 
- * Best practices:
- * 
- * Usage:
- * 
+ *   The web dashboard is initialized once during startup after WiFi/AP is
+ *   ready. The current implementation serves the live data, config, and logs
+ *   pages plus their JSON endpoints from embedded assets.
  * ============================================================================
  * MIT License
  * ============================================================================
@@ -53,16 +43,10 @@
 #pragma once
 
 /**
- * @brief Initialize the HTTP(S) web dashboard.
+ * @brief Initializes the embedded HTTP dashboard routes and starts the server.
  *
- * Sets up the internal web server, mounts the filesystem containing the
- * frontend assets, registers URI handlers for status/configuration APIs
- * and, if requested, enables authentication/TLS.  After this call the
- * dashboard will respond to incoming browser requests without further
- * intervention; it runs inside its own task or the Arduino loop depending
- * on the underlying web-server library.
- *
- * Call once during setup() after the network interface has been started.
- * The function is re-entrant; calling it a second time has no effect.
+ * Registers the current AsyncWebServer handlers and serves the embedded page
+ * assets. This is plain HTTP on the device AP/STA interfaces; no filesystem,
+ * TLS, or separate dashboard task is involved.
  */
 void web_dashboard_init();

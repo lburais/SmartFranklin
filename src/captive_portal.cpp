@@ -5,18 +5,17 @@
  * 
  * File:        captive_portal.cpp
  * Project:     SmartFranklin IoT Device Controller
- * Description: Captive portal DNS server for WiFi configuration interface.
- *              Redirects all DNS queries to device IP for seamless user setup.
+ * Description: Captive portal DNS helper used by the WiFi module.
+ *              Starts a wildcard DNS server that resolves every query to the
+ *              AP IP so browsers land on the embedded web UI.
  * 
  * Author:      Laurent Burais
  * Date:        5 March 2026
  * Version:     1.0
  * 
  * Overview:
- *   A captive portal is a network access point that intercepts HTTP/DNS traffic
- *   to redirect users to a login or configuration page. SmartFranklin uses this
- *   technique to automatically present the WiFi configuration interface when a
- *   user connects to the device's Access Point (AP).
+ *   The current implementation only starts the DNS side of the captive portal.
+ *   HTTP handling is provided separately by the web dashboard routes.
  * 
  * How It Works:
  *   1. Device broadcasts WiFi AP hotspot (e.g., "SmartFranklin-AP")
@@ -27,23 +26,7 @@
  *   6. Browser redirects to device's web dashboard (smartfranklin.local or 192.168.4.1)
  *   7. User sees configuration interface without manual IP entry
  * 
- * Benefits:
- *   - Seamless user experience: No manual IP address entry required
- *   - Mobile-friendly: Works on iOS and Android automatic detection
- *   - Cross-platform: Compatible with Windows, macOS, Linux
- *   - Zero configuration: Works immediately upon AP connection
- * 
- * DNS Spoofing Method:
- *   - Listens on UDP port 53 (standard DNS port)
- *   - Wildcards "*" catch ALL DNS queries regardless of domain
- *   - Responds with AP IP address (typically 192.168.4.1)
- *   - Integrates with web dashboard for full configuration UI
- * 
- * Dependencies:
- *   - DNSServer.h (Arduino WiFi library)
- *   - WiFi.h (ESP32 WiFi support)
- *   - web_dashboard.h (configuration interface)
- *   - captive_portal.h (header declarations)
+ * The server is non-blocking and remains owned by this translation unit.
  * 
  * ============================================================================
  * MIT License
@@ -103,29 +86,7 @@ static DNSServer dnsServer;
  *   - User's browser receives this IP and navigates to the configuration page
  *   - No manual DNS or IP configuration required from user
  * 
- * Typical User Experience:
- *   a) User connects to "SmartFranklin-AP" WiFi network
- *   b) Device automatically opens "Sign in to Network" popup
- *   c) User taps "Sign in" button (or browser opens automatically)
- *   d) Browser loads configuration dashboard at 192.168.4.1
- *   e) User can configure WiFi credentials, MQTT settings, etc.
- * 
- * Technical Details:
- *   - DNS Protocol: RFC 1035 compliant responses
- *   - Response IP: Obtained from WiFi.softAPIP() (AP interface)
- *   - Query Filtering: Wildcard "*" accepts any domain name
- *   - Port: Standard DNS port 53 (UDP)
- *   - Non-blocking: Server runs in background, doesn't block execution
- * 
- * Prerequisites:
- *   - WiFi Access Point must be started before calling this function
- *   - WiFi.mode() should be set to WIFI_AP or WIFI_AP_STA
- *   - Valid AP IP address must be assigned (typically 192.168.4.1)
- * 
- * 
- * @note This function should be called during system initialization (setup())
- *       when external WiFi connection is unavailable or fails.
- *       Example: if (WiFi.status() != WL_CONNECTED) { captive_portal_start(); }
+ * @note Call after the AP interface is started and has a valid IP address.
  * 
  * @see WiFi.softAPIP() - Returns AP interface IP address
  * @see web_dashboard.h - Provides web configuration interface

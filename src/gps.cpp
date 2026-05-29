@@ -304,37 +304,3 @@ bool GPS::process()
     return true;
 }
 
-void taskGps(void* pv)
-{
-    (void)pv;
-    SF_LOGI("[GPS] Task started");
-
-    uint32_t nextInitAttemptMs = 0;
-
-    auto isRetryDue = [](uint32_t nowMs, uint32_t nextAttemptMs) {
-        return static_cast<int32_t>(nowMs - nextAttemptMs) >= 0;
-    };
-
-    auto scheduleRetry = [](uint32_t& nextAttemptMs, uint32_t nowMs) {
-        nextAttemptMs = nowMs + 10000UL;  // 10 second retry interval
-    };
-
-    for (;;) {
-        const uint32_t nowMs = millis();
-
-        if (!GPS_TASK.isInitialized() && isRetryDue(nowMs, nextInitAttemptMs)) {
-            if (!GPS_TASK.init()) {
-                SF_LOGW("[GPS] Init failed");
-                scheduleRetry(nextInitAttemptMs, nowMs);
-            }
-        }
-
-        if (GPS_TASK.isInitialized()) {
-            GPS_TASK.process();
-        }
-
-        const uint32_t recurrenceMs = sf_interfaces::getRecurrenceMs(sf_interfaces::InterfaceSensor::Gps);
-        const int loopMs = (recurrenceMs > 0) ? static_cast<int>(recurrenceMs) : 1000;
-        vTaskDelay(pdMS_TO_TICKS(loopMs));
-    }
-}

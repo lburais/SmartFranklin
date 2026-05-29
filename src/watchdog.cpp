@@ -5,89 +5,21 @@
  * 
  * File:        watchdog.cpp
  * Project:     SmartFranklin IoT Device Controller
- * Description: Hardware watchdog timer implementation using ESP-IDF Task WDT.
- *              Monitors FreeRTOS task health by requiring periodic "heartbeats"
- *              from critical tasks. Triggers system reset if any task fails.
+ * Description: Watchdog helper implementation for SmartFranklin.
+ *              Configures the ESP-IDF TWDT and keeps a small software
+ *              heartbeat table for optional logical task liveness tracking.
  * 
  * Author:      Laurent Burais
  * Date:        5 March 2026
  * Version:     1.0
  * 
  * Overview:
- *   SmartFranklin runs multiple concurrent FreeRTOS tasks for sensor acquisition,
- *   network communication, and control operations. The watchdog ensures system
- *   reliability by detecting and recovering from task failures (hangs, deadlocks,
- *   or infinite loops) through hardware-enforced resets.
- * 
- * Watchdog Mechanism:
- *   - Hardware Timer: ESP32 Task Watchdog Timer (TWDT) peripheral
- *   - Heartbeat System: Tasks periodically call watchdog_beat() to signal health
- *   - Timeout Monitoring: If no heartbeat within timeout period, system resets
- *   - Panic Reset: Immediate system restart on watchdog timeout
- *   - Task-Specific: Each critical task has dedicated heartbeat slot
- * 
- * Task Monitoring:
- *   The system monitors 9 critical tasks (configurable via NUM_TASKS):
- *   - Task 0: Main application loop (prevents UI freezes)
- *   - Task 1: WiFi management (network connectivity)
- *   - Task 2: MQTT communication (cloud messaging)
- *   - Task 3: Sensor acquisition (data collection)
- *   - Task 4: Battery monitoring (power management)
- *   - Task 5: File system operations (configuration persistence)
- *   - Task 6: Command processing (user input handling)
- *   - Task 7: Display updates (UI responsiveness)
- *   - Task 8: System diagnostics (health monitoring)
- * 
- * Heartbeat Protocol:
- *   - Each task calls watchdog_beat(task_id) regularly
- *   - Typical interval: 1-5 seconds depending on task criticality
- *   - Beat updates timestamp in lastBeat[task_id]
- *   - Watchdog checks all timestamps against current time
- *   - Any task exceeding timeout triggers system reset
- * 
- * Timeout Configuration:
- *   - Timeout Period: 10 seconds (configurable via esp_task_wdt_init)
- *   - Reset Behavior: Panic reset (immediate restart, no cleanup)
- *   - Graceful Shutdown: Disabled (true parameter in esp_task_wdt_init)
- *   - Recovery Time: ~2-5 seconds for ESP32 boot sequence
- * 
- * Failure Scenarios Protected:
- *   - Task hangs in infinite loop
- *   - Deadlock between tasks
- *   - Memory corruption causing task crash
- *   - Network stack freezes
- *   - Sensor driver lockups
- *   - File system corruption hangs
- * 
- * System Impact:
- *   - Power Cycle: Watchdog reset causes complete system restart
- *   - State Loss: RAM contents lost, SPIFFS data preserved
- *   - Recovery: System boots normally, tasks restart
- *   - Data Persistence: Configuration survives via SPIFFS
- *   - Network Reconnection: Automatic on restart
- * 
- * Dependencies:
- *   - esp_task_wdt.h (ESP-IDF Task Watchdog Timer API)
- *   - watchdog.h (Header declarations and task ID definitions)
- *   - Arduino.h (millis() function for timestamping)
- * 
- * Configuration Constants:
- *   - NUM_TASKS: Number of monitored tasks (9)
- *   - Timeout: 10 seconds (set in esp_task_wdt_init)
- *   - Panic Reset: Enabled (true parameter)
- * 
- * Limitations:
- *   - Fixed timeout: Cannot adjust per-task timeouts
- *   - All-or-nothing: Single failed task resets entire system
- *   - No graceful shutdown: Immediate reset prevents cleanup
- *   - Task ID management: Manual assignment required
- * 
- * Best Practices:
- *   - Heartbeat frequency: Every 1-2 seconds for critical tasks
- *   - Task placement: Only monitor essential tasks (not helpers)
- *   - Error handling: Tasks should handle their own errors first
- *   - Testing: Verify watchdog triggers on task hangs
- *   - Logging: Log heartbeats for debugging watchdog issues
+ *   The current module has two parts:
+ *   - TWDT setup via `watchdog_init()`
+ *   - a small `lastBeat[]` table updated by `watchdog_beat()`
+ *
+ *   The heartbeat table is available for software liveness bookkeeping, while
+ *   the active hardware watchdog kicking is currently done by `taskWatchdog`.
  * 
  * ============================================================================
  * MIT License

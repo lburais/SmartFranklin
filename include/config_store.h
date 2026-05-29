@@ -53,12 +53,11 @@ struct SmartConfig {
     String hostname = "franklin";
     String ap_ssid = "SmartFranklin-AP";
     String ap_pass = "smartfranklin";
-    String sta_ssid = "jrdl1";
+    String sta_ssid = "jrdl";
     String sta_pass = "05121996190119942106196801071964";
 
     // Gaz calibration and smoothing
     float gaz_calibration_factor = 36.0f;
-    int gaz_weight_average_window = 10;
 
     String rtc_timezone = "Europe/Paris";
 
@@ -81,7 +80,6 @@ struct SmartConfig {
     // Task timing configuration (milliseconds)
     int task_wifi_loop_ms = 500;
     int task_mqtt_loop_ms = 250;
-    int task_i2c_loop_ms = 1000;
     int task_hmi_loop_ms = 1000;
     int task_hmi_init_retry_ms = 1000;
     int task_hw_monitor_loop_ms = 5000;

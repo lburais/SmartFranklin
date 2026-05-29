@@ -5,34 +5,17 @@
  * 
  * File:        captive_portal.h
  * Project:     SmartFranklin IoT Device Controller
- * Description: Header file for WiFi captive portal functionality. Provides
+ * Description: Declaration for the captive-portal DNS helper used when the
+ *              SmartFranklin access point is active.
  * 
  * Author:      Laurent Burais
  * Date:        5 March 2026
  * Version:     1.0
  * 
  * Overview:
- * 
- * WiFi Access Point:
- * 
- * Web Server Features:
- * 
- * Configuration Options:
- * 
- * Portal Activation:
- * 
- * User Experience:
- * 
- * Security Considerations:
- * 
- * Integration:
- * 
- * Dependencies:
- * 
- * Limitations:
- * 
- * Best Practices:
- * 
+ *   `captive_portal_start()` starts the wildcard DNS responder that points
+ *   every hostname at the AP interface IP. The web dashboard provides the
+ *   HTTP content; this header only exposes the DNS start hook.
  * ============================================================================
  * MIT License
  * ============================================================================
@@ -61,34 +44,11 @@
 #pragma once
 
 /**
- * @brief Starts the WiFi captive portal for device configuration.
- * 
- * Initializes and starts the captive portal access point and web server.
- * Creates an open WiFi network that allows users to connect and configure
- * the device through a web interface. Automatically handles DNS redirection
- * and web page serving for a seamless configuration experience.
- * 
- * Portal Setup Process:
- * 
- * Access Point Configuration:
- * 
- * Web Server Features:
- * 
- * DNS Server:
- * 
- * Configuration Handling:
- * 
- * User Interaction:
- * 
- * Timeout and Exit:
- * 
- * Error Handling:
- * 
- * Security Notes:
- * 
- * @note This function blocks until configuration is complete or timeout.
- * 
- * @see WiFiManager - WiFi connection management
- * @see config_store - Configuration persistence
+ * @brief Starts the wildcard DNS responder for captive-portal behavior.
+ *
+ * This function does not create the AP or serve HTML by itself; it only makes
+ * DNS queries resolve to `WiFi.softAPIP()` so browsers land on the device.
+ *
+ * @note Non-blocking helper intended to be called after AP startup.
  */
 void captive_portal_start();

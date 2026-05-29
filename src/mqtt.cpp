@@ -5,9 +5,9 @@
  *
  * File:        mqtt.cpp
  * Project:     SmartFranklin IoT Device Controller
- * Description: ESP-IDF MQTT client wrapper implementation used by runtime
- *              tasks for broker connectivity, publish/subscribe operations,
- *              and message callback dispatching.
+ * Description: MQTT API implementation used by runtime modules for optional
+ *              ESP-IDF MQTT client connectivity plus local-broker-backed
+ *              publish/subscribe fallback behavior.
  *
  * Author:      Laurent Burais
  * Date:        12 March 2026
@@ -19,11 +19,11 @@
  *   a small, task-safe interface for other SmartFranklin modules.
  *
  * Responsibilities:
- *   - Initialize and start external MQTT client from runtime config.
+ *   - Optionally initialize and start an ESP-IDF MQTT client.
  *   - Track connection state from MQTT events.
- *   - Forward inbound messages to registered callback.
- *   - Publish outbound messages to external broker.
- *   - Fall back to local broker publication when external client is absent.
+ *   - Forward inbound messages to the registered callback.
+ *   - Publish outbound messages through the external client when active.
+ *   - Fall back to the embedded local broker when the client is absent.
  *
  * Event Model:
  *   - MQTT events are processed in `handle_mqtt_event(...)`.

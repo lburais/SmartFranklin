@@ -6,18 +6,17 @@
  * File:        config_store.cpp
  * Project:     SmartFranklin IoT Device Controller
  * Description: Persistent configuration management using SPIFFS filesystem.
- *              Loads, saves, and provides default configuration for all
- *              device subsystems (WiFi, MQTT, NB-IoT, authentication).
+ *              Loads, saves, and provides default configuration for current
+ *              device subsystems (WiFi, local MQTT, auth, sensor calibration).
  * 
  * Author:      Laurent Burais
  * Date:        5 March 2026
  * Version:     1.0
  * 
  * Overview:
- *   SmartFranklin requires numerous configuration parameters to operate:
- *   WiFi credentials, MQTT broker details, NB-IoT settings, authentication
- *   credentials, and hardware calibration factors. This module manages the
- *   complete lifecycle of configuration data.
+ *   SmartFranklin requires persisted runtime parameters such as WiFi
+ *   credentials, local MQTT port, authentication credentials, task timing,
+ *   and sensor calibration values. This module manages that lifecycle.
  * 
  * Storage System:
  *   - File System: SPIFFS (SPI Flash File System) on ESP32
@@ -38,19 +37,20 @@
  *   3. Local MQTT Broker
  *      - Port: Local broker listen port
  * 
- *   4. NB-IoT Cellular
- *      - APN: Carrier network access point name
- *      - MQTT Details: Cellular backup connectivity
- * 
- *   6. Hardware Calibration
+ *   4. Hardware Calibration
  *      - Scale Calibration Factor: Weight sensor accuracy adjustment
+ *      - Level zero and geometry values
  * 
  * Default Configuration:
  *   If no config.json exists, sensible defaults are applied:
- *   - WiFi: Empty credentials (user must configure)
+ *   - WiFi: Built-in defaults from SmartConfig
  *   - MQTT: Local broker enabled on default port
- *   - NB-IoT: Enabled with 1NCE carrier APN
  *   - Admin: Default credentials (admin/admin - change on first boot!)
+ *
+ * Backward Compatibility:
+ *   Legacy persisted keys can still be migrated during load. In particular,
+ *   older configurations may still carry the deprecated `ext_mqtt_port` key,
+ *   which is folded into the current `mqtt_port` model.
  * 
  * Dependencies:
  *   - ArduinoJson (JSON serialization/deserialization)
@@ -200,7 +200,6 @@ bool config_load()
     CONFIG.gaz_calibration_factor = doc["gaz_calibration_factor"] |
                                     doc["scale_cal_factor"] |
                                     defaultCONFIG.gaz_calibration_factor;
-    CONFIG.gaz_weight_average_window = doc["gaz_weight_average_window"] | defaultCONFIG.gaz_weight_average_window;
 
     CONFIG.rtc_timezone = doc["rtc_timezone"] | defaultCONFIG.rtc_timezone;
     
@@ -216,7 +215,6 @@ bool config_load()
 
     CONFIG.task_wifi_loop_ms = doc["task_wifi_loop_ms"] | defaultCONFIG.task_wifi_loop_ms;
     CONFIG.task_mqtt_loop_ms = doc["task_mqtt_loop_ms"] | defaultCONFIG.task_mqtt_loop_ms;
-    CONFIG.task_i2c_loop_ms = doc["task_i2c_loop_ms"] | defaultCONFIG.task_i2c_loop_ms;
     CONFIG.task_hmi_loop_ms = doc["task_hmi_loop_ms"] | defaultCONFIG.task_hmi_loop_ms;
     CONFIG.task_hmi_init_retry_ms = doc["task_hmi_init_retry_ms"] | defaultCONFIG.task_hmi_init_retry_ms;
     CONFIG.task_hw_monitor_loop_ms = doc["task_hw_monitor_loop_ms"] | defaultCONFIG.task_hw_monitor_loop_ms;
@@ -250,7 +248,7 @@ bool config_load()
  *   - WiFi credentials (sta_ssid, sta_pass)
  *   - Authentication (admin_user, admin_pass)
  *   - Hardware calibration (gaz_calibration_factor)
- *   - MQTT broker settings (local and NB-IoT)
+ *   - MQTT broker settings (local embedded broker)
  * 
  * Return Value:
  *   - true: File written successfully
@@ -286,7 +284,6 @@ bool config_save()
     doc["sta_ssid"] = CONFIG.sta_ssid;                      // External network SSID
     doc["sta_pass"] = CONFIG.sta_pass;                      // External network password
     doc["gaz_calibration_factor"] = CONFIG.gaz_calibration_factor;      // Weight sensor calibration
-    doc["gaz_weight_average_window"] = CONFIG.gaz_weight_average_window; // Gaz smoothing window
 
     doc["rtc_timezone"] = CONFIG.rtc_timezone;
     doc["level_wheelbase_mm"] = CONFIG.level_wheelbase_mm;
@@ -311,7 +308,6 @@ bool config_save()
 
     doc["task_wifi_loop_ms"] = CONFIG.task_wifi_loop_ms;
     doc["task_mqtt_loop_ms"] = CONFIG.task_mqtt_loop_ms;
-    doc["task_i2c_loop_ms"] = CONFIG.task_i2c_loop_ms;
     doc["task_hmi_loop_ms"] = CONFIG.task_hmi_loop_ms;
     doc["task_hmi_init_retry_ms"] = CONFIG.task_hmi_init_retry_ms;
     doc["task_hw_monitor_loop_ms"] = CONFIG.task_hw_monitor_loop_ms;

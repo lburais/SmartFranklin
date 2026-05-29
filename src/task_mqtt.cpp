@@ -5,20 +5,19 @@
  * 
  * File:        task_mqtt.cpp
  * Project:     SmartFranklin IoT Device Controller
- * Description: FreeRTOS task for unified MQTT processing (local broker + external
- *              client). Handles broker servicing, connection maintenance,
- *              and incoming message dispatching to registered callbacks.
+ * Description: FreeRTOS task for unified MQTT processing around the embedded
+ *              local broker. Starts and services the broker, exposes the
+ *              local publish path, and publishes broker diagnostics.
  * 
  * Author:      Laurent Burais
  * Date:        5 March 2026
  * Version:     1.0
  * 
  * Overview:
- *   SmartFranklin communicates with cloud services and other IoT devices
- *   through MQTT (Message Queuing Telemetry Transport) protocol. This task
- *   maintains the persistent connection to the MQTT broker, processes
- *   incoming messages, and ensures reliable message delivery. It serves
- *   as the central communication hub for all MQTT-based functionality.
+ *   SmartFranklin currently runs an embedded MQTT broker on-device.
+ *   This task owns broker startup, retry behavior, and runtime servicing.
+ *   Other modules publish through the `sf_mqtt` API, which can route
+ *   messages to this local broker even when no external client is active.
  * 
  * MQTT Protocol Features:
  *   - Publish/Subscribe: Asynchronous message passing
@@ -28,20 +27,15 @@
  *   - Clean Session: Session state management on reconnect
  * 
  * Task Responsibilities:
- *   - Connection Maintenance: Keep MQTT broker connection alive
- *   - Message Processing: Handle incoming messages and route to callbacks
- *   - Subscription Management: Maintain topic subscriptions
- *   - Reconnection Logic: Automatic reconnection on connection loss
- *   - Keep-Alive: Send periodic ping messages to maintain connection
- *   - Error Handling: Graceful handling of connection failures
+ *   - Local Broker Startup: Start the embedded broker on CONFIG.mqtt_port
+ *   - Retry Logic: Reattempt startup on failure after a short delay
+ *   - Broker Servicing: Call broker update loop from a FreeRTOS task
+ *   - Diagnostics: Publish broker host/port metadata for observability
  * 
- * Connection Management:
- *   - Broker Address: CONFIG.mqtt_broker (IP address or hostname)
- *   - Port: CONFIG.mqtt_port (typically 1883 for non-secure, 8883 for TLS)
- *   - Client ID: CONFIG.mqtt_client_id (unique identifier)
- *   - Authentication: CONFIG.mqtt_user and CONFIG.mqtt_pass
- *   - TLS/SSL: Optional secure connection support
- *   - Keep-Alive Interval: CONFIG.mqtt_keepalive seconds
+ * Runtime Configuration:
+ *   - Port: CONFIG.mqtt_port
+ *   - Task Loop: CONFIG.task_mqtt_loop_ms
+ *   - Broker Host Metadata: published as "local"
  * 
  * Message Processing:
  *   - Incoming Messages: Routed to registered callback functions
@@ -78,20 +72,13 @@
  *   - mqtt.h (MQTT abstraction layer with sf_mqtt namespace)
  * 
  * Configuration Integration:
- *   - CONFIG.mqtt_broker: Broker hostname/IP address
- *   - CONFIG.mqtt_port: Connection port number
- *   - CONFIG.mqtt_client_id: Unique client identifier
- *   - CONFIG.mqtt_user: Authentication username
- *   - CONFIG.mqtt_pass: Authentication password
- *   - CONFIG.mqtt_keepalive: Keep-alive interval in seconds
+ *   - CONFIG.mqtt_port: Local broker listen port
+ *   - CONFIG.task_mqtt_loop_ms: Servicing cadence for broker work
  * 
  * Limitations:
- *   - Single Broker Connection: No multi-broker failover support
- *   - Fixed Loop Rate: 10Hz processing (not configurable)
- *   - No Message Queuing: Real-time processing only
- *   - Memory Constraints: Limited by ESP32 RAM for large payloads
- *   - No Offline Buffering: Messages lost during disconnection
- *   - Synchronous Processing: Blocking during message callbacks
+ *   - Single embedded broker instance
+ *   - No persistence for retained data beyond broker runtime state
+ *   - External MQTT connectivity, if used, is handled outside this task
  * 
  * Best Practices:
  *   - Use descriptive topic hierarchies (e.g., smartfranklin/sensor/temperature)

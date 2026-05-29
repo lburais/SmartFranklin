@@ -77,7 +77,7 @@ private:
 
 };
 
-/** Global singleton used by taskTank, mirroring LEVEL_TASK pattern. */
+/** Global singleton used by the unified I2C runtime scheduler and APIs. */
 extern Tank TANK_TASK;
 
 

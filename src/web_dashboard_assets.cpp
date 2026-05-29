@@ -81,6 +81,10 @@ const char HW_PAGE[] PROGMEM = R"HTML(
     <div class="card"><div class="label">Battery Level</div><div id="battery_percent" class="value">-- %</div></div>
     <div class="card"><div class="label">Charging</div><div id="charging" class="value">--</div></div>
     <div class="card"><div class="label">Temperature</div><div id="temperature" class="value">-- C</div></div>
+    <div class="card"><div class="label">AXP Voltage</div><div id="axp_battery_voltage" class="value">--</div></div>
+    <div class="card"><div class="label">AXP Level</div><div id="axp_battery_percent" class="value">-- %</div></div>
+    <div class="card"><div class="label">AXP Charging</div><div id="axp_charging" class="value">--</div></div>
+    <div class="card"><div class="label">AXP Temperature</div><div id="axp_temperature" class="value">-- C</div></div>
     <div class="card"><div class="label">Button A</div><div id="button_a" class="btn">Released</div></div>
     <div class="card"><div class="label">Button B</div><div id="button_b" class="btn">Released</div></div>
     <div class="card"><div class="label">Brightness</div><input id="brightness" type="range" min="10" max="255" value="128" class="slider"></div>
@@ -122,6 +126,10 @@ function updateHw() {
         document.getElementById("battery_percent").textContent = data.battery_percent + " %";
         document.getElementById("charging").textContent = data.charging ? "Charging" : "Not Charging";
         document.getElementById("temperature").textContent = data.temperature.toFixed(1) + " C";
+        document.getElementById("axp_battery_voltage").textContent = Number(data.axp_battery_voltage || 0).toFixed(2) + " V";
+        document.getElementById("axp_battery_percent").textContent = Number(data.axp_battery_percent || 0) + " %";
+        document.getElementById("axp_charging").textContent = data.axp_charging ? "Charging" : "Not Charging";
+        document.getElementById("axp_temperature").textContent = Number(data.axp_temperature || 0).toFixed(1) + " C";
 
         const btnA = document.getElementById("button_a");
         const btnB = document.getElementById("button_b");

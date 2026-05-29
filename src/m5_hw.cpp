@@ -5,64 +5,20 @@
  * 
  * File:        m5_hw.cpp
  * Project:     SmartFranklin IoT Device Controller
- * Description: Hardware interface abstraction for M5Stack device.
- *              Encapsulates M5Stack power management, input controls, display,
- *              and IMU sensor access through a unified class interface.
+ * Description: Implementation of the small M5 hardware abstraction used by the
+ *              firmware to read built-in battery, buttons, temperature, and
+ *              acceleration state from M5Unified.
  * 
  * Author:      Laurent Burais
  * Date:        5 March 2026
  * Version:     1.0
  * 
  * Overview:
- *   M5Stack is a modular embedded development platform based on ESP32.
- *   SmartFranklin uses M5Stack as the primary hardware platform, providing:
- *   - Display with touch support for user interface
- *   - Power management and battery monitoring
- *   - Physical buttons (A, B, C) for user input
- *   - 6-axis IMU (accelerometer + gyroscope) for motion sensing
- *   - Real-time clock (RTC) for timekeeping
- *   - Integrated I2C/Serial/GPIO ports for peripheral expansion
+ *   This file keeps direct M5Unified hardware reads in one place so the rest
+ *   of the firmware can consume a simple `HwStatus` snapshot.
  * 
- * Hardware Component Summary:
- * 
- *   Display:
- *   - Type: 2-inch (320x240 pixel) LCD color display
- *   - Touch: Capacitive touchscreen with multi-touch support
- *   - Brightness: Adjustable 0-255 level
- *   - Purpose: Main user interface for configuration and status display
- * 
- *   Power Management:
- *   - Battery: Integrated 110mAh Li-Po battery
- *   - Charging: USB-C with automatic charging circuit
- *   - Monitoring: Real-time voltage and charge level sensing
- *   - Deep Sleep: Ultra-low-power mode (< 10µA)
- * 
- *   Input Controls:
- *   - Button A: Left side button (GPIO pin assignment by M5Stack)
- *   - Button B: Middle/center button (GPIO pin assignment by M5Stack)
- *   - Button C: Right side button (disabled in SmartFranklin, reserved)
- *   - Usage: Menu navigation, command execution, configuration selection
- * 
- *   Inertial Measurement Unit (IMU):
- *   - Sensor: 6-axis IMU (3-axis accelerometer + 3-axis gyroscope)
- *   - Type: MEMS sensor (typically MPU6886 or similar)
- *   - Acceleration Range: ±2g to ±16g (configurable)
- *   - Sampling: Continuous monitoring at 100+ Hz
- *   - Applications: Tilt angle calculation, motion detection
- * 
- *   Real-Time Clock (RTC):
- *   - Type: I2C battery-backed RTC (BM8563 or similar)
- *   - Accuracy: ±20 ppm typical
- *   - Battery: Separate coin cell for timekeeping during power loss
- *   - Function: System clock source, timezone-aware scheduling
- * 
- * Architecture Pattern:
- *   This module implements the SINGLETON pattern through global HW object.
- *   The M5Hardware class encapsulates M5Stack library calls, providing:
- *   - Single unified interface to hardware
- *   - Abstraction from M5Stack library internals
- *   - Easy migration if hardware platform changes
- *   - Cleaner application code without library-specific calls
+ * The abstraction is intentionally narrow and does not try to own display or
+ * higher-level UI logic; those remain in the HMI module.
  * 
  * Dependencies:
  *   - M5Unified.h (M5Stack abstraction library)

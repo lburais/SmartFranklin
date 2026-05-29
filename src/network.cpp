@@ -60,9 +60,9 @@ bool Wifi::init()
 
     m_hostname = CONFIG.hostname.isEmpty() ? String("franklin") : CONFIG.hostname;
 
-    WiFi.persistent(false);
-    WiFi.setSleep(false);
-    WiFi.setAutoReconnect(true);
+    // WiFi.persistent(false);
+    // WiFi.setSleep(false);
+    // WiFi.setAutoReconnect(true);
     WiFi.mode(WIFI_AP_STA);
 
     if (!WiFi.setHostname(m_hostname.c_str())) {
@@ -183,7 +183,7 @@ bool Wifi::process()
 
     if (!CONFIG.sta_ssid.isEmpty() && staStatus != WL_CONNECTED) {
         if (millis() - m_lastReconnectAttemptMs > kReconnectIntervalMs) {
-            SF_LOGW("[%s] STA reconnecting...", m_tag);
+            SF_LOGW("[%s] STA reconnecting to %s...", m_tag, CONFIG.sta_ssid.c_str());
 
             if (WiFi.SSID() == CONFIG.sta_ssid) {
                 WiFi.reconnect();
@@ -196,7 +196,7 @@ bool Wifi::process()
     }
 
     if (millis() - m_lastStatusMs > kStatusIntervalMs) {
-        SF_LOGI("[%s] publishing:status=%s sta_ip=%s ap_ip=%s", 
+        SF_LOGI("[%s] publishing: status=%s sta_ip=%s ap_ip=%s", 
             m_tag,
             wifiStatusToString(staStatus),
             WiFi.localIP().toString().c_str(),

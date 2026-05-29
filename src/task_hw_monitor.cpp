@@ -5,104 +5,25 @@
  * 
  * File:        task_hw_monitor.cpp
  * Project:     SmartFranklin IoT Device Controller
- * Description: FreeRTOS task for monitoring M5Stack hardware status including
- *              IMU accelerometer, battery voltage/level/charging status,
- *              internal temperature, and button states. Publishes all sensor
- *              data to MQTT topics for remote monitoring and diagnostics.
+ * Description: FreeRTOS task for periodic publication of built-in M5 hardware
+ *              status to MQTT. The current implementation publishes battery
+ *              voltage, battery percentage, and charging state.
  * 
  * Author:      Laurent Burais
  * Date:        5 March 2026
  * Version:     1.0
  * 
  * Overview:
- *   SmartFranklin continuously monitors the M5Stack's built-in sensors
- *   and hardware status to provide comprehensive system health information.
- *   This task collects data from the IMU (accelerometer), power management
- *   unit (battery), internal temperature sensor, and button states, then
- *   publishes everything to MQTT topics for cloud-based monitoring and
- *   remote diagnostics.
- * 
- * Hardware Monitored:
- * 
- *   IMU Accelerometer:
- *   - 3-axis acceleration (X, Y, Z axes in m/s²)
- *   - Real-time motion detection and orientation sensing
- *   - Published as JSON object: {"x": float, "y": float, "z": float}
- *   - Update rate: 5-second intervals
- * 
- *   Battery Management:
- *   - Battery voltage: Raw voltage reading in millivolts (mV)
- *   - Battery level: Percentage charge remaining (0-100%)
- *   - Charging status: Boolean indicating if device is charging
- *   - Power source detection and battery health monitoring
- * 
- *   Internal Temperature:
- *   - IMU temperature sensor reading (currently commented out)
- *   - Device internal temperature for thermal monitoring
- *   - Could be used for overheating detection and fan control
- * 
- *   Button States:
- *   - Button A and Button B press detection
- *   - Real-time button status for user interaction monitoring
- *   - Published as "1" (pressed) or "0" (released)
+ *   This task is a thin polling loop around `M5.Power` and the `sf_mqtt`
+ *   publish API. It intentionally stays small and does not own sensor fusion
+ *   or UI state.
  * 
  * MQTT Topics Published:
  *   - smartfranklin/hw/battery_voltage: Battery voltage in mV (string)
  *   - smartfranklin/hw/battery_percent: Battery level in percent (string)
  *   - smartfranklin/hw/charging: Charging status (0/1 string)
- *   - smartfranklin/hw/temperature: Internal temperature (commented out)
- *   - smartfranklin/hw/button_a: Button A state (0/1 string)
- *   - smartfranklin/hw/button_b: Button B state (0/1 string)
- *   - smartfranklin/hw/accel: Accelerometer data (JSON string)
  * 
- * Data Publishing:
- *   - Format: All values converted to strings for MQTT compatibility
- *   - Frequency: Every 5 seconds (configurable via task delay)
- *   - QoS: Default (0, at most once delivery)
- *   - Retention: Not retained (real-time status data)
- *   - JSON for complex data: Accelerometer uses JSON object format
- * 
- * Task Configuration:
- *   - Update Interval: 5 seconds (pdMS_TO_TICKS(5000))
- *   - Priority: tskIDLE_PRIORITY + 1 (standard priority)
- *   - Stack Size: 4096 bytes (sufficient for sensor reads and MQTT)
- *   - Core Affinity: No restriction (runs on any core)
- * 
- * Error Handling:
- *   - IMU disabled: Graceful handling with zero values
- *   - Sensor failures: M5Unified library handles internally
- *   - MQTT failures: Publishing continues on next cycle
- *   - Button state errors: Boolean conversion handles edge cases
- *   - Temperature unavailable: Feature commented out (not implemented)
- * 
- * Performance Considerations:
- *   - CPU Usage: Low (sensor reads are fast, mostly sleeping)
- *   - Memory Usage: Minimal (local variables and string conversions)
- *   - I2C Traffic: IMU reads require brief I2C communication
- *   - Power Impact: Minimal additional power consumption
- *   - MQTT Bandwidth: 7 messages every 5 seconds (~1.4 msg/sec)
- * 
- * Dependencies:
- *   - Arduino.h (FreeRTOS task functions)
- *   - tasks.h (Task definitions and priorities)
- *   - m5_hw.h (M5Stack hardware abstraction - not directly used here)
- *   - mqtt.h (MQTT publishing interface)
- *   - M5Unified.h (M5Stack unified sensor and power interface)
- * 
- * Limitations:
- *   - Temperature monitoring disabled (commented out in code)
- *   - Fixed 5-second update interval (not configurable)
- *   - No data filtering or averaging (raw sensor values)
- *   - Button polling only (no interrupt-based detection)
- *   - No historical data storage (real-time only)
- *   - JSON parsing required for accelerometer data on receiver side
- * 
- * Integration Notes:
- *   - Complements m5_hw.h abstraction layer
- *   - Provides raw hardware data for diagnostics
- *   - Enables remote monitoring without physical access
- *   - Supports automated alerting based on sensor thresholds
- *   - Data can be used for predictive maintenance algorithms
+ * The update cadence is controlled by `CONFIG.task_hw_monitor_loop_ms`.
  * 
  * ============================================================================
  * MIT License
@@ -130,10 +51,12 @@
  */
 
 #include <Arduino.h>
+#include <mutex>
 #include "tasks.h"
 #include "m5_hw.h"
 #include "mqtt.h"
 #include "config_store.h"
+#include "data_model.h"
 #include "log.h"
 #include <M5Unified.h>
 
@@ -214,17 +137,24 @@ void taskHwMonitor(void *pv)
     for (;;) {
 
         // --- Battery Status Reading ---
-        // Retrieve battery voltage (mV), charge level (%), and charging state
-        float batt_voltage = M5.Power.getBatteryVoltage();   // in mV
-        int   batt_percent = M5.Power.getBatteryLevel();     // in %
-        bool  charging = M5.Power.isCharging();
+        // Use AXP module state mirrored in DATA.
+        float batt_voltage_v = 0.0f;
+        int batt_percent = 0;
+        bool charging = false;
+
+        {
+            std::lock_guard<std::mutex> lock(DATA_MUTEX);
+            batt_voltage_v = DATA.axp_battery_voltage;
+            batt_percent = static_cast<int>(DATA.axp_battery_percent);
+            charging = DATA.axp_charging;
+        }
 
         // --- MQTT Publishing ---
         // Publish all hardware data to MQTT topics
         // Convert numeric values to strings for MQTT compatibility
         
         sf_mqtt::publish("smartfranklin/hw/battery_voltage",
-                 std::string(String(batt_voltage).c_str()));
+             std::string(String(batt_voltage_v).c_str()));
 
         sf_mqtt::publish("smartfranklin/hw/battery_percent",
                  std::string(String(batt_percent).c_str()));

@@ -12,9 +12,14 @@
  * Version:     1.1
  *
  * Overview:
+ *   This API exposes two MQTT paths: an optional ESP-IDF MQTT client wrapper
+ *   for direct broker connectivity, and helpers for the embedded local broker
+ *   started by `taskMqtt`.
  *
  * Integration Notes:
- *
+ *   Most firmware modules call `publish(...)` and let the implementation route
+ *   to the external client when present or to the local broker otherwise.
+ *   Startup health checks can query `is_local_broker_ready()` directly.
  * ============================================================================
  * MIT License
  * ============================================================================
@@ -53,20 +58,11 @@ namespace sf_mqtt {
 
 /**
  * @brief Callback type for MQTT message reception.
- * 
- * Function signature for handling incoming MQTT messages. Called
- * asynchronously when messages are received on subscribed topics.
- * Provides topic and payload as std::string parameters.
- * 
- * Callback Signature:
- * 
- * Parameters:
- * 
- * Usage:
- * 
- * Thread Safety:
- * 
- * @see init() - Function that registers this callback
+ *
+ * Receives topic and payload as `std::string` values when the optional
+ * ESP-IDF MQTT client dispatches inbound messages.
+ *
+ * @see init() registers this callback for client-delivered messages.
  */
 using MessageCallback = std::function<void(const std::string &topic,
                                            const std::string &payload)>;
@@ -245,7 +241,8 @@ bool is_connected();
  * @param payload Message payload
  * @param qos QoS level (0..2)
  * @param retain Retain flag
- * @return true if queued for local broker clients, false if local broker is
+ * @return true if queued for local broker clients, false if the local broker
+ *         is not ready
  */
 bool publish_local(const std::string &topic,
                    const std::string &payload,

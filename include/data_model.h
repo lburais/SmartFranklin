@@ -5,34 +5,30 @@
  * 
  * File:        data_model.h
  * Project:     SmartFranklin IoT Device Controller
- * Description: Header file defining the global data model structure for
+ * Description: Header file defining the shared SmartData runtime model and
+ *              synchronization primitive used across modules.
  * 
  * Author:      Laurent Burais
  * Date:        5 March 2026
  * Version:     1.0
  * 
  * Overview:
- * 
+ *   `SmartData` is the shared runtime state exchanged between sensor modules,
+ *   the HMI, MQTT publication, and web dashboard JSON endpoints.
+ *
  * Data Categories:
- * 
+ *   - Time/GPS state from RTC and GPS modules
+ *   - Gaz and tank measurements from the unified I2C scheduler
+ *   - Level/assiette measurements from the IMU module
+ *   - BMS telemetry and actuator state
+ *
  * Thread Safety:
- * 
- * Data Flow:
- * 
- * Update Frequency:
- * 
- * Memory Management:
- * 
- * Data Validation:
- * 
+ *   Access must be protected with `DATA_MUTEX` whenever multiple fields are
+ *   read or written as one logical snapshot.
+ *
  * Integration Points:
- * 
- * Dependencies:
- * 
- * Limitations:
- * 
- * Best Practices:
- * 
+ *   Updated by runtime modules and consumed by HMI drawing, MQTT topics, and
+ *   web dashboard JSON serialization.
  * ============================================================================
  * MIT License
  * ============================================================================
@@ -195,6 +191,26 @@ struct SmartData {
      * @brief Rear-right wheel relative height in millimeters.
      */
     float level_wheel_rr_mm = 0.0f;
+
+    /**
+     * @brief AXP battery voltage in volts.
+     */
+    float axp_battery_voltage = 0.0f;
+
+    /**
+     * @brief AXP battery level in percent.
+     */
+    int32_t axp_battery_percent = 0;
+
+    /**
+     * @brief AXP charging state.
+     */
+    bool axp_charging = false;
+
+    /**
+     * @brief AXP PMIC temperature in celsius.
+     */
+    float axp_temperature = 0.0f;
 
     /**
      * @brief Weight sensor calibration gap value.

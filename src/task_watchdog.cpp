@@ -5,89 +5,19 @@
  * 
  * File:        task_watchdog.cpp
  * Project:     SmartFranklin IoT Device Controller
- * Description: FreeRTOS task for watchdog timer management and system health
- *              monitoring. Initializes the watchdog system, registers the task
- *              with ESP-IDF Task Watchdog Timer (TWDT), and periodically resets
- *              the watchdog to prevent system resets.
+ * Description: FreeRTOS task wrapper for the ESP-IDF task watchdog.
+ *              Initializes TWDT once, registers the current task, and
+ *              periodically resets the watchdog according to config.
  * 
  * Author:      Laurent Burais
  * Date:        5 March 2026
  * Version:     1.0
  * 
  * Overview:
- *   SmartFranklin implements a watchdog system to ensure system reliability
- *   and prevent hangs or infinite loops. This task manages the ESP-IDF Task
- *   Watchdog Timer (TWDT), which monitors task execution and can reset the
- *   system if tasks fail to respond within the timeout period. The watchdog
- *   provides a safety mechanism for embedded system stability.
- * 
- * ESP-IDF Task Watchdog Timer (TWDT):
- *   - Hardware-based watchdog timer integrated in ESP32
- *   - Monitors task execution and responsiveness
- *   - Configurable timeout periods (default 5 seconds)
- *   - Automatic system reset on timeout
- *   - Multiple tasks can be registered for monitoring
- *   - Interrupt-safe operation with dedicated timer
- * 
- * Watchdog Operation:
- *   - Initialization: watchdog_init() sets up TWDT configuration
- *   - Task Registration: esp_task_wdt_add(NULL) adds current task
- *   - Periodic Reset: esp_task_wdt_reset() called every second
- *   - Timeout Prevention: Resets prevent system reset triggers
- *   - Health Monitoring: Ensures main tasks are executing properly
- * 
- * Task Behavior:
- *   - Startup: Initialize watchdog system and register task
- *   - Loop: Continuous 1-second cycle of watchdog reset
- *   - Monitoring: Prevents watchdog timeout and system reset
- *   - Logging: Startup message for debugging and monitoring
- * 
- * Configuration:
- *   - Reset Interval: 1 second (pdMS_TO_TICKS(1000))
- *   - Timeout Period: Configured in watchdog_init() (typically 5 seconds)
- *   - Task Priority: tskIDLE_PRIORITY + 1 (standard priority)
- *   - Stack Size: 2048 bytes (minimal for watchdog operations)
- *   - Core Affinity: No restriction (runs on any core)
- * 
- * Error Handling:
- *   - Initialization Failures: watchdog_init() handles configuration errors
- *   - Registration Failures: esp_task_wdt_add() may fail if TWDT full
- *   - Reset Failures: esp_task_wdt_reset() handles invalid states
- *   - Task Stability: Watchdog prevents hangs but doesn't recover from them
- * 
- * Performance Considerations:
- *   - CPU Usage: Very low (minimal operations per second)
- *   - Memory Usage: Minimal (no dynamic allocations)
- *   - Power Impact: Negligible additional power consumption
- *   - Interrupt Latency: TWDT operations are interrupt-safe
- *   - System Overhead: Lightweight watchdog management
- * 
- * Dependencies:
- *   - Arduino.h (FreeRTOS task functions)
- *   - tasks.h (Task definitions and priorities)
- *   - watchdog.h (Watchdog initialization functions)
- *   - esp_task_wdt.h (ESP-IDF Task Watchdog Timer API)
- * 
- * Limitations:
- *   - Single Task Monitoring: Only this task is registered with TWDT
- *   - Fixed Reset Interval: 1-second reset cycle (not configurable)
- *   - No Custom Timeouts: Uses default ESP-IDF TWDT configuration
- *   - System Reset Only: No graceful shutdown or recovery mechanisms
- *   - No Task-Specific Monitoring: All tasks share the same watchdog
- * 
- * Best Practices:
- *   - Keep reset interval shorter than TWDT timeout
- *   - Monitor system logs for watchdog-related messages
- *   - Ensure all critical tasks call watchdog_beat() if needed
- *   - Test watchdog functionality during development
- *   - Consider TWDT timeout vs. application responsiveness
- *   - Use watchdog as last resort for system stability
- * 
- * Integration Notes:
- *   - Complements other system monitoring (MQTT status, sensor health)
- *   - Provides hardware-level protection against software faults
- *   - Enables automatic recovery from system hangs
- *   - Supports remote monitoring through serial logging
+ *   The current runtime uses a simple watchdog model: `taskWatchdog` owns the
+ *   TWDT registration and periodically kicks the watchdog using the configured
+ *   loop period. This is a coarse system-liveness safeguard, not a per-task
+ *   heartbeat framework.
  * 
  * ============================================================================
  * MIT License

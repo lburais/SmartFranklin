@@ -14,10 +14,9 @@
  * Version:     1.0
  * 
  * Overview:
- *   SmartFranklin provides a comprehensive web-based management interface
- *   accessible via WiFi connection. The dashboard offers real-time monitoring,
- *   configuration management, diagnostics, and over-the-air firmware updates.
- *   All access is protected by HTTP basic authentication using admin credentials.
+ *   SmartFranklin provides a small embedded web interface accessible over WiFi.
+ *   The current dashboard serves a live data page, a configuration page, and
+ *   a logs page plus a minimal JSON API used by those pages.
  * 
  * Web Server Architecture:
  *   - Framework: ESPAsyncWebServer (asynchronous, non-blocking)
@@ -28,62 +27,15 @@
  *   - Real-time Updates: JavaScript fetch API with 1-second polling
  * 
  * Dashboard Pages:
- * 
- *   Main Dashboard (/):
- *   - Live sensor data display with auto-refresh
- *   - Navigation buttons to configuration sections
- *   - Real-time JSON data from /api/status endpoint
- *   - Responsive design for mobile/desktop access
- * 
- *   Configuration (/config):
- *   - WiFi settings (SSID, password)
- *   - MQTT broker configuration
- *   - Runtime configuration settings
- *   - Admin authentication credentials
- *   - Hardware calibration factors
- * 
- *   Firmware Update (/update):
- *   - Over-the-air (OTA) firmware upload
- *   - Progress indication and status
- *   - Automatic reboot after successful update
- *   - Rollback protection (ESP-IDF OTA partitions)
- * 
- *   Diagnostics (/diagnostics):
- *   - System health and performance metrics
- *   - Network connectivity status
- *   - Task watchdog heartbeat monitoring
- *   - Log file access and filtering
+ *   - `/`        : live data page
+ *   - `/config`  : configuration editor
+ *   - `/logs`    : runtime logs viewer
  * 
  * API Endpoints:
- * 
- *   GET /api/status:
- *   - Returns real-time sensor data and system state
- *   - Protected by authentication
- *   - JSON format with current DATA values
- *   - Thread-safe access with DATA_MUTEX
- * 
- *   GET /api/hw:
- *   - Hardware status (battery, buttons, IMU)
- *   - M5Stack-specific sensor readings
- *   - JSON response with HwStatus structure
- * 
- *   GET /api/full:
- *   - Combined runtime snapshot (data + config + hardware)
- * 
- *   GET /api/set_brightness?value=N:
- *   - Controls display brightness (0-255)
- *   - Immediate effect on M5Stack LCD
- *   - No authentication required for convenience
- * 
- *   GET /api/reboot:
- *   - Triggers system restart
- *   - 200ms delay before ESP.restart()
- *   - Allows HTTP response to complete
- * 
- *   GET /api/sleep:
- *   - Enters deep sleep mode
- *   - Ultra-low power consumption
- *   - Device wakes on button press or USB
+ *   - `/api/status` and `/api/data`     : current runtime data snapshot
+ *   - `/api/config`                     : current persisted configuration
+ *   - `/api/set_config?...`             : apply and persist config changes
+ *   - `/api/logs?after=N&max=M`         : incremental log retrieval
  * 
  * Authentication:
  *   - HTTP Basic Authentication on all sensitive endpoints
@@ -92,16 +44,12 @@
  *   - Session-less (credentials required for each request)
  * 
  * Static Assets:
- *   - Served from embedded PROGMEM strings
- *   - HTML pages: /hw.html, /sensors.html
- *   - JavaScript: /theme.js (common UI functionality)
- *   - Cached by browser for performance
+ *   - Served from embedded PROGMEM strings in web_dashboard_assets.cpp
+ *   - Main/config/log pages are embedded with their minimal client-side logic
  * 
  * Real-time Updates:
- *   - JavaScript fetch API polls /api/status every second
- *   - JSON data displayed in formatted <pre> element
- *   - Automatic refresh continues during page view
- *   - No WebSocket for simplicity (HTTP polling sufficient)
+ *   - Client pages poll JSON endpoints with fetch()
+ *   - No WebSocket layer is used in the current implementation
  * 
  * Dependencies:
  *   - ESPAsyncWebServer.h (asynchronous web server library)
@@ -229,6 +177,11 @@ static void fillDataJson(JsonVariant doc)
     doc["level_wheel_rl_mm"] = DATA.level_wheel_rl_mm;
     doc["level_wheel_rr_mm"] = DATA.level_wheel_rr_mm;
 
+    doc["axp_battery_voltage"] = DATA.axp_battery_voltage;
+    doc["axp_battery_percent"] = DATA.axp_battery_percent;
+    doc["axp_charging"] = DATA.axp_charging;
+    doc["axp_temperature"] = DATA.axp_temperature;
+
     // Backward-compatible aliases used by legacy web pages.
     doc["imu_pitch_deg"] = DATA.level_pitch_deg;
     doc["imu_roll_deg"] = DATA.level_roll_deg;
@@ -259,7 +212,6 @@ static void fillConfigJson(JsonVariant doc)
 
     doc["gaz_calibration_factor"] = CONFIG.gaz_calibration_factor;
     doc["scale_cal_factor"] = CONFIG.gaz_calibration_factor;
-    doc["gaz_weight_average_window"] = CONFIG.gaz_weight_average_window;
 
     doc["level_wheelbase_mm"] = CONFIG.level_wheelbase_mm;
     doc["level_track_width_mm"] = CONFIG.level_track_width_mm;
@@ -281,7 +233,6 @@ static void fillConfigJson(JsonVariant doc)
 
     doc["task_wifi_loop_ms"] = CONFIG.task_wifi_loop_ms;
     doc["task_mqtt_loop_ms"] = CONFIG.task_mqtt_loop_ms;
-    doc["task_i2c_loop_ms"] = CONFIG.task_i2c_loop_ms;
     doc["task_hmi_loop_ms"] = CONFIG.task_hmi_loop_ms;
     doc["task_hmi_init_retry_ms"] = CONFIG.task_hmi_init_retry_ms;
     doc["task_hw_monitor_loop_ms"] = CONFIG.task_hw_monitor_loop_ms;
@@ -303,6 +254,14 @@ static void fillHwJson(JsonVariant doc)
     accel["x"] = st.accel_x;
     accel["y"] = st.accel_y;
     accel["z"] = st.accel_z;
+
+    {
+        std::lock_guard<std::mutex> lock(DATA_MUTEX);
+        doc["axp_battery_voltage"] = DATA.axp_battery_voltage;
+        doc["axp_battery_percent"] = DATA.axp_battery_percent;
+        doc["axp_charging"] = DATA.axp_charging;
+        doc["axp_temperature"] = DATA.axp_temperature;
+    }
 }
 
 static void fillGeometryJson(JsonVariant doc, bool includeLegacyKeys)
@@ -389,7 +348,6 @@ static bool applyConfigFromRequest(AsyncWebServerRequest* request, String& error
         !applyString("sta_pass", updated.sta_pass) ||
         !applyFloat("scale_cal_factor", updated.gaz_calibration_factor) ||
         !applyFloat("gaz_calibration_factor", updated.gaz_calibration_factor) ||
-        !applyInt("gaz_weight_average_window", updated.gaz_weight_average_window) ||
         !applyFloat("level_wheelbase_mm", updated.level_wheelbase_mm) ||
         !applyFloat("level_track_width_mm", updated.level_track_width_mm) ||
         !applyFloat("level_offset_x_mm", updated.level_offset_x_mm) ||
@@ -402,7 +360,6 @@ static bool applyConfigFromRequest(AsyncWebServerRequest* request, String& error
         !applyInt("mqtt_port", updated.mqtt_port) ||
         !applyInt("task_wifi_loop_ms", updated.task_wifi_loop_ms) ||
         !applyInt("task_mqtt_loop_ms", updated.task_mqtt_loop_ms) ||
-        !applyInt("task_i2c_loop_ms", updated.task_i2c_loop_ms) ||
         !applyInt("task_hmi_loop_ms", updated.task_hmi_loop_ms) ||
         !applyInt("task_hmi_init_retry_ms", updated.task_hmi_init_retry_ms) ||
         !applyInt("task_hw_monitor_loop_ms", updated.task_hw_monitor_loop_ms) ||
@@ -414,11 +371,6 @@ static bool applyConfigFromRequest(AsyncWebServerRequest* request, String& error
 
     if (updated.gaz_calibration_factor <= 0.0f || !std::isfinite(updated.gaz_calibration_factor)) {
         errorKey = "gaz_calibration_factor";
-        return false;
-    }
-
-    if (updated.gaz_weight_average_window < 1 || updated.gaz_weight_average_window > 64) {
-        errorKey = "gaz_weight_average_window";
         return false;
     }
 
@@ -459,10 +411,6 @@ static bool applyConfigFromRequest(AsyncWebServerRequest* request, String& error
     }
     if (!loopMsValid(updated.task_mqtt_loop_ms)) {
         errorKey = "task_mqtt_loop_ms";
-        return false;
-    }
-    if (!loopMsValid(updated.task_i2c_loop_ms)) {
-        errorKey = "task_i2c_loop_ms";
         return false;
     }
     if (!loopMsValid(updated.task_hmi_loop_ms)) {

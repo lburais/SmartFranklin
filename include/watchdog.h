@@ -5,36 +5,16 @@
  * 
  * File:        watchdog.h
  * Project:     SmartFranklin IoT Device Controller
- * Description: Header file for watchdog timer functionality. Provides system
+ * Description: Declaration of the lightweight watchdog helpers used by the
+ *              current runtime.
  * 
  * Author:      Laurent Burais
  * Date:        5 March 2026
  * Version:     1.0
  * 
  * Overview:
- * 
- * Watchdog Architecture:
- * 
- * Task Monitoring:
- * 
- * Critical Tasks:
- * 
- * Timeout Configuration:
- * 
- * Recovery Mechanism:
- * 
- * Integration Points:
- * 
- * Performance Impact:
- * 
- * Safety Considerations:
- * 
- * Dependencies:
- * 
- * Limitations:
- * 
- * Best Practices:
- * 
+ *   `watchdog_init()` configures the ESP-IDF task watchdog and
+ *   `watchdog_beat()` records software heartbeat timestamps used by the module.
  * ============================================================================
  * MIT License
  * ============================================================================
@@ -64,55 +44,11 @@
 #include <Arduino.h>
 
 /**
- * @brief Initializes the watchdog timer system.
- * 
- * Sets up the hardware and software watchdog infrastructure for
- * monitoring critical system tasks. Configures timeout periods,
- * initializes task status tracking, and enables watchdog protection.
- * Must be called early in system initialization.
- * 
- * Initialization Process:
- * 
- * Hardware Configuration:
- * 
- * Task Configuration:
- * 
- * Error Handling:
- * 
- * Performance:
- * 
- * Usage Notes:
- * 
- * @note Critical for system reliability in production deployments.
- * 
- * @see watchdog_beat() - Heartbeat function for tasks
+ * @brief Initializes watchdog state and configures the ESP-IDF TWDT.
  */
 void watchdog_init();
 
 /**
- * @brief Sends heartbeat signal from a monitored task.
- * 
- * Updates the last heartbeat timestamp for the specified task ID,
- * indicating that the task is still active and responsive. This
- * prevents watchdog timeout and system reset. Should be called
- * regularly from each monitored task's main loop.
- * 
- * Heartbeat Process:
- * 
- * Task ID Usage:
- * 
- * Timing Requirements:
- * 
- * Performance:
- * 
- * Usage Examples:
- * 
- * 
- * Integration:
- * 
- * @note Function must be called more frequently than the task timeout.
- * 
- * @see watchdog_init() - Required initialization
- * @see TASK_ID_* - Predefined task ID constants
+ * @brief Records a software heartbeat timestamp for a logical task slot.
  */
 void watchdog_beat(int id);

@@ -5,34 +5,15 @@
  * 
  * File:        m5_hw.h
  * Project:     SmartFranklin IoT Device Controller
- * Description: Header file for M5Stack hardware abstraction layer. Provides
+ * Description: Public interface for the lightweight M5 hardware abstraction.
  * 
  * Author:      Laurent Burais
  * Date:        5 March 2026
  * Version:     1.0
  * 
  * Overview:
- * 
- * M5Stack Hardware Integration:
- * 
- * Hardware Status Monitoring:
- * 
- * Display Control:
- * 
- * Power Management:
- * 
- * Abstraction Benefits:
- * 
- * Integration:
- * 
- * Dependencies:
- * 
- * Limitations:
- * 
- * Best Practices:
- * 
- * Safety Considerations:
- * 
+ *   This header defines `HwStatus` plus the `M5Hardware` facade used to read a
+ *   compact snapshot of built-in hardware state from M5Unified.
  * ============================================================================
  * MIT License
  * ============================================================================

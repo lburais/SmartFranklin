@@ -50,10 +50,11 @@ InterfaceSensorMap kSensors[] = {
     {InterfaceSensor::Lte,  InterfacePortName::PortB1,     1, 0x00, 115200UL, 10000, false, "M5Stack NB-IOT2"},
     {InterfaceSensor::Lora, InterfacePortName::PortC2,     4, 0x00, 115200UL, 10000, false, "M5Stack C6L"},
     {InterfaceSensor::Lin,  InterfacePortName::PortB2,     5, 0x00, 115200UL, 10000, false, "LIN Bus"},
-    {InterfaceSensor::Imu,  InterfacePortName::Internal,  -1, 0x68, 400000UL, 10000, false, "MPU6886"},
-    {InterfaceSensor::Rtc,  InterfacePortName::Internal,  -1, 0x51, 400000UL, 10000, false, "BM8563"},
-    {InterfaceSensor::Ina,  InterfacePortName::Internal,  -1, 0x40, 400000UL, 10000, false, "INA3221"},
-    {InterfaceSensor::Axp,  InterfacePortName::Internal,  -1, 0x34, 400000UL, 10000, false, "AXP192"},
+    {InterfaceSensor::Imu,  InterfacePortName::Internal,  -1, 0x68, 400000UL, 10000, false, "MPU6886 6-axis IMU"},
+    {InterfaceSensor::Rtc,  InterfacePortName::Internal,  -1, 0x51, 400000UL, 10000, false, "BM8563 RTC"},
+    {InterfaceSensor::Ina1, InterfacePortName::Internal,  -1, 0x40, 400000UL, 10000, false, "INA3221 3 channel voltage and current sensor"},
+    {InterfaceSensor::Ina2, InterfacePortName::Internal,  -1, 0x41, 400000UL, 10000, false, "INA3221 3 channel voltage and current sensor"},
+    {InterfaceSensor::Axp,  InterfacePortName::Internal,  -1, 0x34, 400000UL, 10000, false, "AXP192 power management"},
     {InterfaceSensor::Bat,  InterfacePortName::Bluetooth, -1, 0x00,      0UL, 10000, false, "Battery"},
     {InterfaceSensor::Obd,  InterfacePortName::Bluetooth, -1, 0x00,      0UL, 10000, false, "OBD"},
 };
@@ -203,7 +204,8 @@ const char* toString(const InterfaceSensor sensor, bool upper)
         case InterfaceSensor::Lin:   return "LIN";
         case InterfaceSensor::Imu:   return "IMU";
         case InterfaceSensor::Rtc:   return "RTC";
-        case InterfaceSensor::Ina:   return "INA";
+        case InterfaceSensor::Ina1:  return "INA1";
+        case InterfaceSensor::Ina2:  return "INA2";
         case InterfaceSensor::Axp:   return "AXP";
         case InterfaceSensor::Bat:   return "BAT";
         case InterfaceSensor::Obd:   return "OBD";
@@ -221,7 +223,8 @@ const char* toString(const InterfaceSensor sensor, bool upper)
     case InterfaceSensor::Lin:    return "lin";
     case InterfaceSensor::Imu:    return "imu";
     case InterfaceSensor::Rtc:    return "rtc";
-    case InterfaceSensor::Ina:    return "ina";
+    case InterfaceSensor::Ina1:   return "ina1";
+    case InterfaceSensor::Ina2:   return "ina2";
     case InterfaceSensor::Axp:    return "axp";
     case InterfaceSensor::Bat:    return "bat";
     case InterfaceSensor::Obd:    return "obd";

@@ -37,7 +37,7 @@
  *   2. Weight/Load Measurement
  *      - weight_raw: Raw ADC value from weight sensor (24-bit)
  *      - weight_kg: Calibrated weight in kilograms
- *      - Updated by: taskGaz (periodic sensor acquisition)
+ *      - Updated by: Gaz module processing inside taskI2c
  * 
  *   3. Device Control State
  *      - led_state: LED on/off state (boolean)
@@ -106,7 +106,7 @@
 // and write to this object for inter-task communication and data publishing.
 //
 // Access Pattern:
-//   - Sensor tasks (taskBmsBle, taskGaz, taskI2c, etc.) continuously
+//   - Sensor tasks (taskBmsBle, taskI2c, etc.) continuously
 //     update DATA with latest readings
 //   - Communication tasks (taskMqttBroker, taskDisplay) read DATA to publish
 //     or display current system state

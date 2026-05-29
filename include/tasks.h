@@ -73,13 +73,7 @@
 
 extern TaskHandle_t taskWiFiHandle;             // WiFi connectivity management
 extern TaskHandle_t taskMqttHandle;             // MQTT client+broker communication
-extern TaskHandle_t taskWeightHandle;           // Weight sensor acquisition
-extern TaskHandle_t taskGazHandle;              // Gaz/weight sensor acquisition
-extern TaskHandle_t taskTankHandle;             // Tank ultrasonic acquisition
-extern TaskHandle_t taskLevelHandle;            // Level/accelerometer sensor acquisition
-extern TaskHandle_t taskRtcHandle;              // RTC acquisition
-extern TaskHandle_t taskGpsHandle;              // GPS/GNSS acquisition
-extern TaskHandle_t taskI2cHandle;              // Unified I2C sensor acquisition (DEPRECATED - use individual tasks)
+extern TaskHandle_t taskI2cHandle;              // Unified I2C sensor acquisition
 extern TaskHandle_t taskBmsBleHandle;           // BLE battery management system
 extern TaskHandle_t taskHmiHandle;              // HMI/display updates
 
@@ -110,27 +104,6 @@ void taskWiFi(void *pv);
 void taskMqtt(void *pv);
 
 /**
- * @brief Weight sensor data acquisition task.
- * 
- * Reads load cells or weight transducers at regular intervals, applies
- * averaging filters, handles tare/calibration operations, and publishes
- * weight measurements to MQTT for remote monitoring.
- * 
- * @note FreeRTOS task entrypoint; does not return during normal runtime.
- */
-void taskWeight(void *pv);
-
-/**
- * @brief Gaz bottle weight acquisition task.
- *
- * Uses the M5Stack Weight I2C unit to read gas bottle weight, applies the
- * persisted calibration gap, updates shared DATA, and publishes MQTT topics.
- *
- * @note FreeRTOS task entrypoint; does not return during normal runtime.
- */
-void taskGaz(void *pv);
-
-/**
  * @brief Unified I2C sensors acquisition task.
  *
  * Initializes and processes I2C sensors that share the Port A bus,
@@ -140,48 +113,6 @@ void taskGaz(void *pv);
  * @note FreeRTOS task entrypoint; does not return during normal runtime.
  */
 void taskI2c(void *pv);
-
-/**
- * @brief Tank ultrasonic level acquisition task.
- *
- * Uses the M5Stack ultrasonic I2C unit to read distance-to-surface values,
- * derives fill percentage from configured tank mapping constants, updates
- * shared DATA, and publishes MQTT topics.
- *
- * @note FreeRTOS task entrypoint; does not return during normal runtime.
- */
-void taskTank(void *pv);
-
-/**
- * @brief Level sensor (accelerometer) acquisition task.
- *
- * Initializes and reads internal or external accelerometer (MPU or ADXL345),
- * derives device tilt/inclination angles, and publishes level measurements
- * for tank/container visualization.
- *
- * @note FreeRTOS task entrypoint; does not return during normal runtime.
- */
-void taskLevel(void *pv);
-
-/**
- * @brief Real-time clock (RTC) acquisition task.
- *
- * Initializes internal or external RTC, reads current date/time,
- * handles clock synchronization, and manages time-based operations.
- *
- * @note FreeRTOS task entrypoint; does not return during normal runtime.
- */
-void taskRtc(void *pv);
-
-/**
- * @brief GPS/GNSS acquisition task.
- *
- * Communicates with DFRobot Gravity GNSS receiver via I2C, reads
- * location and time data, and publishes GPS metrics.
- *
- * @note FreeRTOS task entrypoint; does not return during normal runtime.
- */
-void taskGps(void *pv);
 
 /**
  * @brief BLE battery management system (BMS) monitoring task.
