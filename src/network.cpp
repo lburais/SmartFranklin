@@ -56,13 +56,14 @@ bool Wifi::init()
     m_lastReconnectAttemptMs = 0;
     m_staConnectedSinceMs = 0;
     m_lastExternalCheckMs = 0;
+    m_lastNoInternetLogMs = 0;
     m_lastLoggedStaStatus = WL_IDLE_STATUS;
 
     m_hostname = CONFIG.hostname.isEmpty() ? String("franklin") : CONFIG.hostname;
 
-    // WiFi.persistent(false);
-    // WiFi.setSleep(false);
-    // WiFi.setAutoReconnect(true);
+    WiFi.persistent(false);
+    WiFi.setSleep(false);
+    WiFi.setAutoReconnect(true);
     WiFi.mode(WIFI_AP_STA);
 
     if (!WiFi.setHostname(m_hostname.c_str())) {
@@ -169,15 +170,10 @@ bool Wifi::process()
         m_lastExternalCheckMs = millis();
 
         if (!hasExternalConnectivity()) {
-            SF_LOGW("[%s] STA has no external connectivity, forcing reconnect", m_tag);
-
-            if (WiFi.SSID() == CONFIG.sta_ssid) {
-                WiFi.reconnect();
-            } else if (!CONFIG.sta_ssid.isEmpty()) {
-                WiFi.begin(CONFIG.sta_ssid.c_str(), CONFIG.sta_pass.c_str());
+            if (millis() - m_lastNoInternetLogMs > kNoInternetLogIntervalMs) {
+                SF_LOGW("[%s] STA connected but no external internet (keeping AP+STA online)", m_tag);
+                m_lastNoInternetLogMs = millis();
             }
-
-            m_lastReconnectAttemptMs = millis();
         }
     }
 

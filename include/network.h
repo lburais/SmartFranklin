@@ -21,6 +21,7 @@ private:
     unsigned long m_lastReconnectAttemptMs = 0;
     unsigned long m_staConnectedSinceMs = 0;
     unsigned long m_lastExternalCheckMs = 0;
+    unsigned long m_lastNoInternetLogMs = 0;
 
     bool m_mdnsStarted = false;
     wl_status_t m_lastLoggedStaStatus = WL_IDLE_STATUS;
@@ -28,6 +29,7 @@ private:
     static constexpr unsigned long kReconnectIntervalMs = 15000;
     static constexpr unsigned long kStatusIntervalMs = 60000;
     static constexpr unsigned long kExternalCheckIntervalMs = 30000;
+    static constexpr unsigned long kNoInternetLogIntervalMs = 120000;
 };
 
 extern Wifi WIFI_TASK;

@@ -128,6 +128,7 @@
  * All routes registered in web_dashboard_init() function.
  */
 static AsyncWebServer server(80);
+static bool g_webServerStarted = false;
 
 // Static web assets are defined in src/web_dashboard_assets.cpp.
 
@@ -484,9 +485,20 @@ static bool applyLevelGeometryFromRequest(AsyncWebServerRequest* request)
 
 static void sendJson(AsyncWebServerRequest* request, JsonDocument& doc, int statusCode = 200)
 {
-    String out;
-    serializeJson(doc, out);
-    request->send(statusCode, "application/json", out);
+    AsyncResponseStream* response = request->beginResponseStream("application/json");
+    response->setCode(statusCode);
+    response->addHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+    response->addHeader("Pragma", "no-cache");
+    serializeJson(doc, *response);
+    request->send(response);
+}
+
+static void sendPage(AsyncWebServerRequest* request, const char* page)
+{
+    AsyncWebServerResponse* response = request->beginResponse(200, "text/html", page);
+    response->addHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+    response->addHeader("Pragma", "no-cache");
+    request->send(response);
 }
 
 // ============================================================================
@@ -551,8 +563,13 @@ static void sendJson(AsyncWebServerRequest* request, JsonDocument& doc, int stat
  */
 void web_dashboard_init()
 {
+    if (g_webServerStarted) {
+        SF_LOGW("[WEB] already started");
+        return;
+    }
+
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-        request->send(200, "text/html", MAIN_PAGE);
+        sendPage(request, MAIN_PAGE);
     });
 
     server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -571,7 +588,7 @@ void web_dashboard_init()
         if (!checkAuth(request)) {
             return;
         }
-        request->send(200, "text/html", CONFIG_PAGE);
+        sendPage(request, CONFIG_PAGE);
     });
 
     server.on("/api/config", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -607,7 +624,16 @@ void web_dashboard_init()
     });
 
     server.on("/logs", HTTP_GET, [](AsyncWebServerRequest *request){
-        request->send(200, "text/html", LOGS_PAGE);
+        sendPage(request, LOGS_PAGE);
+    });
+
+    server.on("/api/health", HTTP_GET, [](AsyncWebServerRequest *request){
+        JsonDocument doc;
+        doc["ok"] = true;
+        doc["ap_ip"] = WiFi.softAPIP().toString();
+        doc["sta_status"] = static_cast<int>(WiFi.status());
+        doc["sta_ip"] = WiFi.localIP().toString();
+        sendJson(request, doc);
     });
 
     server.on("/api/logs", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -629,5 +655,11 @@ void web_dashboard_init()
         request->send(200, "application/json", sf_log::getLogsJson(after, maxEntries));
     });
 
+    server.onNotFound([](AsyncWebServerRequest *request){
+        request->send(404, "text/plain", "Not Found");
+    });
+
     server.begin();
+    g_webServerStarted = true;
+    SF_LOGI("[WEB] server started on :80");
 }
