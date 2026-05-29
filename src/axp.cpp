@@ -97,7 +97,11 @@ void Axp::process()
     sf_mqtt::publish("smartfranklin/axp/charging", charging ? "1" : "0", 1, true);
     sf_mqtt::publish("smartfranklin/axp/temperature", tempBuf, 1, true);
 
-    HMI::setLed(sf_interfaces::InterfaceSensor::Axp, PortStatus::Ok);
+    if (batteryPercent > 0.1) {
+        HMI::setLed(sf_interfaces::InterfaceSensor::Axp, PortStatus::Ok);
+    } else {
+        HMI::setLed(sf_interfaces::InterfaceSensor::Axp, PortStatus::BatteryLow);
+    }
 
     SF_LOGI("[%s] Voltage: %.3f V     Fill: %d%%    Charging: %d     Temp: %.2f°", m_tag, batteryVoltageV, batteryPercent, charging, temperatureC);
 }

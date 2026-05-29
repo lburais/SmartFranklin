@@ -64,6 +64,7 @@ enum class PortStatus : uint8_t {
     NoData,
     Error,
     Ok,
+    BatteryLow,
 };
 
 /**

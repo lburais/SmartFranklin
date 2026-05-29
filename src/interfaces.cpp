@@ -54,7 +54,7 @@ InterfaceSensorMap kSensors[] = {
     {InterfaceSensor::Rtc,  InterfacePortName::Internal,  -1, 0x51, 400000UL, 10000, false, "BM8563 RTC"},
     {InterfaceSensor::Ina1, InterfacePortName::Internal,  -1, 0x40, 400000UL, 10000, false, "INA3221 3 channel voltage and current sensor"},
     {InterfaceSensor::Ina2, InterfacePortName::Internal,  -1, 0x41, 400000UL, 10000, false, "INA3221 3 channel voltage and current sensor"},
-    {InterfaceSensor::Axp,  InterfacePortName::Internal,  -1, 0x34, 400000UL, 10000, false, "AXP192 power management"},
+    {InterfaceSensor::Axp,  InterfacePortName::Internal,   3, 0x34, 400000UL, 10000, false, "AXP192 power management"},
     {InterfaceSensor::Bat,  InterfacePortName::Bluetooth, -1, 0x00,      0UL, 10000, false, "Battery"},
     {InterfaceSensor::Obd,  InterfacePortName::Bluetooth, -1, 0x00,      0UL, 10000, false, "OBD"},
 };
