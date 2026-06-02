@@ -231,6 +231,8 @@ bool GPS::process()
         }
     }
 
+    SF_LOGI("[%s] processing...", m_tag);
+
     if (!seize(m_sensor)) {
         SF_LOGW("[%s] unable to lock port", m_tag);
         HMI::setLed(m_sensor, PortStatus::Error);

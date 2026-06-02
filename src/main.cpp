@@ -189,7 +189,7 @@ void setup() {
     xTaskCreatePinnedToCore(taskHmi,              "HMI",      8192, nullptr, 3,  &taskHmiHandle,      0);
     #endif
 
-    #if defined(ENABLE_GAZ) || defined(ENABLE_TANK) || defined(ENABLE_LEVEL) || defined(ENABLE_RTC) || defined(ENABLE_GPS) || defined(ENABLE_AXP)
+    #if defined(ENABLE_GAZ) || defined(ENABLE_TANK) || defined(ENABLE_LEVEL) || defined(ENABLE_RTC) || defined(ENABLE_GPS) || defined(ENABLE_AXP) || defined(ENABLE_INA)
     xTaskCreatePinnedToCore(taskI2c,              "I2C",      8192, nullptr, 2, &taskI2cHandle,       1);
     #endif
 

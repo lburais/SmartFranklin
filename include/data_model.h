@@ -213,6 +213,36 @@ struct SmartData {
     float axp_temperature = 0.0f;
 
     /**
+     * @brief INA3221 #1 online state at address 0x40.
+     */
+    bool ina1_online = false;
+
+    /**
+     * @brief INA3221 #2 online state at address 0x41.
+     */
+    bool ina2_online = false;
+
+    float ina1_bus_voltage_ch1_v = 0.0f;
+    float ina1_bus_voltage_ch2_v = 0.0f;
+    float ina1_bus_voltage_ch3_v = 0.0f;
+    float ina1_shunt_voltage_ch1_mv = 0.0f;
+    float ina1_shunt_voltage_ch2_mv = 0.0f;
+    float ina1_shunt_voltage_ch3_mv = 0.0f;
+    float ina1_current_ch1_a = 0.0f;
+    float ina1_current_ch2_a = 0.0f;
+    float ina1_current_ch3_a = 0.0f;
+
+    float ina2_bus_voltage_ch1_v = 0.0f;
+    float ina2_bus_voltage_ch2_v = 0.0f;
+    float ina2_bus_voltage_ch3_v = 0.0f;
+    float ina2_shunt_voltage_ch1_mv = 0.0f;
+    float ina2_shunt_voltage_ch2_mv = 0.0f;
+    float ina2_shunt_voltage_ch3_mv = 0.0f;
+    float ina2_current_ch1_a = 0.0f;
+    float ina2_current_ch2_a = 0.0f;
+    float ina2_current_ch3_a = 0.0f;
+
+    /**
      * @brief Weight sensor calibration gap value.
      * 
      * Calibration offset for weight sensor accuracy.

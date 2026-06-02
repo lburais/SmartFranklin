@@ -179,6 +179,7 @@ bool Gaz::init()
         release(m_sensor);
         return false;
     } else {
+        sf_interfaces::setAvailable(m_sensor);
         SF_LOGI("[%s] %s m_unit started", m_tag, m_device);
     }
 
@@ -230,6 +231,7 @@ bool Gaz::process()
     if (!m_unit.updated()) {
         HMI::setLed(m_sensor, PortStatus::NoData);
         release(m_sensor);
+        SF_LOGI("[%s] no data", m_tag);
         return false;
     }
 

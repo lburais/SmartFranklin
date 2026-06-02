@@ -15,6 +15,8 @@
 #include <ctime>
 #include <mutex>
 
+#include "interfaces.h"
+
 class RTC {
 public:
     /**
@@ -87,6 +89,10 @@ private:
     uint32_t m_lastPublishMs = 0;
     uint32_t m_lastRtcWriteMs = 0;
     SyncSource m_lastSyncSource = SyncSource::None;
+
+	const sf_interfaces::InterfaceSensor m_sensor = sf_interfaces::InterfaceSensor::Rtc;
+    const char* const m_tag = sf_interfaces::toString(m_sensor, true);
+    const char* const m_device = sf_interfaces::getDeviceName(m_sensor);
 };
 
 /** Instance globale utilisée par les tâches système. */

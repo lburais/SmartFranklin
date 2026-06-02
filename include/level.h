@@ -3,6 +3,8 @@
 #include <Arduino.h>
 #include <mutex>
 
+#include "interfaces.h"
+
 class Level {
 public:
     bool init();
@@ -44,6 +46,10 @@ private:
     mutable std::mutex m_mutex;
 
     bool m_initialized = false;
+
+	const sf_interfaces::InterfaceSensor m_sensor = sf_interfaces::InterfaceSensor::Imu;
+    const char* const m_tag = sf_interfaces::toString(m_sensor, true);
+    const char* const m_device = sf_interfaces::getDeviceName(m_sensor);
 
     float m_lastPitchDeg = 0.0f;
     float m_lastRollDeg = 0.0f;

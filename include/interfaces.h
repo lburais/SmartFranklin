@@ -11,6 +11,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <M5Unified.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -24,7 +25,8 @@ class EspSoftwareSerial;
 namespace sf_interfaces {
 
 enum class InterfacePortName : uint8_t {
-    PortA = 0,
+    PortA1 = 0,
+    PortA2,
     PortB1,
     PortB2,
     PortC1,
@@ -35,7 +37,9 @@ enum class InterfacePortName : uint8_t {
 };
 
 enum class InterfacePortType : uint8_t {
-    I2C = 0,
+    Wire = 0,
+    Wire1,
+    In_I2C,
     UART,
     UART1,
     UART2,
@@ -66,9 +70,10 @@ enum class InterfaceSensor : uint8_t {
 struct InterfaceConnector {
     union Ptr {
         void* raw;
-        TwoWire* twoWire;
-        SoftWire* softWire;
+        TwoWire*        twoWire;
+        SoftWire*       softWire;
         HardwareSerial* hardwareSerial;
+        m5::I2C_Class*  inI2C;
 
         constexpr Ptr() : raw(nullptr) {}
     } ptr{};
@@ -81,21 +86,18 @@ struct InterfacePortMap {
     InterfaceConnector connector;      ///< TwoWire or HardwareSerial
 };
 
-struct InterfacePort {
-    InterfacePortName Name;
-    InterfacePortType Type;
-    int8_t            pinYellow;  ///< SDA (I2C) or RX (UART); -1 if not applicable
-    int8_t            pinWhite;   ///< SCL (I2C) or TX (UART); -1 if not applicable
-};
-
 struct InterfaceSensorMap {
     InterfaceSensor   Sensor;
     InterfacePortName Port;
+    InterfacePortType Type;
+    int8_t            pinYellow;     ///< SDA (I2C) or RX (UART); -1 if not applicable
+    int8_t            pinWhite;      ///< SCL (I2C) or TX (UART); -1 if not applicable
     int8_t            led;           ///< led number; -1 if not applicable
     uint8_t           I2cAddress;    ///< I2C device address; 0 if not applicable
     uint32_t          Clock;         ///< I2C clock frequency in Hz or UART bauds; 0 if not applicable
     uint32_t          recurrenceMs;  ///< Suggested task recurrence for this sensor
     bool              available;     ///< Last availability state set by configure(sensor)
+    InterfacePortMap* portMap;
     const char*       DeviceName;
 };
 
@@ -118,6 +120,7 @@ bool configure_all_sensors();
 bool configure(InterfaceSensor sensor);
 bool configured(InterfaceSensor sensor);
 bool isAvailable(InterfaceSensor sensor);
+void setAvailable(InterfaceSensor sensor);
 
 bool seize(InterfaceSensor sensor);
 void release(InterfaceSensor sensor);

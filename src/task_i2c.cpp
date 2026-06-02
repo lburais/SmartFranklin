@@ -3,6 +3,7 @@
 #include "axp.h"
 #include "gaz.h"
 #include "gps.h"
+#include "ina.h"
 #include "interfaces.h"
 #include "level.h"
 #include "log.h"
@@ -59,6 +60,10 @@ bool axpIsInitialized() { return AXP_TASK.isInitialized(); }
 bool axpInit() { return AXP_TASK.init(); }
 void axpProcess() { AXP_TASK.process(); }
 
+bool inaIsInitialized() { return INA_TASK.isInitialized(); }
+bool inaInit() { return INA_TASK.init(); }
+void inaProcess() { INA_TASK.process(); }
+
 }  // namespace
 
 void taskI2c(void* pv)
@@ -109,7 +114,16 @@ void taskI2c(void* pv)
             false,
     #endif
             axpIsInitialized, axpInit, axpProcess, 0U, 0U},
+        {"INA",   sf_interfaces::InterfaceSensor::Ina1,
+    #if defined(ENABLE_INA)
+            true,
+    #else
+            false,
+    #endif
+            inaIsInitialized, inaInit, inaProcess, 0U, 0U},
     };
+
+    sf_interfaces::configure_all_sensors();
 
     for (;;) {
         const uint32_t nowMs = millis();

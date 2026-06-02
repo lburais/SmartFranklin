@@ -14,63 +14,41 @@
 #include <HardwareSerial.h>
 #include <Wire.h>
 
-#include <cctype>
 #include <cstddef>
-#include <cstring>
 
 namespace sf_interfaces {
 
 namespace {
 
 InterfacePortMap kConnections[] = {
-//   type                        Lock                      configured? connector
-    {InterfacePortType::I2C,     xSemaphoreCreateMutex(),  false,      {}},
-    {InterfacePortType::UART,    xSemaphoreCreateMutex(),  false,      {}},
-    {InterfacePortType::UART1,   xSemaphoreCreateMutex(),  false,      {}},
-    {InterfacePortType::UART2,   xSemaphoreCreateMutex(),  false,      {}},
-    {InterfacePortType::UART3,   xSemaphoreCreateMutex(),  false,      {}},
-};
-
-InterfacePort kPorts[] = {
-//   name                          type                      yellow white
-    {InterfacePortName::PortA,     InterfacePortType::I2C,   32,    33},
-    {InterfacePortName::PortB1,    InterfacePortType::UART1, 35,    25},
-    {InterfacePortName::PortB2,    InterfacePortType::UART2, 36,    26},
-    {InterfacePortName::PortC1,    InterfacePortType::I2C,   14,    13},
-    {InterfacePortName::PortC2,    InterfacePortType::UART3, 17,    16},
-    {InterfacePortName::Internal,  InterfacePortType::I2C,   21,    22},
-    {InterfacePortName::Bluetooth, InterfacePortType::BLE,   -1,    -1},
+//   type                      Lock                      configured? connector
+    {InterfacePortType::Wire,   xSemaphoreCreateMutex(),  false,      {}},
+    {InterfacePortType::Wire1,                  nullptr,  false,      {}},
+    {InterfacePortType::In_I2C,                 nullptr,  false,      {}},
+    {InterfacePortType::UART,                   nullptr,  false,      {}},
+    {InterfacePortType::UART1,                  nullptr,  false,      {}},
+    {InterfacePortType::UART2,                  nullptr,  false,      {}},
+    {InterfacePortType::UART3,                  nullptr,  false,      {}},
 };
 
 InterfaceSensorMap kSensors[] = {
-//   sensor                 port                          led addr  clock     recur  avail? device name
-    {InterfaceSensor::Gaz,  InterfacePortName::PortA,      0, 0x26, 400000UL, 20000, false, "M5Stack Weight I2C Unit"},
-    {InterfaceSensor::Tank, InterfacePortName::PortA,      6, 0x57, 100000UL, 10000, false, "M5Stack Unit Ultrasonic I2C (RCWL-9600)"},
-    {InterfaceSensor::Gps,  InterfacePortName::PortC1,     2, 0x66, 400000UL, 30000, false, "DFRobot Gravity GNSS (DFR1103)"},
-    {InterfaceSensor::Lte,  InterfacePortName::PortB1,     1, 0x00, 115200UL, 10000, false, "M5Stack NB-IOT2"},
-    {InterfaceSensor::Lora, InterfacePortName::PortC2,     4, 0x00, 115200UL, 10000, false, "M5Stack C6L"},
-    {InterfaceSensor::Lin,  InterfacePortName::PortB2,     5, 0x00, 115200UL, 10000, false, "LIN Bus"},
-    {InterfaceSensor::Imu,  InterfacePortName::Internal,  -1, 0x68, 400000UL, 10000, false, "MPU6886 6-axis IMU"},
-    {InterfaceSensor::Rtc,  InterfacePortName::Internal,  -1, 0x51, 400000UL, 10000, false, "BM8563 RTC"},
-    {InterfaceSensor::Ina1, InterfacePortName::Internal,  -1, 0x40, 400000UL, 10000, false, "INA3221 3 channel voltage and current sensor"},
-    {InterfaceSensor::Ina2, InterfacePortName::Internal,  -1, 0x41, 400000UL, 10000, false, "INA3221 3 channel voltage and current sensor"},
-    {InterfaceSensor::Axp,  InterfacePortName::Internal,   3, 0x34, 400000UL, 10000, false, "AXP192 power management"},
-    {InterfaceSensor::Bat,  InterfacePortName::Bluetooth, -1, 0x00,      0UL, 10000, false, "Battery"},
-    {InterfaceSensor::Obd,  InterfacePortName::Bluetooth, -1, 0x00,      0UL, 10000, false, "OBD"},
+//   sensor                 port                          type                       yellow white led  addr  clock     recur  avail? map device name
+    {InterfaceSensor::Gaz,  InterfacePortName::PortA1,     InterfacePortType::Wire,   -1,    -1,    0,  0x26, 400000UL, 10000, false, nullptr, "M5Stack Weight I2C Unit"},
+    {InterfaceSensor::Tank, InterfacePortName::PortA2,     InterfacePortType::Wire,   -1,    -1,    6,  0x57, 100000UL, 15000, false, nullptr, "M5Stack Unit Ultrasonic I2C (RCWL-9600)"},
+    {InterfaceSensor::Gps,  InterfacePortName::PortC1,    InterfacePortType::Wire1,  -1,    -1,    2,  0x66, 400000UL, 30000, false, nullptr, "DFRobot Gravity GNSS (DFR1103)"},
+    {InterfaceSensor::Lte,  InterfacePortName::PortB1,    InterfacePortType::UART1,  -1,    -1,    1,  0x00, 115200UL, 10000, false, nullptr, "M5Stack NB-IOT2"},
+    {InterfaceSensor::Lora, InterfacePortName::PortC2,    InterfacePortType::UART3,  -1,    -1,    4,  0x00, 115200UL, 10000, false, nullptr, "M5Stack C6L"},
+    {InterfaceSensor::Lin,  InterfacePortName::PortB2,    InterfacePortType::UART2,  -1,    -1,    5,  0x00, 115200UL, 10000, false, nullptr, "LIN Bus"},
+    {InterfaceSensor::Imu,  InterfacePortName::Internal,  InterfacePortType::In_I2C, -1,    -1,   -1,  0x68, 400000UL, 10000, false, nullptr, "MPU6886 6-axis IMU"},
+    {InterfaceSensor::Rtc,  InterfacePortName::Internal,  InterfacePortType::In_I2C, -1,    -1,   -1,  0x51, 400000UL, 60000, false, nullptr, "BM8563 RTC"},
+    {InterfaceSensor::Ina1, InterfacePortName::Internal,  InterfacePortType::In_I2C, -1,    -1,   -1,  0x40, 400000UL, 60000, false, nullptr, "INA3221 3 channel voltage and current sensor"},
+    {InterfaceSensor::Ina2, InterfacePortName::Internal,  InterfacePortType::In_I2C, -1,    -1,   -1,  0x41, 400000UL, 60000, false, nullptr, "INA3221 3 channel voltage and current sensor"},
+    {InterfaceSensor::Axp,  InterfacePortName::Internal,  InterfacePortType::In_I2C, -1,    -1,    3,  0x34, 400000UL, 30000, false, nullptr, "AXP192 power management"},
+    {InterfaceSensor::Bat,  InterfacePortName::Bluetooth, InterfacePortType::BLE,    -1,    -1,   -1,  0x00,      0UL, 10000, false, nullptr, "Battery"},
+    {InterfaceSensor::Obd,  InterfacePortName::Bluetooth, InterfacePortType::BLE,    -1,    -1,   -1,  0x00,      0UL, 10000, false, nullptr, "OBD"},
 };
 
 // kSensor
-
-const InterfaceSensorMap* findSensorConst(const InterfaceSensor sensor)
-{
-    const size_t count = sizeof(kSensors) / sizeof(kSensors[0]);
-    for (size_t i = 0; i < count; ++i) {
-        if (kSensors[i].Sensor == sensor) {
-            return &kSensors[i];
-        }
-    }
-    return nullptr;
-}
 
 InterfaceSensorMap* findSensorMutable(const InterfaceSensor sensor)
 {
@@ -83,26 +61,9 @@ InterfaceSensorMap* findSensorMutable(const InterfaceSensor sensor)
     return nullptr;
 }
 
-// kPort
-
-const InterfacePort* findPort(const InterfacePortName name)
+const InterfaceSensorMap* findSensorConst(const InterfaceSensor sensor)
 {
-    const size_t count = sizeof(kPorts) / sizeof(kPorts[0]);
-    for (size_t i = 0; i < count; ++i) {
-        if (kPorts[i].Name == name) {
-            return &kPorts[i];
-        }
-    }
-    return nullptr;
-}
-
-const InterfacePort* findPort(const InterfaceSensor sensor)
-{
-    const InterfaceSensorMap* map = findSensorConst(sensor);
-    if (map == nullptr) {
-        return nullptr;
-    } 
-    return findPort(map->Port);
+    return findSensorMutable(sensor);
 }
 
 // kConnection
@@ -118,18 +79,13 @@ InterfacePortMap* findConnectionMutable(const InterfacePortType type)
     return nullptr;
 }
 
-const InterfacePortMap* findConnectionConst(const InterfacePortType type)
-{
-    return findConnectionMutable(type);
-}
-
 InterfacePortMap* findConnectionMutable(const InterfaceSensor sensor)
 {
-    const InterfacePort* port = findPort(sensor);
-    if (port == nullptr) {
+    const InterfaceSensorMap* map = findSensorMutable(sensor);
+    if (map == nullptr) {
         return nullptr;
     } 
-    return findConnectionMutable(port->Type);
+    return findConnectionMutable(map->Type);
 }
 
 InterfacePortMap* findConnectionConst(const InterfaceSensor sensor)
@@ -139,19 +95,19 @@ InterfacePortMap* findConnectionConst(const InterfaceSensor sensor)
 
 void publishConfiguration(const InterfaceSensor sensor)
 {
-    char addressBuf[8] = {0};
+    const InterfaceSensorMap* map = findSensorConst(sensor);
+
     char topicBuf[96] = {0};
     const char* topicTag = toString(sensor);
-    const uint8_t deviceAddress = getAddress(sensor);
 
-    snprintf(addressBuf, sizeof(addressBuf), "0x%02X", deviceAddress);
+    char addressBuf[8] = {0};
+    snprintf(addressBuf, sizeof(addressBuf), "0x%02X", map->I2cAddress);
 
     const String name = toString(sensor);
-    const String deviceName = getDeviceName(sensor);
 
-    const InterfacePort* port = findPort(sensor);
-    const InterfacePortType result = port ? port->Type : InterfacePortType::Unknown;
-    const String type = toString(result);
+    const String deviceName = map->DeviceName;
+
+    const String type = toString(map->Type);
 
     snprintf(topicBuf, sizeof(topicBuf), "smartfranklin/system/interface/%s/address", topicTag);
     sf_mqtt::publish(topicBuf, addressBuf, 1, true);
@@ -168,8 +124,13 @@ void publishConfiguration(const InterfaceSensor sensor)
 const char* toString(const InterfacePortType type)
 {
     switch (type) {
-    case InterfacePortType::I2C:          return "I2C";
+    case InterfacePortType::Wire:         return "I2C";
+    case InterfacePortType::Wire1:        return "I2C";
+    case InterfacePortType::In_I2C:       return "I2C";
     case InterfacePortType::UART:         return "UART";
+    case InterfacePortType::UART1:        return "UART";
+    case InterfacePortType::UART2:        return "UART";
+    case InterfacePortType::UART3:        return "UART";
     case InterfacePortType::BLE:          return "BLE";
     case InterfacePortType::Unused:       return "unused";
     default:                              return "unknown";
@@ -179,7 +140,8 @@ const char* toString(const InterfacePortType type)
 const char* toString(const InterfacePortName id)
 {
     switch (id) {
-    case InterfacePortName::PortA:      return "a";
+    case InterfacePortName::PortA1:     return "a1";
+    case InterfacePortName::PortA2:     return "a2";
     case InterfacePortName::PortB1:     return "b1";
     case InterfacePortName::PortB2:     return "b2";
     case InterfacePortName::PortC1:     return "c1";
@@ -232,13 +194,6 @@ const char* toString(const InterfaceSensor sensor, bool upper)
     }
 }
 
-// InterfacePortType getType(const InterfaceSensor sensor)
-// {
-//     const InterfacePort* port = findPort(sensor);
-//     const InterfacePortType result = port ? port->Type : InterfacePortType::Unknown;
-//     return result;
-// }
-
 const char* getDeviceName(const InterfaceSensor sensor)
 {
     const InterfaceSensorMap* iface = findSensorConst(sensor);
@@ -287,76 +242,87 @@ bool configure(const InterfaceSensor sensor)
 
     map->available = false;
 
+    switch (map->Port) {
+        case InterfacePortName::PortA1:
+            map->pinYellow = 32;
+            map->pinWhite = 33;
+            map->led = 0;
+            break;
+        case InterfacePortName::PortA2:
+            map->pinYellow = 32;
+            map->pinWhite = 33;
+            map->led = 6;
+            break;
+        case InterfacePortName::PortB1:
+            map->pinYellow = 35;
+            map->pinWhite = 25;
+            map->led = 1;
+            break;
+        case InterfacePortName::PortB2:
+            map->pinYellow = 36;
+            map->pinWhite = 26;
+            map->led = 5;
+            break;
+        case InterfacePortName::PortC1:
+            map->pinYellow = 14;
+            map->pinWhite = 13;
+            map->led = 2;
+            break;
+        case InterfacePortName::PortC2:
+            map->pinYellow = 17;
+            map->pinWhite = 16;
+            map->led = 4;
+            break;
+        case InterfacePortName::Internal:
+            map->pinYellow = 21;
+            map->pinWhite = 22;
+            map->led = 3;
+            break;
+        default:
+            map->pinYellow = -1;
+            map->pinWhite = -1;
+            map->led = -1;
+            break;
+    }
+
     InterfacePortMap* connection = findConnectionMutable(sensor);
 
     if (connection == nullptr) {
-        SF_LOGE("[IFACE] configure(%s) -> missing connection", toString(sensor));
+        SF_LOGE("[IFACE] configure(%s) -> connection %s not found", toString(sensor), toString(map->Type));
         return false;
     }
 
-    if (connection->Lock == nullptr) {
-        connection->Lock = xSemaphoreCreateMutex();
-        SF_LOGI("[IFACE] configure(%s) -> Lock is 0x%X", toString(sensor), connection->Lock);
-    }
+    map->portMap = connection;
 
-    if (connection->Type == InterfacePortType::I2C) {
-
-        TwoWire* bus = &Wire;
-        if (map->Port == InterfacePortName::Internal) {
-            bus = &Wire1;
-        }
-
-        connection->connector.ptr.twoWire = bus;
-        connection->configured = true;
-
-        if (!seize(sensor)) {
-            connection->connector.ptr.twoWire = nullptr;
+    switch(connection->Type) {
+        case InterfacePortType::Wire:
+            if (!connection->configured) {
+                if(Wire.begin(map->pinYellow, map->pinWhite, map->Clock)) {
+                    connection->connector.ptr.twoWire = &Wire;
+                    connection->configured = true;
+                }
+            }
+            break;
+        case InterfacePortType::Wire1:
+            if (!connection->configured) {
+                if(Wire1.begin(map->pinYellow, map->pinWhite, map->Clock)) {
+                    connection->connector.ptr.twoWire = &Wire1;
+                    connection->configured = true;
+                }
+            }
+            break;
+        case InterfacePortType::In_I2C:
+            connection->connector.ptr.inI2C = &m5::In_I2C;
+            connection->configured = true;
+            break;
+        case InterfacePortType::UART:
+            SF_LOGW("[IFACE] configure(%s) -> %s not yet implemented", toString(sensor), toString(connection->Type));
             connection->configured = false;
             return false;
-        }
-
-        bus->beginTransmission(map->I2cAddress);
-        const bool ack = bus->endTransmission() == 0;
-        map->available = ack;
-
-        release(sensor);
-
-    } else if (connection->Type == InterfacePortType::UART) {
-
-        HardwareSerial* serial = nullptr;
-        if (map->Port == InterfacePortName::PortB1) {
-            serial = &Serial1;
-        } else {
-            serial = &Serial2;
-        }
-
-        const InterfacePort* port = findPort(sensor);
-
-        const int8_t rx = port->pinYellow;
-        const int8_t tx = port->pinWhite;
-        const uint32_t baud = map->Clock;
-
-        if (rx < 0 || tx < 0 || baud == 0U) {
-            SF_LOGE("[IFACE] configure(%s) -> missing UART pins/baud", toString(sensor));
+        default:
+            SF_LOGW("[IFACE] configure(%s) -> %s not yet implemented", toString(sensor), toString(connection->Type));
+            connection->configured = false;
             return false;
-        }
-
-        serial->begin(baud, SERIAL_8N1, rx, tx);
-        connection->connector.ptr.hardwareSerial = serial;
-        connection->configured = true;
-
-        const bool ok = connection->connector.ptr.hardwareSerial != nullptr;
-        map->available = ok;
-
-    } else {
-        SF_LOGW("[IFACE] configure(%s) -> %s not yet implemented", toString(sensor), toString(connection->Type));
-    }
-
-    if (!map->available) {
-        SF_LOGW("[IFACE] configure(%s) -> sensor not available", toString(sensor));
-        return false;
-    } else {
-        SF_LOGI("[IFACE] configure(%s) -> sensor ready", toString(sensor));
     }
 
     publishConfiguration(sensor);
@@ -391,11 +357,21 @@ bool isAvailable(const InterfaceSensor sensor)
     return map->available;
 }
 
+void setAvailable(const InterfaceSensor sensor)
+{
+    InterfaceSensorMap* map = findSensorMutable(sensor);
+    if (map == nullptr) {
+        SF_LOGW("[IFACE] configured(%s) -> sensor not found", toString(sensor));
+    } else {
+        map->available = true;
+    }
+}
+
 const InterfaceConnector getConnector(const InterfaceSensor sensor)
 {
     const InterfacePortMap* map = findConnectionConst(sensor);
     if (map == nullptr) {
-        SF_LOGW("[IFACE] getPort(%s) -> sensor not found", toString(sensor));
+        SF_LOGW("[IFACE] getConnector(%s) -> connection not found", toString(sensor));
         return InterfaceConnector{};
     }
     return map->connector;
@@ -403,51 +379,23 @@ const InterfaceConnector getConnector(const InterfaceSensor sensor)
 
 bool seize(InterfaceSensor sensor) 
 {
-    InterfacePortMap* connection = findConnectionMutable(sensor);
-    if (connection == nullptr) {
-        SF_LOGW("[IFACE] seize(%s) -> connector not found", toString(sensor));
+    const InterfaceSensorMap* map = findSensorConst(sensor);
+    if (map->portMap == nullptr) {
+        SF_LOGE("[IFACE] seize(%s) -> sensor not configured", toString(sensor));
         return false;
     }
     
-    if (!connection->configured) {
-        SF_LOGW("[IFACE] seize(%s) -> port %s not configured", toString(sensor), toString(connection->Type));
-        return false;
-    }
-
-    if (connection->Lock == nullptr) {
-        SF_LOGE("[IFACE] seize(%s) -> missing lock", toString(sensor));
-        return false;
-    }
-
-    if (!xSemaphoreTake(connection->Lock, pdMS_TO_TICKS(500))) {
-        SF_LOGI("[IFACE] seized(0x%X) -> failed", connection->Lock);
-        return false;
-    }
-
-    if (connection->Type == InterfacePortType::I2C) {
-        const InterfacePort* port = findPort(sensor);
-        const int8_t white = port->pinWhite;   // SCL
-        const int8_t yellow = port->pinYellow; // SDA
-        
-        const InterfaceSensorMap* map = findSensorConst(sensor);
-        const uint32_t clockHz = map->Clock;
-
-        TwoWire* bus = connection->connector.ptr.twoWire;
-        if (bus == nullptr) {
-            SF_LOGE("[IFACE] seize(%s) -> no connector", toString(connection->Type));
-            release(sensor);
+    if (map->portMap->Lock != nullptr) {
+        if (!xSemaphoreTake(map->portMap->Lock, pdMS_TO_TICKS(500))) {
+            SF_LOGE("[IFACE] seized(0x%X) -> failed", map->portMap->Lock);
             return false;
         }
+    }
 
-        bus->end();
-
-        if (!bus->begin(yellow, white, clockHz)) {
-            SF_LOGE("[IFACE] seize(%s) -> begin failed", toString(connection->Type));
-            release(sensor);
-            return false;
+    if (map->Type == InterfacePortType::Wire || map->Type == InterfacePortType::Wire1) {
+        if (map->portMap->connector.ptr.twoWire->getClock() != map->Clock) {
+            map->portMap->connector.ptr.twoWire->setClock(map->Clock);
         }
-
-        bus->setTimeOut(50);
     }
 
     return true;
@@ -455,18 +403,15 @@ bool seize(InterfaceSensor sensor)
 
 void release(InterfaceSensor sensor) 
 {
-    InterfacePortMap* connection = findConnectionMutable(sensor);
-    if (connection == nullptr) {
-        SF_LOGW("[IFACE] release(%s) -> connection not found", toString(sensor));
+    const InterfaceSensorMap* map = findSensorConst(sensor);
+    if (map == nullptr) {
+        SF_LOGW("[IFACE] release(%s) -> sensor not found", toString(sensor));
         return;
     }
     
-    if (connection->Lock == nullptr) {
-        SF_LOGW("[IFACE] release(port=%s) -> missing lock", toString(connection->Type));
-        return;
+    if (map->portMap->Lock != nullptr) {
+        xSemaphoreGive(map->portMap->Lock);
     }
-
-    xSemaphoreGive(connection->Lock);
 }
 
 }  // namespace sf_interfaces

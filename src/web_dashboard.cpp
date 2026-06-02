@@ -183,6 +183,28 @@ static void fillDataJson(JsonVariant doc)
     doc["axp_charging"] = DATA.axp_charging;
     doc["axp_temperature"] = DATA.axp_temperature;
 
+    doc["ina1_online"] = DATA.ina1_online;
+    doc["ina2_online"] = DATA.ina2_online;
+    doc["ina1_bus_voltage_ch1_v"] = DATA.ina1_bus_voltage_ch1_v;
+    doc["ina1_bus_voltage_ch2_v"] = DATA.ina1_bus_voltage_ch2_v;
+    doc["ina1_bus_voltage_ch3_v"] = DATA.ina1_bus_voltage_ch3_v;
+    doc["ina1_shunt_voltage_ch1_mv"] = DATA.ina1_shunt_voltage_ch1_mv;
+    doc["ina1_shunt_voltage_ch2_mv"] = DATA.ina1_shunt_voltage_ch2_mv;
+    doc["ina1_shunt_voltage_ch3_mv"] = DATA.ina1_shunt_voltage_ch3_mv;
+    doc["ina1_current_ch1_a"] = DATA.ina1_current_ch1_a;
+    doc["ina1_current_ch2_a"] = DATA.ina1_current_ch2_a;
+    doc["ina1_current_ch3_a"] = DATA.ina1_current_ch3_a;
+
+    doc["ina2_bus_voltage_ch1_v"] = DATA.ina2_bus_voltage_ch1_v;
+    doc["ina2_bus_voltage_ch2_v"] = DATA.ina2_bus_voltage_ch2_v;
+    doc["ina2_bus_voltage_ch3_v"] = DATA.ina2_bus_voltage_ch3_v;
+    doc["ina2_shunt_voltage_ch1_mv"] = DATA.ina2_shunt_voltage_ch1_mv;
+    doc["ina2_shunt_voltage_ch2_mv"] = DATA.ina2_shunt_voltage_ch2_mv;
+    doc["ina2_shunt_voltage_ch3_mv"] = DATA.ina2_shunt_voltage_ch3_mv;
+    doc["ina2_current_ch1_a"] = DATA.ina2_current_ch1_a;
+    doc["ina2_current_ch2_a"] = DATA.ina2_current_ch2_a;
+    doc["ina2_current_ch3_a"] = DATA.ina2_current_ch3_a;
+
     // Backward-compatible aliases used by legacy web pages.
     doc["imu_pitch_deg"] = DATA.level_pitch_deg;
     doc["imu_roll_deg"] = DATA.level_roll_deg;

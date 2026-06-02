@@ -38,9 +38,7 @@ bool Tank::init()
 
     m_initialized = false;
 
-    const bool configured = sf_interfaces::configured(m_sensor);
-
-    if (!configured) {
+    if (!sf_interfaces::configured(m_sensor)) {
         if (!sf_interfaces::configure(m_sensor)) {
             SF_LOGW("[%s] configure failed", m_tag);
             HMI::setLed(m_sensor, PortStatus::Error);
@@ -62,14 +60,13 @@ bool Tank::init()
     }
 
     m_units.add(m_unit, *connector);
-
-    const bool ok = m_units.begin();
-    if (!ok) {
+    if (!m_units.begin()) {
         SF_LOGW("[%s] %s m_unit not started", m_tag, m_device);
         HMI::setLed(m_sensor, PortStatus::Error);
         release(m_sensor);
         return false;
     } else {
+        sf_interfaces::setAvailable(m_sensor);
         SF_LOGI("[%s] %s m_unit started", m_tag, m_device);
     }
 
@@ -106,6 +103,7 @@ bool Tank::process()
     if (!m_unit.updated()) {
         release(m_sensor);
         HMI::setLed(m_sensor, PortStatus::NoData);
+        SF_LOGI("[%s] no data", m_tag);
         return false;
     }
 

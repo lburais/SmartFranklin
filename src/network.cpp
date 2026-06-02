@@ -242,6 +242,11 @@ void taskWiFi(void *pv)
             }
         }
 
+        UBaseType_t heap = uxTaskGetStackHighWaterMark(NULL);
+        if ( heap < 1000) {
+            SF_LOGW("[WIFI] Stack: %d", heap);
+        }
+
         if (WIFI_TASK.isInitialized()) {
             WIFI_TASK.process();
         }
