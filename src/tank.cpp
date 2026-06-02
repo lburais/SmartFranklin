@@ -41,7 +41,6 @@ bool Tank::init()
     if (!sf_interfaces::configured(m_sensor)) {
         if (!sf_interfaces::configure(m_sensor)) {
             SF_LOGW("[%s] configure failed", m_tag);
-            HMI::setLed(m_sensor, PortStatus::Error);
             return false;
         }
     }
@@ -54,8 +53,6 @@ bool Tank::init()
     }
 
     if (!seize(m_sensor)) {
-        SF_LOGW("[%s] unable to lock port", m_tag);
-        HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
@@ -75,7 +72,7 @@ bool Tank::init()
 
     release(m_sensor);
 
-    SF_LOGI("[%s] (0x%02X) initialized", m_tag, sf_interfaces::getAddress(m_sensor));
+    SF_LOGI("[%s] (0x%02X) %s initialized", m_tag, m_device, sf_interfaces::getAddress(m_sensor));
     return true;
 }
 
@@ -85,16 +82,13 @@ bool Tank::process()
     int32_t fillPct = 0;
 
     if (!m_initialized) {
+        SF_LOGI("[%s] initialization required", m_tag);
         if (!init()) {
-            SF_LOGW("[%s] not configured", m_tag);
-            HMI::setLed(m_sensor, PortStatus::Error);
             return false;
         }
     }
 
     if (!seize(m_sensor)) {
-        SF_LOGW("[%s] unable to lock port", m_tag);
-        HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
@@ -151,7 +145,7 @@ bool Tank::process()
     snprintf(pctBuf, sizeof(pctBuf), "%d", fillPct);
     sf_mqtt::publish("smartfranklin/tank/fill", pctBuf, 1, true);
 
-    SF_LOGI("[%s] Raw: %.2f cm    Distance: %d mm     Fill level: %d%%", m_tag, rawDistanceMm, distanceMm, fillPct);
+    SF_LOGI("[%s] Raw: %.2f mm    Distance: %d mm     Fill level: %d%%", m_tag, rawDistanceMm, distanceMm, fillPct);
 
     HMI::setLed(m_sensor, PortStatus::Ok);
 

@@ -9,6 +9,7 @@
 
 #include "mqtt.h"
 #include "log.h"
+#include "hmi.h"
 
 #include <M5Unified.h>
 #include <HardwareSerial.h>
@@ -289,6 +290,7 @@ bool configure(const InterfaceSensor sensor)
 
     if (connection == nullptr) {
         SF_LOGE("[IFACE] configure(%s) -> connection %s not found", toString(sensor), toString(map->Type));
+        HMI::setLed(sensor, PortStatus::Error);
         return false;
     }
 
@@ -317,10 +319,12 @@ bool configure(const InterfaceSensor sensor)
             break;
         case InterfacePortType::UART:
             SF_LOGW("[IFACE] configure(%s) -> %s not yet implemented", toString(sensor), toString(connection->Type));
+            HMI::setLed(sensor, PortStatus::Unset);
             connection->configured = false;
             return false;
         default:
             SF_LOGW("[IFACE] configure(%s) -> %s not yet implemented", toString(sensor), toString(connection->Type));
+            HMI::setLed(sensor, PortStatus::Unset);
             connection->configured = false;
             return false;
     }
@@ -340,6 +344,7 @@ bool configured(const InterfaceSensor sensor)
 
     if (!map->configured) {
         SF_LOGW("[IFACE] configured(%s) -> port %s not configured", toString(sensor), toString(map->Type));
+        HMI::setLed(sensor, PortStatus::Error);
         return false;
     }
 
@@ -372,6 +377,7 @@ const InterfaceConnector getConnector(const InterfaceSensor sensor)
     const InterfacePortMap* map = findConnectionConst(sensor);
     if (map == nullptr) {
         SF_LOGW("[IFACE] getConnector(%s) -> connection not found", toString(sensor));
+        HMI::setLed(sensor, PortStatus::Error);
         return InterfaceConnector{};
     }
     return map->connector;
@@ -382,12 +388,14 @@ bool seize(InterfaceSensor sensor)
     const InterfaceSensorMap* map = findSensorConst(sensor);
     if (map->portMap == nullptr) {
         SF_LOGE("[IFACE] seize(%s) -> sensor not configured", toString(sensor));
+        HMI::setLed(sensor, PortStatus::Error);
         return false;
     }
     
     if (map->portMap->Lock != nullptr) {
         if (!xSemaphoreTake(map->portMap->Lock, pdMS_TO_TICKS(500))) {
-            SF_LOGE("[IFACE] seized(0x%X) -> failed", map->portMap->Lock);
+            SF_LOGE("[IFACE] seized(%s) -> failed", toString(sensor));
+            HMI::setLed(sensor, PortStatus::Error);
             return false;
         }
     }
@@ -406,6 +414,7 @@ void release(InterfaceSensor sensor)
     const InterfaceSensorMap* map = findSensorConst(sensor);
     if (map == nullptr) {
         SF_LOGW("[IFACE] release(%s) -> sensor not found", toString(sensor));
+        HMI::setLed(sensor, PortStatus::Error);
         return;
     }
     

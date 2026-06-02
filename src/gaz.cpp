@@ -201,7 +201,7 @@ bool Gaz::init()
 
     release(m_sensor);
 
-    SF_LOGI("[%s] (0x%02X) initialized", m_tag, sf_interfaces::getAddress(m_sensor));
+    SF_LOGI("[%s] (0x%02X) %s initialized", m_tag, m_device, sf_interfaces::getAddress(m_sensor));
 
     return true;
 }
@@ -214,24 +214,20 @@ bool Gaz::process()
     if (!m_initialized) {
         SF_LOGI("[%s] initialization required", m_tag);
         if (!init()) {
-            SF_LOGW("[%s] not initialized", m_tag);
-            HMI::setLed(m_sensor, PortStatus::Error);
             return false;
         }
     }
 
     if (!seize(m_sensor)) {
-        SF_LOGW("[%s] unable to lock port", m_tag);
-        HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
     m_units.update();
 
     if (!m_unit.updated()) {
-        HMI::setLed(m_sensor, PortStatus::NoData);
         release(m_sensor);
         SF_LOGI("[%s] no data", m_tag);
+        HMI::setLed(m_sensor, PortStatus::NoData);
         return false;
     }
 
