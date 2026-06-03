@@ -137,7 +137,6 @@ void taskI2c(void* pv)
             if (!slot.isInitialized()) {
                 if (isDue(nowMs, slot.nextInitAttemptMs)) {
                     if (!slot.init()) {
-                        SF_LOGW("[I2C][%s] Init failed", slot.name);
                         slot.nextInitAttemptMs = nowMs + sf_interfaces::kInterfaceInitRetryMs;
                     } else {
                         slot.nextProcessMs = nowMs;

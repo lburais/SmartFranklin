@@ -201,7 +201,7 @@ bool Gaz::init()
 
     release(m_sensor);
 
-    SF_LOGI("[%s] (0x%02X) %s initialized", m_tag, m_device, sf_interfaces::getAddress(m_sensor));
+    SF_LOGI("[%s] (0x%02X) %s initialized", m_tag, sf_interfaces::getAddress(m_sensor), m_device);
 
     return true;
 }

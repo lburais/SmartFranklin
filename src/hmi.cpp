@@ -192,8 +192,13 @@ void HMI::setLed(const sf_interfaces::InterfaceSensor sensor, const PortStatus s
         return;
     }
 
-    const size_t index = sf_interfaces::getLed(sensor);
-    if (index == -1) {
+    const int8_t led = sf_interfaces::getLed(sensor);
+    if (led < 0) {
+        return;
+    }
+
+    const size_t index = static_cast<size_t>(led);
+    if (index >= kBoardLedCount) {
         return;
     }
 

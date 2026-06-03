@@ -386,6 +386,12 @@ const InterfaceConnector getConnector(const InterfaceSensor sensor)
 bool seize(InterfaceSensor sensor) 
 {
     const InterfaceSensorMap* map = findSensorConst(sensor);
+    if (map == nullptr) {
+        SF_LOGE("[IFACE] seize(%s) -> sensor not found", toString(sensor));
+        HMI::setLed(sensor, PortStatus::Error);
+        return false;
+    }
+
     if (map->portMap == nullptr) {
         SF_LOGE("[IFACE] seize(%s) -> sensor not configured", toString(sensor));
         HMI::setLed(sensor, PortStatus::Error);
@@ -414,6 +420,12 @@ void release(InterfaceSensor sensor)
     const InterfaceSensorMap* map = findSensorConst(sensor);
     if (map == nullptr) {
         SF_LOGW("[IFACE] release(%s) -> sensor not found", toString(sensor));
+        HMI::setLed(sensor, PortStatus::Error);
+        return;
+    }
+
+    if (map->portMap == nullptr) {
+        SF_LOGW("[IFACE] release(%s) -> sensor not configured", toString(sensor));
         HMI::setLed(sensor, PortStatus::Error);
         return;
     }
