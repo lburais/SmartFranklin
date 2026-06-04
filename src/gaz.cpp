@@ -11,12 +11,6 @@
 
 #include "gaz.h"
 
-#include <M5Unified.h>
-#include <M5UnitUnified.h>
-#include <M5UnitUnifiedWEIGHT.h>
-#include <M5Utility.h>
-#include <Wire.h>
-
 #include <cmath>
 #include <cstdio>
 #include <mutex>
@@ -59,36 +53,30 @@ bool Gaz::calibrate(float weightG)
     }
 
     if (!seize(m_sensor)) {
-        SF_LOGW("[%s] unable to lock port", m_tag);
-        HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
-    int32_t raw = 0;
-    bool ok = m_unit.readRawADC (raw);
+    int32_t raw = m_unit.getRawADC();
+    const float factor = raw / weightG;
+    bool ok = false;
 
-    release(m_sensor);
-
-    if (!ok) {
+    if (raw == 0) {
         SF_LOGE("[%s] unable to readADC", m_tag);
         HMI::setLed(m_sensor, PortStatus::Error);
-        return false;
-    }
+    } else {
+        m_unit.setGapValue(factor);
+        if (m_unit.getGapValue() != factor) {
+            SF_LOGW("[%s] failed to reset calibration gap during calibrate", m_tag);
+            HMI::setLed(m_sensor, PortStatus::Error);
+        } else {
+            ok = true;
+        }
 
-    if (!seize(m_sensor)) {
-        SF_LOGW("[%s] unable to lock port", m_tag);
-        HMI::setLed(m_sensor, PortStatus::Error);
-        return false;
     }
-
-    const float factor = raw / weightG;
-    ok = m_unit.writeGap(factor);
 
     release(m_sensor);
 
     if (!ok) {
-        SF_LOGW("[%s] failed to reset calibration gap during calibrate", m_tag);
-        HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
@@ -109,18 +97,12 @@ bool Gaz::tare()
     }
 
     if (!seize(m_sensor)) {
-        SF_LOGW("[%s] unable to lock port", m_tag);
-        HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
-    bool ok = m_unit.resetOffset();
+    m_unit.setOffset();
 
     release(m_sensor);
-
-    if (!ok) {
-        return false;
-    }
 
     {
         std::lock_guard<std::mutex> lock(DATA_MUTEX);
@@ -145,65 +127,58 @@ bool Gaz::isInitialized() const
 
 bool Gaz::init()
 {
+    SF_LOGI("[%s] initializing...", m_tag);
+
     m_initialized        = false;
 
     if (!sf_interfaces::configured(m_sensor)) {
-        SF_LOGW("[%s] configuration required", m_tag);
         if (!sf_interfaces::configure(m_sensor)) {
-            SF_LOGW("[%s] configuration failed", m_tag);
-            HMI::setLed(m_sensor, PortStatus::Error);
             return false;
         }
     }
 
     TwoWire* connector = sf_interfaces::getConnector(m_sensor).ptr.twoWire;
     if (connector == nullptr) {
-        SF_LOGW("[%s] connector unavailable", m_tag);
-        HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
     if (!seize(m_sensor)) {
-        SF_LOGW("[%s] unable to lock port", m_tag);
-        HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
-    
-    m_units.add(m_unit, *connector);
 
-    bool ok = m_units.begin();
+    bool ok = m_unit.begin( connector,
+                            sf_interfaces::getSda(m_sensor),
+                            sf_interfaces::getScl(m_sensor),
+                            sf_interfaces::getAddress(m_sensor),
+                            sf_interfaces::getClock(m_sensor) 
+                          );
 
     if (!ok) {
-        SF_LOGW("[%s] %s m_unit not started", m_tag, m_device);
+        SF_LOGE("[%s] failed to start %s", m_tag, sf_interfaces::getDeviceName(m_sensor));
         HMI::setLed(m_sensor, PortStatus::Error);
-        release(m_sensor);
-        return false;
     } else {
-        sf_interfaces::setAvailable(m_sensor);
-        SF_LOGI("[%s] %s m_unit started", m_tag, m_device);
+        SF_LOGI("[%s] %s started", m_tag, sf_interfaces::getDeviceName(m_sensor));
+        float effectiveGap = CONFIG.gaz_calibration_factor;
+        if (!std::isfinite(effectiveGap) || effectiveGap == 0.0f) {
+            effectiveGap = 1.0f;
+        }
+
+        m_unit.setGapValue(effectiveGap);
+        ok = (m_unit.getGapValue() == effectiveGap);
+        if (!ok) {
+            SF_LOGW("[%s] failed to apply calibration gap %.6f during init", m_tag, effectiveGap);
+            HMI::setLed(m_sensor, PortStatus::Error);
+        } else {
+            SF_LOGI("[%s] (0x%02X) %s initialized", m_tag, sf_interfaces::getAddress(m_sensor), sf_interfaces::getDeviceName(m_sensor));
+            m_initialized = true;
+            HMI::setLed(m_sensor, PortStatus::Initialized);
+        }
+
     }
-
-    float effectiveGap = CONFIG.gaz_calibration_factor;
-    if (!std::isfinite(effectiveGap) || effectiveGap == 0.0f) {
-        effectiveGap = 1.0f;
-    }
-
-    if (!m_unit.writeGap(effectiveGap)) {
-        SF_LOGW("[%s] failed to apply calibration gap %.6f during init", m_tag, effectiveGap);
-        HMI::setLed(m_sensor, PortStatus::Error);
-    }
-
-    CONFIG.gaz_calibration_factor = effectiveGap;
-    config_save();
-
-    m_initialized = true;
-    HMI::setLed(m_sensor, PortStatus::Initialized);
-
+    
     release(m_sensor);
 
-    SF_LOGI("[%s] (0x%02X) %s initialized", m_tag, sf_interfaces::getAddress(m_sensor), m_device);
-
-    return true;
+    return ok;
 }
 
 bool Gaz::process()
@@ -212,7 +187,6 @@ bool Gaz::process()
     int32_t fillPct        = 0;
 
     if (!m_initialized) {
-        SF_LOGI("[%s] initialization required", m_tag);
         if (!init()) {
             return false;
         }
@@ -222,16 +196,7 @@ bool Gaz::process()
         return false;
     }
 
-    m_units.update();
-
-    if (!m_unit.updated()) {
-        release(m_sensor);
-        SF_LOGI("[%s] no data", m_tag);
-        HMI::setLed(m_sensor, PortStatus::NoData);
-        return false;
-    }
-
-    const float rawWeight = m_unit.weight();
+    const float rawWeight = m_unit.getWeight();
 
     release(m_sensor);
 

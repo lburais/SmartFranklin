@@ -123,7 +123,7 @@ void taskI2c(void* pv)
             inaIsInitialized, inaInit, inaProcess, 0U, 0U},
     };
 
-    sf_interfaces::configure_all_sensors();
+    //sf_interfaces::configure_all_sensors();
 
     for (;;) {
         const uint32_t nowMs = millis();

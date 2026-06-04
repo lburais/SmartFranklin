@@ -114,8 +114,6 @@
  */
 
 #include <Arduino.h>
-#include <M5Unified.h>
-#include <M5Utility.h>
 #include <sMQTTBroker.h>
 
 #include "tasks.h"

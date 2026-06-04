@@ -10,9 +10,6 @@
 
 #include "tank.h"
 
-#include <M5Unified.h>
-#include <Wire.h>
-
 #include <cmath>
 #include <cstdio>
 #include <cstdint>
@@ -34,21 +31,18 @@ bool Tank::isInitialized() const
 
 bool Tank::init()
 {
-    SF_LOGI("[%s] init", m_tag);
+    SF_LOGI("[%s] initializing...", m_tag);
 
-    m_initialized = false;
+    m_initialized        = false;
 
     if (!sf_interfaces::configured(m_sensor)) {
         if (!sf_interfaces::configure(m_sensor)) {
-            SF_LOGW("[%s] configure failed", m_tag);
             return false;
         }
     }
 
     TwoWire* connector = sf_interfaces::getConnector(m_sensor).ptr.twoWire;
     if (connector == nullptr) {
-        SF_LOGW("[%s] connector unavailable", m_tag);
-        HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
@@ -56,23 +50,22 @@ bool Tank::init()
         return false;
     }
 
-    m_units.add(m_unit, *connector);
-    if (!m_units.begin()) {
-        SF_LOGW("[%s] %s m_unit not started", m_tag, m_device);
-        HMI::setLed(m_sensor, PortStatus::Error);
-        release(m_sensor);
-        return false;
-    } else {
-        sf_interfaces::setAvailable(m_sensor);
-        SF_LOGI("[%s] %s m_unit started", m_tag, m_device);
-    }
+    m_unit.begin( connector,
+                  sf_interfaces::getAddress(m_sensor),
+                  sf_interfaces::getSda(m_sensor),
+                  sf_interfaces::getScl(m_sensor),
+                  sf_interfaces::getClock(m_sensor) 
+                );
+
+    SF_LOGI("[%s] %s started", m_tag, sf_interfaces::getDeviceName(m_sensor));
+
+    SF_LOGI("[%s] (0x%02X) %s initialized", m_tag, sf_interfaces::getAddress(m_sensor), sf_interfaces::getDeviceName(m_sensor));
 
     m_initialized = true;
     HMI::setLed(m_sensor, PortStatus::Initialized);
 
     release(m_sensor);
 
-    SF_LOGI("[%s] (0x%02X) %s initialized", m_tag, sf_interfaces::getAddress(m_sensor), m_device);
     return true;
 }
 
@@ -82,7 +75,6 @@ bool Tank::process()
     int32_t fillPct = 0;
 
     if (!m_initialized) {
-        SF_LOGI("[%s] initialization required", m_tag);
         if (!init()) {
             return false;
         }
@@ -92,16 +84,7 @@ bool Tank::process()
         return false;
     }
 
-    m_units.update();
-
-    if (!m_unit.updated()) {
-        release(m_sensor);
-        HMI::setLed(m_sensor, PortStatus::NoData);
-        SF_LOGI("[%s] no data", m_tag);
-        return false;
-    }
-
-    const float rawDistanceMm = m_unit.distance();
+    const float rawDistanceMm = m_unit.getDistance();
 
     release(m_sensor);
 

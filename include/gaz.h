@@ -11,8 +11,7 @@
 #pragma once
 
 #include <Arduino.h>
-#include <M5UnitUnified.h>
-#include <M5UnitUnifiedWEIGHT.h>
+#include <M5UnitWeightI2C.h>
 
 #include <mutex>
 
@@ -28,18 +27,16 @@ public:
     bool calibrate(float weightG);
 
 private:
+	const sf_interfaces::InterfaceSensor m_sensor = sf_interfaces::InterfaceSensor::Gaz;
+    const char* const                    m_tag = sf_interfaces::toString(m_sensor, true);
+
     mutable std::mutex m_mutex;
 
-    m5::unit::UnitUnified    m_units;
-    m5::unit::UnitWeightI2C  m_unit;
+    M5UnitWeightI2C m_unit;
 
     bool    m_initialized             = false;
     bool    m_calibration_in_progress = false;
     
-	const sf_interfaces::InterfaceSensor m_sensor = sf_interfaces::InterfaceSensor::Gaz;
-    const char* const m_tag = sf_interfaces::toString(m_sensor, true);
-    const char* const m_device = sf_interfaces::getDeviceName(m_sensor);
-
     static constexpr int32_t  GAZ_BOTTLE_FULL_G  = 6450;
     static constexpr int32_t  GAZ_BOTTLE_EMPTY_G = 3700;
 

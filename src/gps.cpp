@@ -11,10 +11,6 @@
 
 #include "gps.h"
 
-#include <M5Unified.h>
-#include <M5Utility.h>
-#include <Wire.h>
-
 #include <cmath>
 #include <cstdio>
 #include <cstdint>
@@ -45,15 +41,13 @@ GPS GPS_TASK;
 
 bool GPS::writeRegister(const uint8_t reg, const uint8_t value) const
 {
-    const sf_interfaces::InterfaceConnector connection = sf_interfaces::getConnector(m_sensor);
-
-    TwoWire* connector = connection.ptr.twoWire;
+    TwoWire* connector = sf_interfaces::getConnector(m_sensor).ptr.twoWire;
     if (connector == nullptr) {
         HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
-    connector->beginTransmission(m_i2cAddress);
+    connector->beginTransmission(sf_interfaces::getAddress(m_sensor));
     connector->write(reg);
     connector->write(value);
     bool ok = connector->endTransmission() == 0;
@@ -67,21 +61,19 @@ bool GPS::readRegisters(const uint8_t reg, uint8_t* out, const size_t len) const
         return false;
     }
 
-    const sf_interfaces::InterfaceConnector connection = sf_interfaces::getConnector(m_sensor);
-
-    TwoWire* connector = connection.ptr.twoWire;
+    TwoWire* connector = sf_interfaces::getConnector(m_sensor).ptr.twoWire;
     if (connector == nullptr) {
         HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
-    connector->beginTransmission(m_i2cAddress);
+    connector->beginTransmission(sf_interfaces::getAddress(m_sensor));
     connector->write(reg);
     if (connector->endTransmission(false) != 0) {
         return false;
     }
 
-    const size_t readCount = connector->requestFrom(m_i2cAddress, static_cast<uint8_t>(len));
+    const size_t readCount = connector->requestFrom(sf_interfaces::getAddress(m_sensor), static_cast<uint8_t>(len));
     if (readCount < len) {
         return false;
     }
@@ -180,42 +172,42 @@ bool GPS::isInitialized() const
 
 bool GPS::init()
 {
-    SF_LOGI("[%s] init", m_tag);
+    SF_LOGI("[%s] initializing...", m_tag);
 
     m_initialized        = false;
 
     if (!sf_interfaces::configured(m_sensor)) {
-        SF_LOGW("[%s] configuration required", m_tag);
         if (!sf_interfaces::configure(m_sensor)) {
-            SF_LOGW("[%s] configuration failed", m_tag);
-            HMI::setLed(m_sensor, PortStatus::Error);
             return false;
         }
     }
 
+    TwoWire* connector = sf_interfaces::getConnector(m_sensor).ptr.twoWire;
+    if (connector == nullptr) {
+        return false;
+    }
+
     if (!seize(m_sensor)) {
-        SF_LOGW("[%s] unable to lock port", m_tag);
-        HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
     uint8_t probe = 0;
-    if (!readRegisters(REG_USE_STAR, &probe, 1U)) {
+    bool ok = readRegisters(REG_USE_STAR, &probe, 1U);
+
+    if (!ok) {
         SF_LOGE("[%s] cannot read register 0x%02X", m_tag, REG_USE_STAR);
-        release(m_sensor);
-        return false;
+        HMI::setLed(m_sensor, PortStatus::Error);
+    } else {
+        // 0x07 = GPS + BeiDou + GLONASS in DFRobot firmware.
+        static_cast<void>(writeRegister(34U, 0x07));
+        m_initialized = true;
+        HMI::setLed(m_sensor, PortStatus::Initialized);
+        SF_LOGI("[%s] (0x%02X) %s initialized", m_tag, sf_interfaces::getAddress(m_sensor), sf_interfaces::getDeviceName(m_sensor));
     }
-
-    // 0x07 = GPS + BeiDou + GLONASS in DFRobot firmware.
-    static_cast<void>(writeRegister(34U, 0x07));
-
-    m_initialized = true;
-
-    SF_LOGI("[%s] (0x%02X) initialized", m_tag, sf_interfaces::getAddress(m_sensor));
 
     release(m_sensor);
 
-    return true;
+    return ok;
 }
 
 bool GPS::process()
@@ -225,84 +217,79 @@ bool GPS::process()
 
     if (!m_initialized) {
         if (!init()) {
-            SF_LOGW("[%s] not configured", m_tag);
-            HMI::setLed(m_sensor, PortStatus::Error);
             return false;
         }
     }
 
-    SF_LOGI("[%s] processing...", m_tag);
-
     if (!seize(m_sensor)) {
-        SF_LOGW("[%s] unable to lock port", m_tag);
-        HMI::setLed(m_sensor, PortStatus::Error);
         return false;
     }
 
-    if (!readPoseAndTimeLocked()) {
-        SF_LOGW("[%s] sample read failed", m_tag);
-        HMI::setLed(m_sensor, PortStatus::NoData);
-        release(m_sensor);
-        return false;
-    }    
-
-    snprintf(dateBuf, sizeof(dateBuf), "%04u-%02u-%02u",
-             static_cast<unsigned>(m_year),
-             static_cast<unsigned>(m_month),
-             static_cast<unsigned>(m_day));
-    snprintf(utcBuf, sizeof(utcBuf), "%02u:%02u:%02u",
-             static_cast<unsigned>(m_hour),
-             static_cast<unsigned>(m_minute),
-             static_cast<unsigned>(m_second));
-
-    {
-        std::lock_guard<std::mutex> dataLock(DATA_MUTEX);
-        DATA.gps_has_fix = m_hasFix;
-        DATA.gps_latitude_deg = m_latitudeDeg;
-        DATA.gps_longitude_deg = m_longitudeDeg;
-        DATA.gps_altitude_m = m_altitudeM;
-        DATA.gps_speed_knots = m_speedKnots;
-        DATA.gps_course_deg = m_courseDeg;
-        DATA.gps_satellites = m_satellites;
-        DATA.gps_date = dateBuf;
-        DATA.gps_utc = utcBuf;
-    }
-
-    // publishFix(dateBuf, utcBuf);
-    char latBuf[24] = {0};
-    char lonBuf[24] = {0};
-    char altBuf[24] = {0};
-    char sogBuf[24] = {0};
-    char cogBuf[24] = {0};
-    char satsBuf[8] = {0};
-
-    snprintf(latBuf, sizeof(latBuf), "%.7f", m_latitudeDeg);
-    snprintf(lonBuf, sizeof(lonBuf), "%.7f", m_longitudeDeg);
-    snprintf(altBuf, sizeof(altBuf), "%.2f", m_altitudeM);
-    snprintf(sogBuf, sizeof(sogBuf), "%.2f", m_speedKnots);
-    snprintf(cogBuf, sizeof(cogBuf), "%.2f", m_courseDeg);
-    snprintf(satsBuf, sizeof(satsBuf), "%u", static_cast<unsigned>(m_satellites));
-
-    sf_mqtt::publish("smartfranklin/gps/has_fix", m_hasFix ? "1" : "0");
-    sf_mqtt::publish("smartfranklin/gps/latitude_deg", latBuf);
-    sf_mqtt::publish("smartfranklin/gps/longitude_deg", lonBuf);
-    sf_mqtt::publish("smartfranklin/gps/altitude_m", altBuf);
-    sf_mqtt::publish("smartfranklin/gps/speed_knots", sogBuf);
-    sf_mqtt::publish("smartfranklin/gps/course_deg", cogBuf);
-    sf_mqtt::publish("smartfranklin/gps/satellites", satsBuf);
-    sf_mqtt::publish("smartfranklin/gps/date", dateBuf);
-    sf_mqtt::publish("smartfranklin/gps/utc", utcBuf);
-
-    if (m_hasFix) {
-        SF_LOGI("[%s] sat=%s lat=%s lon=%s alt=%s date=%s utc=%s", m_tag, satsBuf, latBuf, lonBuf, altBuf, dateBuf, utcBuf);
-    } else {
-        SF_LOGI("[%s] no fix", m_tag);
-    }
-
-    HMI::setLed(m_sensor, PortStatus::Ok);
+    bool ok = readPoseAndTimeLocked();
 
     release(m_sensor);
 
-    return true;
+    if (!ok) {
+        SF_LOGW("[%s] sample read failed", m_tag);
+        HMI::setLed(m_sensor, PortStatus::NoData);
+    } else {
+        snprintf(dateBuf, sizeof(dateBuf), "%04u-%02u-%02u",
+                static_cast<unsigned>(m_year),
+                static_cast<unsigned>(m_month),
+                static_cast<unsigned>(m_day));
+        snprintf(utcBuf, sizeof(utcBuf), "%02u:%02u:%02u",
+                static_cast<unsigned>(m_hour),
+                static_cast<unsigned>(m_minute),
+                static_cast<unsigned>(m_second));
+
+        {
+            std::lock_guard<std::mutex> dataLock(DATA_MUTEX);
+            DATA.gps_has_fix = m_hasFix;
+            DATA.gps_latitude_deg = m_latitudeDeg;
+            DATA.gps_longitude_deg = m_longitudeDeg;
+            DATA.gps_altitude_m = m_altitudeM;
+            DATA.gps_speed_knots = m_speedKnots;
+            DATA.gps_course_deg = m_courseDeg;
+            DATA.gps_satellites = m_satellites;
+            DATA.gps_date = dateBuf;
+            DATA.gps_utc = utcBuf;
+        }
+
+        // publishFix(dateBuf, utcBuf);
+        char latBuf[24] = {0};
+        char lonBuf[24] = {0};
+        char altBuf[24] = {0};
+        char sogBuf[24] = {0};
+        char cogBuf[24] = {0};
+        char satsBuf[8] = {0};
+
+        snprintf(latBuf, sizeof(latBuf), "%.7f", m_latitudeDeg);
+        snprintf(lonBuf, sizeof(lonBuf), "%.7f", m_longitudeDeg);
+        snprintf(altBuf, sizeof(altBuf), "%.2f", m_altitudeM);
+        snprintf(sogBuf, sizeof(sogBuf), "%.2f", m_speedKnots);
+        snprintf(cogBuf, sizeof(cogBuf), "%.2f", m_courseDeg);
+        snprintf(satsBuf, sizeof(satsBuf), "%u", static_cast<unsigned>(m_satellites));
+
+        sf_mqtt::publish("smartfranklin/gps/has_fix", m_hasFix ? "1" : "0");
+        sf_mqtt::publish("smartfranklin/gps/latitude_deg", latBuf);
+        sf_mqtt::publish("smartfranklin/gps/longitude_deg", lonBuf);
+        sf_mqtt::publish("smartfranklin/gps/altitude_m", altBuf);
+        sf_mqtt::publish("smartfranklin/gps/speed_knots", sogBuf);
+        sf_mqtt::publish("smartfranklin/gps/course_deg", cogBuf);
+        sf_mqtt::publish("smartfranklin/gps/satellites", satsBuf);
+        sf_mqtt::publish("smartfranklin/gps/date", dateBuf);
+        sf_mqtt::publish("smartfranklin/gps/utc", utcBuf);
+
+        if (m_hasFix) {
+            SF_LOGI("[%s] sat=%s lat=%s lon=%s alt=%s date=%s utc=%s", m_tag, satsBuf, latBuf, lonBuf, altBuf, dateBuf, utcBuf);
+        } else {
+            SF_LOGI("[%s] no fix", m_tag);
+        }
+
+        HMI::setLed(m_sensor, PortStatus::Ok);
+
+    }
+
+    return ok;
 }
 

@@ -42,6 +42,12 @@ public:
     bool isInitialized() const;
 
 private:
+	const sf_interfaces::InterfaceSensor m_sensor = sf_interfaces::InterfaceSensor::Gps;
+    const char* const m_tag = sf_interfaces::toString(m_sensor, true);
+    //const char* const m_device = sf_interfaces::getDeviceName(m_sensor);
+
+    //const uint8_t m_i2cAddress = sf_interfaces::getAddress(m_sensor);
+
     mutable std::mutex m_mutex;
 
     bool    m_initialized = false;
@@ -60,12 +66,6 @@ private:
     uint8_t  m_minute = 0;
     uint8_t  m_second = 0;
     uint32_t m_lastProcessMs = 0;
-
-	const sf_interfaces::InterfaceSensor m_sensor = sf_interfaces::InterfaceSensor::Gps;
-    const char* const m_tag = sf_interfaces::toString(m_sensor, true);
-    const char* const m_device = sf_interfaces::getDeviceName(m_sensor);
-
-    const uint8_t m_i2cAddress = sf_interfaces::getAddress(m_sensor);
 
     bool readPoseAndTimeLocked();
     bool writeRegister(uint8_t reg, uint8_t value) const;

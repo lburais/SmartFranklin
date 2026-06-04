@@ -35,8 +35,7 @@
 #pragma once
 
 #include <Arduino.h>
-#include <M5UnitUnified.h>
-#include <M5UnitUnifiedDISTANCE.h>
+#include <Unit_Sonic.h>
 
 #include <mutex>
 
@@ -58,16 +57,14 @@ public:
 	bool isInitialized() const;
 
 private:
-	mutable std::mutex m_mutex;
-
-    m5::unit::UnitUnified       m_units;
-    m5::unit::UnitUltraSonicI2C m_unit;
-
-	bool    m_initialized = false;
-
 	const sf_interfaces::InterfaceSensor m_sensor = sf_interfaces::InterfaceSensor::Tank;
 	const char* const m_tag = sf_interfaces::toString(m_sensor, true);
-	const char* const m_device = sf_interfaces::getDeviceName(m_sensor);
+
+	mutable std::mutex m_mutex;
+
+    SONIC_I2C m_unit;
+
+	bool    m_initialized = false;
 
 	const int32_t TANK_DISTANCE_MIN_MM = 20;
 	const int32_t TANK_DISTANCE_MAX_MM = 4500;
