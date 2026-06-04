@@ -127,6 +127,8 @@ void setup() {
 
     M5.begin(cfg);
 
+    M5.Power.setExtOutput(true);
+
     // Initialize serial communication at 115200 baud
     Serial.begin(115200);
 

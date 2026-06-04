@@ -185,33 +185,47 @@ void Ina::process()
     publishSensor("smartfranklin/ina1", ina1);
     publishSensor("smartfranklin/ina2", ina2);
 
-    HMI::setLed(sf_interfaces::InterfaceSensor::Ina1, ina1.ok ? PortStatus::Ok : PortStatus::Error);
-    HMI::setLed(sf_interfaces::InterfaceSensor::Ina2, ina2.ok ? PortStatus::Ok : PortStatus::Error);
+    HMI::setLed(sf_interfaces::InterfaceSensor::Ina1, (ina1.ok && ina2.ok) ? PortStatus::Ok : PortStatus::Error);
 
-    if (ina1.ok ) {
-        for (int ch = 0; ch < kChannelCount; ++ch) {
-            SF_LOGI(
-                "[%s] INA1 CH%d: Voltage = %.3f V current = %.3f A shunt = %.3f mV", 
-                m_tag, 
-                ch, 
-                ina1.busVoltageV[ch], 
-                ina1.currentA[ch], 
-                ina1.busVoltageV[ch]);
+    const sf_interfaces::InterfacePortName ports[] = {
+        sf_interfaces::InterfacePortName::PortA1,
+        sf_interfaces::InterfacePortName::PortA2,
+        sf_interfaces::InterfacePortName::PortB1,
+        sf_interfaces::InterfacePortName::PortB2,
+        sf_interfaces::InterfacePortName::PortC1,
+        sf_interfaces::InterfacePortName::PortC2,
+    };
+
+    for (const auto port : ports) {
+        const sf_interfaces::InterfaceSensor sensor = sf_interfaces::getSensor(port);
+        const char* sensorName = sf_interfaces::toString(sensor);
+        const Sample* sample = nullptr;
+        uint8_t inaNb = 0;
+        uint8_t channel = 0;
+
+        switch (port) {
+            case sf_interfaces::InterfacePortName::PortA1: sample = ina1.ok ? &ina1 : nullptr; inaNb = 1; channel = 0; break;
+            case sf_interfaces::InterfacePortName::PortA2: sample = ina1.ok ? &ina1 : nullptr; inaNb = 1; channel = 1; break;
+            case sf_interfaces::InterfacePortName::PortB1: sample = ina1.ok ? &ina1 : nullptr; inaNb = 1; channel = 2; break;
+            case sf_interfaces::InterfacePortName::PortB2: sample = ina2.ok ? &ina2 : nullptr; inaNb = 2; channel = 0; break;
+            case sf_interfaces::InterfacePortName::PortC1: sample = ina2.ok ? &ina2 : nullptr; inaNb = 2; channel = 1; break;
+            case sf_interfaces::InterfacePortName::PortC2: sample = ina2.ok ? &ina2 : nullptr; inaNb = 2; channel = 2; break;
         }
-    } else {
-        SF_LOGI("[%s] INA1 KO", m_tag);
-    }
-    if (ina2.ok ) {
-        for (int ch = 0; ch < kChannelCount; ++ch) {
-            SF_LOGI(
-                "[%s] INA2 CH%d: Voltage = %.3f V current = %.3f A shunt = %.3f mV", 
-                m_tag, 
-                ch, 
-                ina2.busVoltageV[ch], 
-                ina2.currentA[ch], 
-                ina2.busVoltageV[ch]);
+
+        if (sample == nullptr) {
+            continue;
         }
-    } else {
-        SF_LOGI("[%s] INA2 KO", m_tag);
+
+        if (sample->currentA[channel] > 0.0f) {
+            SF_LOGI(
+                "[%s] INA%u.%u (%-4s): V=%5.3fV I=%5.3fA SH=%7.3fmV",
+                m_tag,
+                inaNb,
+                channel+1,
+                sensorName,
+                sample->busVoltageV[channel],
+                sample->currentA[channel],
+                sample->shuntVoltageMv[channel]);
+        }
     }
 }

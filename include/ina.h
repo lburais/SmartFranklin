@@ -36,6 +36,7 @@ private:
 
     bool sampleSensor(sf_interfaces::InterfaceSensor sensor, Sample& out);
     void publishSensor(const char* topicRoot, const Sample& sample);
+
 };
 
 extern Ina INA_TASK;

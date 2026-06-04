@@ -25,8 +25,21 @@ class EspSoftwareSerial;
 
 namespace sf_interfaces {
 
+enum class InterfacePortName : uint8_t {
+    PortA1 = 0,
+    PortA2,
+    PortB1,
+    PortB2,
+    PortC1,
+    PortC2,
+    Internal,
+    Bluetooth,
+    Unknown,
+};
+
 enum class InterfaceSensor : uint8_t {
-    Gaz = 0,
+    Axp = 0,   /// start first to ensure power on grove
+    Gaz,
     Tank,
     Gps,
     Lte,
@@ -36,7 +49,6 @@ enum class InterfaceSensor : uint8_t {
     Rtc,
     Ina1,
     Ina2,
-    Axp,
     Bat,
     Obd,
     None,
@@ -56,6 +68,8 @@ struct InterfaceConnector {
 // global
 
 const InterfaceConnector getConnector(InterfaceSensor sensor);
+
+const InterfaceSensor getSensor(InterfacePortName port);
 
 const char* getDeviceName(InterfaceSensor sensor);
 uint8_t getAddress(InterfaceSensor sensor);

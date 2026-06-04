@@ -123,8 +123,6 @@ void taskI2c(void* pv)
             inaIsInitialized, inaInit, inaProcess, 0U, 0U},
     };
 
-    //sf_interfaces::configure_all_sensors();
-
     for (;;) {
         const uint32_t nowMs = millis();
         uint32_t nextWakeMs = nowMs + 1000U;

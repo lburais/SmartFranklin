@@ -80,18 +80,6 @@ const char* toString(const InterfacePortType type)
 // Ports
 // =========================================================================
 
-enum class InterfacePortName : uint8_t {
-    PortA1 = 0,
-    PortA2,
-    PortB1,
-    PortB2,
-    PortC1,
-    PortC2,
-    Internal,
-    Bluetooth,
-    Unknown,
-};
-
 const char* toString(const InterfacePortName id)
 {
     switch (id) {
@@ -129,6 +117,7 @@ struct InterfaceSensorMap {
 
 InterfaceSensorMap kSensors[] = {
 //                                                  sensor                 port                          type                        yellow white led  addr  clock     recur  avail? connection device name
+    [static_cast<size_t>(InterfaceSensor::Axp)]  = {InterfaceSensor::Axp,  InterfacePortName::Internal,  InterfacePortType::I2C1,    -1,    -1,   -1,  0x34, 400000UL, 30000, false, nullptr,   "AXP192 power management"},
     [static_cast<size_t>(InterfaceSensor::Gaz)]  = {InterfaceSensor::Gaz,  InterfacePortName::PortA1,    InterfacePortType::I2C,     -1,    -1,   -1,  0x26, 400000UL, 10000, false, nullptr,   "M5Stack Weight I2C Unit"},
     [static_cast<size_t>(InterfaceSensor::Tank)] = {InterfaceSensor::Tank, InterfacePortName::PortA2,    InterfacePortType::I2C,     -1,    -1,   -1,  0x57, 100000UL, 15000, false, nullptr,   "M5Stack Unit Ultrasonic I2C (RCWL-9600)"},
     [static_cast<size_t>(InterfaceSensor::Gps)]  = {InterfaceSensor::Gps,  InterfacePortName::PortC1,    InterfacePortType::I2C,     -1,    -1,   -1,  0x66, 400000UL, 30000, false, nullptr,   "DFRobot Gravity GNSS (DFR1103)"},
@@ -139,7 +128,6 @@ InterfaceSensorMap kSensors[] = {
     [static_cast<size_t>(InterfaceSensor::Rtc)]  = {InterfaceSensor::Rtc,  InterfacePortName::Internal,  InterfacePortType::I2C1,    -1,    -1,   -1,  0x51, 400000UL, 60000, false, nullptr,   "BM8563 RTC"},
     [static_cast<size_t>(InterfaceSensor::Ina1)] = {InterfaceSensor::Ina1, InterfacePortName::Internal,  InterfacePortType::I2C1,    -1,    -1,   -1,  0x40, 400000UL, 60000, false, nullptr,   "INA3221 3 channel voltage and current sensor"},
     [static_cast<size_t>(InterfaceSensor::Ina2)] = {InterfaceSensor::Ina2, InterfacePortName::Internal,  InterfacePortType::I2C1,    -1,    -1,   -1,  0x41, 400000UL, 60000, false, nullptr,   "INA3221 3 channel voltage and current sensor"},
-    [static_cast<size_t>(InterfaceSensor::Axp)]  = {InterfaceSensor::Axp,  InterfacePortName::Internal,  InterfacePortType::I2C1,    -1,    -1,   -1,  0x34, 400000UL, 30000, false, nullptr,   "AXP192 power management"},
     [static_cast<size_t>(InterfaceSensor::Bat)]  = {InterfaceSensor::Bat,  InterfacePortName::Bluetooth, InterfacePortType::BLE,     -1,    -1,   -1,  0x00,      0UL, 10000, false, nullptr,   "Battery"},
     [static_cast<size_t>(InterfaceSensor::Obd)]  = {InterfaceSensor::Obd,  InterfacePortName::Bluetooth, InterfacePortType::BLE,     -1,    -1,   -1,  0x00,      0UL, 10000, false, nullptr,   "OBD"},
     [static_cast<size_t>(InterfaceSensor::None)] = {InterfaceSensor::None, InterfacePortName::Unknown,   InterfacePortType::Unknown, -1,    -1,   -1,  0x00,      0UL, 10000, false, nullptr,   "Unknown"},
@@ -298,6 +286,18 @@ const InterfaceConnector getConnector(const InterfaceSensor sensor)
         return InterfaceConnector{};
     }
     return map->connector;
+}
+
+const InterfaceSensor getSensor(const InterfacePortName port)
+{
+    const size_t count = sizeof(kSensors) / sizeof(kSensors[0]);
+    for (size_t i = 0; i < count; ++i) {
+        if (kSensors[i].portName == port) {
+            return kSensors[i].sensor;
+        }
+    }
+
+    return InterfaceSensor::None;
 }
 
 // =========================================================================
