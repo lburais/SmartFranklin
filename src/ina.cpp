@@ -187,30 +187,24 @@ void Ina::process()
 
     HMI::setLed(sf_interfaces::InterfaceSensor::Ina1, (ina1.ok && ina2.ok) ? PortStatus::Ok : PortStatus::Error);
 
-    const sf_interfaces::InterfacePortName ports[] = {
-        sf_interfaces::InterfacePortName::PortA1,
-        sf_interfaces::InterfacePortName::PortA2,
-        sf_interfaces::InterfacePortName::PortB1,
-        sf_interfaces::InterfacePortName::PortB2,
-        sf_interfaces::InterfacePortName::PortC1,
-        sf_interfaces::InterfacePortName::PortC2,
-    };
+    Sample* sample = nullptr;;
+    uint8_t inaNb = 0;
+    uint8_t channel = 0;
+    sf_interfaces::InterfaceSensor sensor = sf_interfaces::InterfaceSensor::None;
 
-    for (const auto port : ports) {
-        const sf_interfaces::InterfaceSensor sensor = sf_interfaces::getSensor(port);
-        const char* sensorName = sf_interfaces::toString(sensor);
-        const Sample* sample = nullptr;
-        uint8_t inaNb = 0;
-        uint8_t channel = 0;
-
-        switch (port) {
-            case sf_interfaces::InterfacePortName::PortA1: sample = ina1.ok ? &ina1 : nullptr; inaNb = 1; channel = 0; break;
-            case sf_interfaces::InterfacePortName::PortA2: sample = ina1.ok ? &ina1 : nullptr; inaNb = 1; channel = 1; break;
-            case sf_interfaces::InterfacePortName::PortB1: sample = ina1.ok ? &ina1 : nullptr; inaNb = 1; channel = 2; break;
-            case sf_interfaces::InterfacePortName::PortB2: sample = ina2.ok ? &ina2 : nullptr; inaNb = 2; channel = 0; break;
-            case sf_interfaces::InterfacePortName::PortC1: sample = ina2.ok ? &ina2 : nullptr; inaNb = 2; channel = 1; break;
-            case sf_interfaces::InterfacePortName::PortC2: sample = ina2.ok ? &ina2 : nullptr; inaNb = 2; channel = 2; break;
+    for (size_t i = 0; i < kChannelCount*2; ++i) {
+        if (i < kChannelCount) {
+            sample = ina1.ok ? &ina1 : nullptr;;
+            inaNb = 1;
+            channel = i;
+            sensor = sf_interfaces::InterfaceSensor::Ina1;
+        } else {
+            sample = ina2.ok ? &ina2 : nullptr;;
+            inaNb = 2;
+            channel = i - kChannelCount;
+            sensor = sf_interfaces::InterfaceSensor::Ina2;
         }
+        const char* sensorName = sf_interfaces::getSensor(sensor, channel + 1);
 
         if (sample == nullptr) {
             continue;

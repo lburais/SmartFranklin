@@ -80,6 +80,18 @@ const char* toString(const InterfacePortType type)
 // Ports
 // =========================================================================
 
+enum class InterfacePortName : uint8_t {
+    PortA1 = 0,
+    PortA2,
+    PortB1,
+    PortB2,
+    PortC1,
+    PortC2,
+    Internal,
+    Bluetooth,
+    Unknown,
+};
+
 const char* toString(const InterfacePortName id)
 {
     switch (id) {
@@ -288,16 +300,35 @@ const InterfaceConnector getConnector(const InterfaceSensor sensor)
     return map->connector;
 }
 
-const InterfaceSensor getSensor(const InterfacePortName port)
+const char* getSensor(const InterfaceSensor sensor, const uint8_t channel)
 {
-    const size_t count = sizeof(kSensors) / sizeof(kSensors[0]);
-    for (size_t i = 0; i < count; ++i) {
-        if (kSensors[i].portName == port) {
-            return kSensors[i].sensor;
+    InterfacePortName port = InterfacePortName::Unknown;
+    switch (sensor) {
+    case (InterfaceSensor::Ina1):
+        switch (channel) {
+        case 1: port = InterfacePortName::PortA1; break;
+        case 2: port = InterfacePortName::PortA2; break;
+        case 3: port = InterfacePortName::PortB1; break;
+        };
+        break;
+    case (InterfaceSensor::Ina2):
+        switch (channel) {
+        case 1: port = InterfacePortName::PortB2; break;
+        case 2: port = InterfacePortName::PortC1; break;
+        case 3: port = InterfacePortName::PortC2; break;
+        };
+        break;
+    }
+    if (port != InterfacePortName::Unknown) {
+        const size_t count = sizeof(kSensors) / sizeof(kSensors[0]);
+        for (size_t i = 0; i < count; ++i) {
+            if (kSensors[i].portName == port) {
+                return toString(kSensors[i].sensor);
+            }
         }
     }
 
-    return InterfaceSensor::None;
+    return "Unknown";
 }
 
 // =========================================================================
